@@ -1,0 +1,16 @@
+{
+  "threads": {
+    "u_1775769861513": [
+      {
+        "from": "citizen",
+        "text": "hello",
+        "at": "2026-04-09T22:18:28.642Z"
+      },
+      {
+        "from": "staff",
+        "text": "Nội dung đã được chuyển tới cán bộ phụ trách. Hệ thống sẽ gửi thông báo khi có cập nhật.",
+        "at": "2026-04-09T22:18:32.370Z"
+      }
+    ]
+  }
+}

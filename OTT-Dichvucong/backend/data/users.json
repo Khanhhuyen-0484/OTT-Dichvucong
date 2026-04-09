@@ -1,0 +1,24 @@
+{
+  "users": [
+    {
+      "id": "u_1775766651629",
+      "email": "ttkh1310@gmail.com",
+      "fullName": "Trần Khánh Huyền",
+      "phone": "0912345678",
+      "address": "Hà Nội",
+      "avatarUrl": "",
+      "passwordHash": "$2b$10$Hb5Y5e4yJHk.NkwqLzGz3OxUO7wv7/k3nVXwaYNT/t2F1Z5kRmkDK",
+      "createdAt": "2026-04-09T20:30:51.629Z"
+    },
+    {
+      "id": "u_1775769861513",
+      "email": "tkhanhhuyen0484@gmail.com",
+      "fullName": "Trần Khánh Huyền",
+      "phone": "0984567890",
+      "address": "Gò vấp Thành phố Hồ Chí Minh",
+      "avatarUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/avatars/u_1775769861513/1775772543090-d54b30acb0891bbe.jpg",
+      "passwordHash": "$2b$10$HiGyAvDT.wZ0sUZm/ebgsOX8Zx/pg5WkmHOWemq6NZ0FS5CqHaZtS",
+      "createdAt": "2026-04-09T21:24:21.513Z"
+    }
+  ]
+}

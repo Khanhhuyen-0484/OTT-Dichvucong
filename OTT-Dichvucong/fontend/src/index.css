@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --gov-navy: #1e3a8a;
+  --gov-red: #b91c1c;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+*:focus-visible {
+  outline: 3px solid rgba(30, 58, 138, 0.35);
+  outline-offset: 2px;
+}
+
