@@ -64,6 +64,7 @@ async function createUser({
     fullName: String(fullName || "").trim(),
     phone: String(phone || "").trim(),
     address: String(address || "").trim(),
+    role: "citizen",
     avatarUrl: "",
     passwordHash,
     createdAt: new Date().toISOString()

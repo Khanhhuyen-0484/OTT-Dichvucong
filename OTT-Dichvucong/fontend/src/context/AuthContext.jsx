@@ -47,7 +47,11 @@ function decodeJwtPayload(token) {
     const json = atob(b64 + pad);
     const payload = JSON.parse(json);
     if (payload?.id && payload?.email) {
-      return { id: payload.id, email: payload.email };
+      return {
+        id: payload.id,
+        email: payload.email,
+        role: payload.role === "admin" ? "admin" : "citizen"
+      };
     }
     return null;
   } catch {
@@ -117,6 +121,7 @@ export function AuthProvider({ children }) {
             setUser({
               id: basic.id,
               email: basic.email,
+              role: basic.role || "citizen",
               fullName: "",
               phone: "",
               address: "",

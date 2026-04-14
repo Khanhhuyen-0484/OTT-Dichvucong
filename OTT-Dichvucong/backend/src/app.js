@@ -35,6 +35,7 @@ app.get("/api/test", authMiddleware, (req, res) => {
 });
 
 app.use("/api/chat", require("./routes/chat"));
+app.use("/api/admin", require("./routes/admin"));
 
 /** OTP, đăng ký, đăng nhập, /me, PATCH /me — tất cả dưới /api */
 app.use("/api", require("./routes/public"));
