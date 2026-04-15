@@ -111,6 +111,21 @@
   ],
   "supportConversations": [
     {
+      "id": "sup-1776267359754",
+      "dossierId": "CHAT-u_1775769861513",
+      "citizenUserId": "u_1775769861513",
+      "citizenName": "tkhanhhuyen0484@gmail.com",
+      "status": "waiting",
+      "messages": [
+        {
+          "id": "msg-1776267359754",
+          "from": "citizen",
+          "text": "hiiii",
+          "at": "2026-04-15T15:35:59.755Z"
+        }
+      ]
+    },
+    {
       "id": "sup-1776261194665",
       "dossierId": "CHAT-u_1776261166230",
       "citizenUserId": "u_1776261166230",
