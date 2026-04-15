@@ -37,7 +37,7 @@ export default function UserAvatar({
   }
   return (
     <div
-      className={`rounded-full bg-white/15 grid place-items-center font-bold text-white ring-2 ring-white/30 shrink-0 ${className}`}
+      className={`rounded-full bg-gradient-to-br from-[#003366] to-[#052b53] grid place-items-center font-bold text-white ring-2 ring-white/30 shrink-0 ${className}`}
       style={{ width: px, height: px, fontSize: size * 0.35 }}
       aria-hidden
     >

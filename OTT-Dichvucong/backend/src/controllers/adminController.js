@@ -6,13 +6,12 @@ const {
   getOrCreateConversationByDossier,
   listConversations,
   getConversationById,
-  addConversationMessage,
   resolveConversation,
   getAiHistory,
   getAiRules,
   updateAiRules
 } = require("../store/adminStore");
-const { appendMessage } = require("../store/chatThreadStore");
+const { sendMessage } = require("../store/supportConversationsStore");
 const { findById, updateUserRole } = require("../store/userStore");
 
 exports.dashboard = async (req, res) => {
@@ -71,7 +70,12 @@ exports.dossierDecision = async (req, res) => {
 exports.openDossierChat = async (req, res) => {
   try {
     const conversation = await getOrCreateConversationByDossier(req.params.id);
-    return res.json({ conversation });
+    return res.json({
+      conversation: {
+        ...conversation,
+        messages: normalizedMessages
+      }
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi mở hội thoại hồ sơ" });
   }
@@ -90,6 +94,29 @@ exports.supportConversationDetail = async (req, res) => {
   try {
     const conversation = await getConversationById(req.params.id);
     if (!conversation) return res.status(404).json({ message: "Không tìm thấy hội thoại" });
+    const normalizedMessages = Array.isArray(conversation.messages)
+      ? conversation.messages.map((msg) => {
+          const fullName =
+            msg?.sender?.fullName ||
+            (msg?.from === "admin" || msg?.from === "staff"
+              ? "Admin hỗ trợ"
+              : conversation.citizenName || "Người dùng");
+          return {
+            id: msg?.id || `msg-${Date.now()}`,
+            from:
+              msg?.from === "admin" || msg?.from === "staff" ? "admin" : "user",
+            text: String(msg?.text || ""),
+            createdAt: msg?.createdAt || msg?.at || new Date().toISOString(),
+            sender: {
+              id: msg?.sender?.id || "",
+              fullName,
+              avatarUrl:
+                msg?.sender?.avatarUrl ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&size=128`
+            }
+          };
+        })
+      : [];
     return res.json({ conversation });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi lấy chi tiết hội thoại" });
@@ -100,15 +127,24 @@ exports.supportSendMessage = async (req, res) => {
   try {
     const text = String(req.body?.text || "").trim();
     if (!text) return res.status(400).json({ message: "Nội dung không được để trống" });
-    const conversation = await addConversationMessage({
-      conversationId: req.params.id,
+
+    const adminUser = await findById(req.user.id);
+    const fullName = adminUser?.fullName || "Admin hỗ trợ";
+    const avatarUrl = adminUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&size=128`;
+    const sender = {
+      id: req.user.id,
+      fullName,
+      avatarUrl
+    };
+
+    await sendMessage({
+      userId: req.params.id,
       from: "admin",
-      text
+      text,
+      sender
     });
+    const conversation = await getConversationById(req.params.id);
     if (!conversation) return res.status(404).json({ message: "Không tìm thấy hội thoại" });
-    if (conversation.citizenUserId) {
-      await appendMessage(conversation.citizenUserId, { from: "staff", text });
-    }
     return res.json({ message: "Đã gửi tin nhắn", conversation });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi gửi tin nhắn hỗ trợ" });

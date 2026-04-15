@@ -1,14 +1,12 @@
 import axios from "axios";
 
-/** Dev: dùng `/api` + proxy Vite → tránh CORS / lỗi kết nối cross-origin. Prod: set VITE_API_BASE_URL. */
-const baseURL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? "/api" : "http://localhost:3000/api");
+const baseURL = "/api";
 
 const api = axios.create({
   baseURL,
   timeout: 20000
 });
+const API = api;
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
@@ -91,9 +89,8 @@ export async function forgotPassword(email) {
   return await api.post("/forgot-password", { email });
 }
 
-export async function login({ email, password }) {
-  // backend supports /api/login (and also /api/auth/login)
-  return await api.post("/login", { email, password });
+export async function login(data) {
+  return API.post("/login", data);
 }
 
 export async function getMe() {

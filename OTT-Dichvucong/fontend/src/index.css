@@ -1,8 +1,9 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700&display=swap");
 
 :root {
-  --gov-navy: #1e3a8a;
-  --gov-red: #b91c1c;
+  --gov-navy: #003366;
+  --gov-red: #7a1f1f;
 }
 
 html,
@@ -11,6 +12,7 @@ body {
 }
 
 body {
+  font-family: "Inter", "Roboto", system-ui, -apple-system, Segoe UI, sans-serif;
   color: #0f172a;
   background: #f8fafc;
 }

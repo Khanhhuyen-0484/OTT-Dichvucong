@@ -5,10 +5,13 @@ const {
   UpdateCommand
 } = require("@aws-sdk/lib-dynamodb");
 const { dynamo } = require("../config/dynamoClient");
+const { sendMessage, getChatHistory } = require("./supportConversationsStore");
 
 const DOSSIERS_TABLE = process.env.DYNAMODB_DOSSIERS_TABLE || "Dossiers";
 const SUPPORT_CONVERSATIONS_TABLE =
-  process.env.DYNAMODB_SUPPORT_CONVERSATIONS_TABLE || "SupportConversations";
+  process.env.SUPPORT_CONVERSATIONS_TABLE ||
+  process.env.DYNAMODB_SUPPORT_CONVERSATIONS_TABLE ||
+  "SupportConversations";
 const ADMIN_AI_TABLE = process.env.DYNAMODB_ADMIN_AI_TABLE || "AdminAi";
 
 function nowIso() {
@@ -21,16 +24,23 @@ function normalizeDossierStatus(status) {
 }
 
 async function getDashboardStats() {
-  const [dossiersRs, conversationsRs] = await Promise.all([
-    dynamo.send(new ScanCommand({ TableName: DOSSIERS_TABLE })),
-    dynamo.send(new ScanCommand({ TableName: SUPPORT_CONVERSATIONS_TABLE }))
-  ]);
-  const dossiers = dossiersRs.Items || [];
-  const conversations = conversationsRs.Items || [];
-  const totalNew = dossiers.filter((x) => x.status === "new").length;
-  const totalOverdue = dossiers.filter((x) => x.status === "overdue").length;
-  const waitingMessages = conversations.filter((x) => x.status === "waiting").length;
-  return { totalNew, totalOverdue, waitingMessages };
+  try {
+    const [dossiersRs, conversationsRs] = await Promise.all([
+      dynamo.send(new ScanCommand({ TableName: DOSSIERS_TABLE })),
+      dynamo.send(new ScanCommand({ TableName: SUPPORT_CONVERSATIONS_TABLE }))
+    ]);
+    const dossiers = dossiersRs.Items || [];
+    const conversations = conversationsRs.Items || [];
+    const totalNew = dossiers.filter((x) => x.status === "new").length;
+    const totalOverdue = dossiers.filter((x) => x.status === "overdue").length;
+    const waitingMessages = conversations.filter(
+      (x) => x.status === "active" || x.status === "waiting"
+    ).length;
+    return { totalNew, totalOverdue, waitingMessages };
+  } catch (error) {
+    console.error("[adminStore.getDashboardStats] DynamoDB error:", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
 async function listDossiers(query = "") {
@@ -94,152 +104,139 @@ async function decideDossier({ dossierId, action, note, adminEmail }) {
 }
 
 async function getOrCreateConversationByDossier(dossierId) {
-  const found = await dynamo.send(
-    new ScanCommand({
-      TableName: SUPPORT_CONVERSATIONS_TABLE,
-      FilterExpression: "dossierId = :dossierId",
-      ExpressionAttributeValues: {
-        ":dossierId": dossierId
-      },
-      Limit: 1
-    })
-  );
-  let conv = found.Items?.[0] || null;
-  if (!conv) {
-    const dossier = await getDossierById(dossierId);
-    conv = {
-      id: `sup-${Date.now()}`,
-      dossierId,
-      citizenName: dossier?.citizenName || "Người dân",
-      status: "waiting",
-      messages: [],
-      lastMessage: null,
-      updatedAt: nowIso()
-    };
-    await dynamo.send(
-      new PutCommand({
+  try {
+    const found = await dynamo.send(
+      new ScanCommand({
         TableName: SUPPORT_CONVERSATIONS_TABLE,
-        Item: conv
+        FilterExpression: "dossierId = :dossierId",
+        ExpressionAttributeValues: {
+          ":dossierId": dossierId
+        },
+        Limit: 1
       })
     );
+    let conv = found.Items?.[0] || null;
+    if (!conv) {
+      const dossier = await getDossierById(dossierId);
+      conv = {
+        id: `sup-${Date.now()}`,
+        dossierId,
+        citizenName: dossier?.citizenName || "Người dân",
+        status: "active",
+        messages: [],
+        lastMessage: null,
+        updatedAt: nowIso()
+      };
+      await dynamo.send(
+        new PutCommand({
+          TableName: SUPPORT_CONVERSATIONS_TABLE,
+          Item: conv
+        })
+      );
+    }
+    return conv;
+  } catch (error) {
+    console.error("[adminStore.getOrCreateConversationByDossier] DynamoDB error:", error?.name, error?.message, error);
+    throw error;
   }
-  return conv;
 }
 
 async function upsertConversationFromCitizen({ citizenUserId, citizenName, text }) {
-  const uid = String(citizenUserId || "").trim();
-  if (!uid) return null;
-  const message = {
-    id: `msg-${Date.now()}`,
-    from: "citizen",
-    text: String(text || "").slice(0, 2000),
-    at: nowIso()
-  };
-  await dynamo.send(
-    new UpdateCommand({
-      TableName: SUPPORT_CONVERSATIONS_TABLE,
-      Key: { id: uid },
-      UpdateExpression:
-        "SET citizenUserId = if_not_exists(citizenUserId, :citizen_user_id), dossierId = if_not_exists(dossierId, :dossier_id), citizenName = if_not_exists(citizenName, :citizen_name), #status = :status, messages = list_append(if_not_exists(messages, :empty_list), :new_message), lastMessage = :last_message, updatedAt = :updated_at",
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
-      ExpressionAttributeValues: {
-        ":citizen_user_id": uid,
-        ":dossier_id": `CHAT-${uid}`,
-        ":citizen_name": citizenName || "Người dân",
-        ":status": "waiting",
-        ":empty_list": [],
-        ":new_message": [message],
-        ":last_message": message,
-        ":updated_at": message.at
-      }
-    })
-  );
-  return getConversationById(uid);
+  try {
+    const uid = String(citizenUserId || "").trim();
+    if (!uid) return null;
+
+    await sendMessage({
+      userId: uid,
+      from: "citizen",
+      text
+    });
+
+    await dynamo.send(
+      new UpdateCommand({
+        TableName: SUPPORT_CONVERSATIONS_TABLE,
+        Key: { id: uid },
+        UpdateExpression:
+          "SET citizenUserId = if_not_exists(citizenUserId, :citizen_user_id), dossierId = if_not_exists(dossierId, :dossier_id), citizenName = if_not_exists(citizenName, :citizen_name), updatedAt = :updated_at",
+        ExpressionAttributeValues: {
+          ":citizen_user_id": uid,
+          ":dossier_id": `CHAT-${uid}`,
+          ":citizen_name": citizenName || "Người dân",
+          ":updated_at": nowIso()
+        },
+        ReturnValues: "ALL_NEW"
+      })
+    );
+    return getChatHistory(uid);
+  } catch (error) {
+    console.error("[adminStore.upsertConversationFromCitizen] DynamoDB error:", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
 async function listConversations() {
-  const result = await dynamo.send(new ScanCommand({ TableName: SUPPORT_CONVERSATIONS_TABLE }));
-  const conversations = result.Items || [];
-  return conversations.map((conv) => ({
-    ...conv,
-    latestMessage: conv.messages?.[conv.messages.length - 1] || null,
-    unreadCount: conv.status === "waiting" ? 1 : 0
-  }));
+  try {
+    const result = await dynamo.send(new ScanCommand({ TableName: SUPPORT_CONVERSATIONS_TABLE }));
+    const conversations = result.Items || [];
+    return conversations.map((conv) => ({
+      ...conv,
+      latestMessage: conv.messages?.[conv.messages.length - 1] || null,
+      unreadCount: conv.status === "active" || conv.status === "waiting" ? 1 : 0
+    }));
+  } catch (error) {
+    console.error("[adminStore.listConversations] DynamoDB error:", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
 async function getConversationById(id) {
-  const result = await dynamo.send(
-    new GetCommand({
-      TableName: SUPPORT_CONVERSATIONS_TABLE,
-      Key: { id }
-    })
-  );
-  return result.Item || null;
+  try {
+    return await getChatHistory(id);
+  } catch (error) {
+    console.error("[adminStore.getConversationById] DynamoDB error:", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
-async function addConversationMessage({ conversationId, from, text }) {
-  const current = await getConversationById(conversationId);
-  if (!current) return null;
-  const message = {
-    id: `msg-${Date.now()}`,
-    from,
-    text: String(text).slice(0, 2000),
-    at: nowIso()
-  };
-  const shouldWaiting = from === "citizen";
-  const result = await dynamo.send(
-    new UpdateCommand({
-      TableName: SUPPORT_CONVERSATIONS_TABLE,
-      Key: { id: conversationId },
-      UpdateExpression: shouldWaiting
-        ? "SET #status = :status, messages = list_append(if_not_exists(messages, :empty_list), :new_message), lastMessage = :last_message, updatedAt = :updated_at"
-        : "SET messages = list_append(if_not_exists(messages, :empty_list), :new_message), lastMessage = :last_message, updatedAt = :updated_at",
-      ExpressionAttributeNames: shouldWaiting
-        ? {
-            "#status": "status"
-          }
-        : undefined,
-      ExpressionAttributeValues: shouldWaiting
-        ? {
-            ":status": "waiting",
-            ":empty_list": [],
-            ":new_message": [message],
-            ":last_message": message,
-            ":updated_at": message.at
-          }
-        : {
-            ":empty_list": [],
-            ":new_message": [message],
-            ":last_message": message,
-            ":updated_at": message.at
-          },
-      ConditionExpression: "attribute_exists(id)",
-      ReturnValues: "ALL_NEW"
-    })
-  );
-  return result.Attributes || null;
+async function addConversationMessage({ conversationId, from, text, sender }) {
+  try {
+    const current = await getChatHistory(conversationId);
+    if (!current) return null;
+    return await sendMessage({
+      userId: conversationId,
+      from,
+      text,
+      sender
+    });
+  } catch (error) {
+    console.error("[adminStore.addConversationMessage] DynamoDB error:", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
 async function resolveConversation(conversationId) {
-  const result = await dynamo.send(
-    new UpdateCommand({
-      TableName: SUPPORT_CONVERSATIONS_TABLE,
-      Key: { id: conversationId },
-      UpdateExpression: "SET #status = :status, updatedAt = :updated_at",
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
-      ExpressionAttributeValues: {
-        ":status": "resolved",
-        ":updated_at": nowIso()
-      },
-      ConditionExpression: "attribute_exists(id)",
-      ReturnValues: "ALL_NEW"
-    })
-  );
-  return result.Attributes || null;
+  try {
+    const result = await dynamo.send(
+      new UpdateCommand({
+        TableName: SUPPORT_CONVERSATIONS_TABLE,
+        Key: { id: conversationId },
+        UpdateExpression: "SET #status = :status, updatedAt = :updated_at",
+        ExpressionAttributeNames: {
+          "#status": "status"
+        },
+        ExpressionAttributeValues: {
+          ":status": "resolved",
+          ":updated_at": nowIso()
+        },
+        ConditionExpression: "attribute_exists(id)",
+        ReturnValues: "ALL_NEW"
+      })
+    );
+    return result.Attributes || null;
+  } catch (error) {
+    console.error("[adminStore.resolveConversation] DynamoDB error:", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
 async function getAiHistory() {
