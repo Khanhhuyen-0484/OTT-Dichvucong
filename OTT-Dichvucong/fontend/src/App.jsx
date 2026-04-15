@@ -25,6 +25,22 @@ export default function App() {
       <Route path="/profile" element={<Profile />} />
       <Route
         path="/admin"
+        element={<Navigate to="/admin/dashboard" replace />}
+      />
+      <Route
+        path="/admin/chat"
+        element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />}
+      />
+      <Route
+        path="/admin/dashboard"
+        element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />}
+      />
+      <Route
+        path="/admin/documents"
+        element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />}
+      />
+      <Route
+        path="/admin/ai"
         element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />}
       />
       <Route path="*" element={<Navigate to="/" replace />} />

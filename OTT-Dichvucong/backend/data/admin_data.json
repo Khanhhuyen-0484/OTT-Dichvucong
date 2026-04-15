@@ -111,6 +111,72 @@
   ],
   "supportConversations": [
     {
+      "id": "sup-1776261194665",
+      "dossierId": "CHAT-u_1776261166230",
+      "citizenUserId": "u_1776261166230",
+      "citizenName": "lkimngan268@gmail.com",
+      "status": "resolved",
+      "messages": [
+        {
+          "id": "msg-1776261194665",
+          "from": "citizen",
+          "text": "tôi muốn hỏi về giấy phép lái xe",
+          "at": "2026-04-15T13:53:14.665Z"
+        },
+        {
+          "id": "msg-1776262447147",
+          "from": "citizen",
+          "text": "Tôi muốn hỏi về tiến độ hồ sơ của mình.",
+          "at": "2026-04-15T14:14:07.148Z"
+        },
+        {
+          "id": "msg-1776263131621",
+          "from": "citizen",
+          "text": "tôi muốn khiếu nại",
+          "at": "2026-04-15T14:25:31.621Z"
+        }
+      ]
+    },
+    {
+      "id": "sup-1776259236327",
+      "dossierId": "CHAT-u_1776070377957",
+      "citizenUserId": "u_1776070377957",
+      "citizenName": "kimmlienn04@gmail.com",
+      "status": "waiting",
+      "messages": [
+        {
+          "id": "msg-1776259236327",
+          "from": "citizen",
+          "text": "helo",
+          "at": "2026-04-15T13:20:36.327Z"
+        },
+        {
+          "id": "msg-1776260064746",
+          "from": "admin",
+          "text": "Chào bạn, tôi là cán bộ xử lý hồ sơ. Tôi đang kiểm tra thông tin bạn cung cấp.",
+          "at": "2026-04-15T13:34:24.746Z"
+        },
+        {
+          "id": "msg-1776260104656",
+          "from": "citizen",
+          "text": "tôi",
+          "at": "2026-04-15T13:35:04.656Z"
+        },
+        {
+          "id": "msg-1776263167040",
+          "from": "admin",
+          "text": "Cảm ơn bạn đã phản hồi, hồ sơ đang được cập nhật trạng thái.",
+          "at": "2026-04-15T14:26:07.040Z"
+        },
+        {
+          "id": "msg-1776263259360",
+          "from": "admin",
+          "text": "Chào bạn, tôi là cán bộ xử lý hồ sơ. Tôi đang kiểm tra thông tin bạn cung cấp.",
+          "at": "2026-04-15T14:27:39.360Z"
+        }
+      ]
+    },
+    {
       "id": "sup-1",
       "dossierId": "HS-2026-001",
       "citizenName": "Nguyễn Văn A",

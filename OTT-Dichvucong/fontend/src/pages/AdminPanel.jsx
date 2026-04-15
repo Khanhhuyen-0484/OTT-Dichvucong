@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   Bot,
@@ -25,10 +26,10 @@ import {
 } from "../lib/api";
 
 const NAV_ITEMS = [
-  { key: "dashboard", label: "Trang chủ (Dashboard)", icon: House },
-  { key: "records", label: "Quản lý hồ sơ", icon: ClipboardList },
-  { key: "support", label: "Trung tâm hỗ trợ (Chat 1v1)", icon: MessageCircleMore },
-  { key: "ai", label: "Quản lý Chat AI (Dữ liệu nguồn)", icon: Bot }
+  { key: "dashboard", label: "Trang chủ (Dashboard)", icon: House, path: "/admin/dashboard" },
+  { key: "records", label: "Quản lý hồ sơ", icon: ClipboardList, path: "/admin/documents" },
+  { key: "support", label: "Trung tâm hỗ trợ (Chat 1v1)", icon: MessageCircleMore, path: "/admin/chat" },
+  { key: "ai", label: "Quản lý Chat AI (Dữ liệu nguồn)", icon: Bot, path: "/admin/ai" }
 ];
 
 const QUICK_REPLIES = [
@@ -60,7 +61,8 @@ function Widget({ title, value, colorClass }) {
 }
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [dashboard, setDashboard] = useState({
     totalNew: 0,
@@ -82,6 +84,14 @@ export default function AdminPanel() {
   const [aiHistory, setAiHistory] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  const activeTab = useMemo(() => {
+    const p = location.pathname;
+    if (p === "/admin/chat") return "support";
+    if (p === "/admin/documents") return "records";
+    if (p === "/admin/ai") return "ai";
+    return "dashboard";
+  }, [location.pathname]);
 
   const waitingCount = dashboard.waitingMessages;
 
@@ -185,7 +195,7 @@ export default function AdminPanel() {
     try {
       const res = await postAdminOpenDossierChat(dossierDetail.id);
       const conv = res.data.conversation;
-      setActiveTab("support");
+      navigate("/admin/chat");
       setActiveConversationId(conv.id);
       await loadDashboard();
       setMessage("Đã mở chat với người dân");
@@ -256,7 +266,7 @@ export default function AdminPanel() {
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => setActiveTab(item.key)}
+                  onClick={() => navigate(item.path || "/admin/dashboard")}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${
                     active
                       ? "bg-(--gov-navy) text-white"

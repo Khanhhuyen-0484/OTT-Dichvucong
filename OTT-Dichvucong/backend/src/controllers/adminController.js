@@ -12,6 +12,7 @@ const {
   getAiRules,
   updateAiRules
 } = require("../store/adminStore");
+const { appendMessage } = require("../store/chatThreadStore");
 
 exports.dashboard = async (req, res) => {
   try {
@@ -104,6 +105,9 @@ exports.supportSendMessage = async (req, res) => {
       text
     });
     if (!conversation) return res.status(404).json({ message: "Không tìm thấy hội thoại" });
+    if (conversation.citizenUserId) {
+      await appendMessage(conversation.citizenUserId, { from: "staff", text });
+    }
     return res.json({ message: "Đã gửi tin nhắn", conversation });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi gửi tin nhắn hỗ trợ" });

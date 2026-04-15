@@ -1,15 +1,5 @@
 const { getThread, appendMessage } = require("../store/chatThreadStore");
-
-const AUTO_REPLIES = [
-  "Cán bộ đã nhận tin nhắn của bạn. Trong giờ hành chính, chúng tôi sẽ phản hồi chi tiết theo thứ tự tiếp nhận.",
-  "Xin cảm ơn. Anh/chị vui lòng cho biết mã hồ sơ (nếu có) hoặc tên thủ tục để bộ phận một cửa hỗ trợ nhanh hơn.",
-  "Chúng tôi ghi nhận yêu cầu. Nếu khẩn cấp, anh/chị có thể gọi tổng đài hoặc đến trực tiếp bộ phận tiếp nhận trong giờ làm việc.",
-  "Nội dung đã được chuyển tới cán bộ phụ trách. Hệ thống sẽ gửi thông báo khi có cập nhật."
-];
-
-function pickAutoReply() {
-  return AUTO_REPLIES[Math.floor(Math.random() * AUTO_REPLIES.length)];
-}
+const { upsertConversationFromCitizen } = require("../store/adminStore");
 
 exports.staffHistory = async (req, res) => {
   try {
@@ -31,16 +21,13 @@ exports.staffSend = async (req, res) => {
     }
 
     const userId = req.user.id;
+    const citizenName = req.user.email || "Người dân";
     await appendMessage(userId, { from: "citizen", text });
-
-    const delay = 1500 + Math.floor(Math.random() * 2500);
-    setTimeout(async () => {
-      try {
-        await appendMessage(userId, { from: "staff", text: pickAutoReply() });
-      } catch (e) {
-        console.error("staff auto-reply failed", e);
-      }
-    }, delay);
+    await upsertConversationFromCitizen({
+      citizenUserId: userId,
+      citizenName,
+      text
+    });
 
     const messages = await getThread(userId);
     res.json({ ok: true, messages });
