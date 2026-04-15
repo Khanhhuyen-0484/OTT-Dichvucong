@@ -9,9 +9,15 @@ const cors = require("cors");
 const app = express();
 const authMiddleware = require("./middleware/authMiddleware");
 const { verifyTransport } = require("./config/mailer");
+const authRoutes = require("./routes/public");
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  console.log("🔥 [BACKEND RECEIVE]:", req.method, req.url, req.body);
+  next();
+});
 
 /** Kiểm tra nhanh: process đang chạy có nạp đúng .env không (không lộ giá trị). */
 app.get("/api/health", (req, res) => {
@@ -38,7 +44,7 @@ app.use("/api/chat", require("./routes/chat"));
 app.use("/api/admin", require("./routes/admin"));
 
 /** OTP, đăng ký, đăng nhập, /me, PATCH /me — tất cả dưới /api */
-app.use("/api", require("./routes/public"));
+app.use("/api", authRoutes);
 
 // Existing routes (kept for compatibility)
 app.use("/api/auth", require("./routes/auth"));

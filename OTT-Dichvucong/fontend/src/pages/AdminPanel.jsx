@@ -5,55 +5,43 @@ import {
   Bot,
   ClipboardList,
   House,
+  LogOut,
   MessageCircleMore,
   RefreshCw,
-  RotateCw,
-  Search
+  Send,
+  ShieldCheck
 } from "lucide-react";
+import UserAvatar from "../components/UserAvatar.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import {
   getAdminAiHistory,
   getAdminAiRules,
   getAdminDashboard,
-  getAdminDossierDetail,
   getAdminDossiers,
   getAdminSupportConversation,
   getAdminSupportConversations,
-  postAdminDossierDecision,
-  postAdminOpenDossierChat,
   postAdminSupportMessage,
   postAdminSupportResolve,
   putAdminAiRules
 } from "../lib/api";
 
 const NAV_ITEMS = [
-  { key: "dashboard", label: "Trang chủ (Dashboard)", icon: House, path: "/admin/dashboard" },
+  { key: "dashboard", label: "Tổng quan", icon: House, path: "/admin/dashboard" },
   { key: "records", label: "Quản lý hồ sơ", icon: ClipboardList, path: "/admin/documents" },
-  { key: "support", label: "Trung tâm hỗ trợ (Chat 1v1)", icon: MessageCircleMore, path: "/admin/chat" },
-  { key: "ai", label: "Quản lý Chat AI (Dữ liệu nguồn)", icon: Bot, path: "/admin/ai" }
+  { key: "support", label: "Chat 1v1", icon: MessageCircleMore, path: "/admin/chat" },
+  { key: "ai", label: "Quản trị AI", icon: Bot, path: "/admin/ai" }
 ];
 
 const QUICK_REPLIES = [
-  "Chào bạn, tôi là cán bộ xử lý hồ sơ. Tôi đang kiểm tra thông tin bạn cung cấp.",
-  "Bạn vui lòng gửi bổ sung ảnh giấy tờ rõ nét hơn để tiếp tục xử lý.",
-  "Cảm ơn bạn đã phản hồi, hồ sơ đang được cập nhật trạng thái.",
-  "Thông tin đã đầy đủ. Chúng tôi sẽ sớm gửi kết quả qua hệ thống."
+  "Chào bạn, tôi đã tiếp nhận yêu cầu và đang kiểm tra hồ sơ.",
+  "Bạn vui lòng bổ sung ảnh giấy tờ rõ nét để xử lý nhanh hơn.",
+  "Thông tin đã đầy đủ, chúng tôi sẽ phản hồi trạng thái trong thời gian sớm nhất.",
+  "Cảm ơn bạn. Hồ sơ đang được chuyển cho chuyên viên phụ trách."
 ];
-
-function viStatus(status) {
-  const map = {
-    new: "Mới",
-    overdue: "Quá hạn",
-    processing: "Đang xử lý",
-    completed: "Hoàn thành",
-    need_more: "Yêu cầu bổ sung",
-    rejected: "Từ chối"
-  };
-  return map[status] || status;
-}
 
 function Widget({ title, value, colorClass }) {
   return (
-    <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="text-sm font-semibold text-slate-600">{title}</div>
       <div className={`mt-2 text-3xl font-black ${colorClass}`}>{value}</div>
     </div>
@@ -63,19 +51,13 @@ function Widget({ title, value, colorClass }) {
 export default function AdminPanel() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState("");
+  const { user, logout } = useAuth();
   const [dashboard, setDashboard] = useState({
     totalNew: 0,
     totalOverdue: 0,
     waitingMessages: 0
   });
   const [dossiers, setDossiers] = useState([]);
-  const [selectedDossierId, setSelectedDossierId] = useState(null);
-  const [dossierDetail, setDossierDetail] = useState(null);
-  const [decisionNote, setDecisionNote] = useState("");
-  const [previewIdx, setPreviewIdx] = useState(0);
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [conversationDetail, setConversationDetail] = useState(null);
@@ -93,12 +75,18 @@ export default function AdminPanel() {
     return "dashboard";
   }, [location.pathname]);
 
-  const waitingCount = dashboard.waitingMessages;
+  const sortedConversations = useMemo(
+    () =>
+      [...conversations].sort((a, b) =>
+        (b.latestMessage?.createdAt || b.latestMessage?.at || "").localeCompare(a.latestMessage?.createdAt || a.latestMessage?.at || "")
+      ),
+    [conversations]
+  );
 
   async function loadDashboard() {
     const [statsRes, dossierRes, convRes] = await Promise.all([
       getAdminDashboard(),
-      getAdminDossiers(searchTerm),
+      getAdminDossiers(""),
       getAdminSupportConversations()
     ]);
     setDashboard(statsRes.data);
@@ -106,17 +94,14 @@ export default function AdminPanel() {
     setConversations(convRes.data.conversations || []);
   }
 
-  async function loadDossierDetail(id) {
-    const res = await getAdminDossierDetail(id);
-    setDossierDetail(res.data.dossier);
-    setPreviewIdx(0);
-    setZoom(1);
-    setRotation(0);
-  }
-
   async function loadConversation(id) {
-    const res = await getAdminSupportConversation(id);
-    setConversationDetail(res.data.conversation);
+    if (!id) return;
+    try {
+      const res = await getAdminSupportConversation(id);
+      setConversationDetail(res.data.conversation);
+    } catch {
+      setMessage("Không tải được hội thoại");
+    }
   }
 
   async function loadAiData() {
@@ -126,85 +111,20 @@ export default function AdminPanel() {
   }
 
   useEffect(() => {
-    const run = async () => {
-      try {
-        await loadDashboard();
-      } catch {
-        setMessage("Không tải được dữ liệu dashboard");
-      }
-    };
-    run();
+    loadDashboard().catch(() => setMessage("Không tải được dữ liệu quản trị"));
   }, []);
 
   useEffect(() => {
-    const run = async () => {
-      try {
-        const res = await getAdminDossiers(searchTerm);
-        setDossiers(res.data.dossiers || []);
-      } catch {
-        setMessage("Không tải được danh sách hồ sơ");
-      }
-    };
-    run();
-  }, [searchTerm]);
-
-  useEffect(() => {
-    if (!selectedDossierId) return;
-    loadDossierDetail(selectedDossierId).catch(() => setMessage("Không tải được chi tiết hồ sơ"));
-  }, [selectedDossierId]);
-
-  useEffect(() => {
-    if (activeTab !== "ai") return;
-    loadAiData().catch(() => setMessage("Không tải được dữ liệu AI"));
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (!activeConversationId) return;
-    loadConversation(activeConversationId).catch(() => setMessage("Không tải được hội thoại"));
+    if (activeConversationId) {
+      loadConversation(activeConversationId).catch(() => setMessage("Không tải được hội thoại"));
+    }
   }, [activeConversationId]);
 
-  const activeAttachment = dossierDetail?.attachments?.[previewIdx] || null;
-
-  const filteredConversations = useMemo(
-    () => conversations.sort((a, b) => (b.latestMessage?.at || "").localeCompare(a.latestMessage?.at || "")),
-    [conversations]
-  );
-
-  async function submitDecision(action) {
-    if (!dossierDetail) return;
-    if ((action === "request_more" || action === "reject") && decisionNote.trim().length < 5) {
-      setMessage("Vui lòng nhập nội dung ít nhất 5 ký tự cho hành động này");
-      return;
+  useEffect(() => {
+    if (activeTab === "ai") {
+      loadAiData().catch(() => setMessage("Không tải được dữ liệu AI"));
     }
-    setBusy(true);
-    try {
-      await postAdminDossierDecision(dossierDetail.id, { action, note: decisionNote });
-      await Promise.all([loadDossierDetail(dossierDetail.id), loadDashboard()]);
-      setMessage("Cập nhật quyết định hồ sơ thành công");
-      setDecisionNote("");
-    } catch {
-      setMessage("Cập nhật quyết định hồ sơ thất bại");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function openChatFromDossier() {
-    if (!dossierDetail) return;
-    setBusy(true);
-    try {
-      const res = await postAdminOpenDossierChat(dossierDetail.id);
-      const conv = res.data.conversation;
-      navigate("/admin/chat");
-      setActiveConversationId(conv.id);
-      await loadDashboard();
-      setMessage("Đã mở chat với người dân");
-    } catch {
-      setMessage("Không mở được chat hồ sơ");
-    } finally {
-      setBusy(false);
-    }
-  }
+  }, [activeTab]);
 
   async function sendSupportMessage(content) {
     if (!activeConversationId) return;
@@ -249,13 +169,42 @@ export default function AdminPanel() {
     }
   }
 
+  const renderMessageBubble = (msg) => {
+    const senderName = msg.sender?.fullName || (msg.from === "admin" ? (user?.fullName || "Cán bộ") : conversationDetail?.citizenName || "Người dân");
+    const senderAvatar = msg.sender?.avatarUrl;
+    const isAdmin = msg.from === "admin";
+    const timeStr = new Date(msg.createdAt || msg.at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+    return (
+      <div key={msg.id} className={`flex items-start gap-3 mb-4 ${isAdmin ? "justify-end flex-row-reverse" : ""}`}>
+        {!isAdmin && senderAvatar && (
+          <UserAvatar user={{ fullName: senderName }} src={senderAvatar} size={36} />
+        )}
+        <div className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
+          isAdmin
+            ? "bg-gradient-to-r from-[#003366] to-[#052b53] text-white rounded-br-none ml-auto"
+            : "bg-white border ring-1 ring-slate-200/50 rounded-bl-none"
+        }`}>
+          <div className="text-xs font-semibold opacity-90 mb-1.5 flex items-center gap-1">
+            {senderName}
+            <span className="text-[10px] opacity-70 ml-auto">{timeStr}</span>
+          </div>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.text}</div>
+        </div>
+        {isAdmin && senderAvatar && (
+          <UserAvatar user={{ fullName: senderName }} src={senderAvatar} size={36} />
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
-      <div className="mx-auto flex max-w-7xl gap-4 px-4 py-4">
-        <aside className="w-72 shrink-0 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row">
+        <aside className="w-full rounded-2xl bg-white p-4 ring-1 ring-slate-200 lg:w-80 lg:shrink-0">
           <div className="mb-4 border-b border-slate-200 pb-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admin Console</div>
-            <div className="mt-1 text-lg font-black text-slate-900">Hệ thống điều hành</div>
+            <div className="mt-1 text-lg font-black text-[#003366]">Hệ thống điều hành</div>
           </div>
 
           <nav className="space-y-2">
@@ -266,10 +215,10 @@ export default function AdminPanel() {
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => navigate(item.path || "/admin/dashboard")}
+                  onClick={() => navigate(item.path)}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${
                     active
-                      ? "bg-(--gov-navy) text-white"
+                      ? "bg-[#003366] text-white"
                       : "bg-slate-50 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
@@ -279,6 +228,31 @@ export default function AdminPanel() {
               );
             })}
           </nav>
+
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#003366]/10 px-3 py-1 text-xs font-bold text-[#003366]">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Thông tin tài khoản
+            </div>
+            <div className="flex items-center gap-3">
+              <UserAvatar user={user} src={user?.avatarUrl || null} size={44} />
+              <div>
+                <div className="text-sm font-bold text-slate-900">{user?.fullName || 'Chưa cập nhật tên'}</div>
+                <div className="text-xs text-slate-600">{user?.email || 'canbo@dichvucong.gov.vn'}</div>
+              </div>
+            </div>
+            <div className="mt-3 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+              Chức vụ: Chuyên viên cấp cao
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#7a1f1f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#621717]"
+            >
+              <LogOut className="h-4 w-4" />
+              Đăng xuất
+            </button>
+          </div>
         </aside>
 
         <section className="min-w-0 flex-1 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
@@ -290,223 +264,62 @@ export default function AdminPanel() {
 
           {activeTab === "dashboard" ? (
             <div>
-              <h1 className="text-2xl font-black text-slate-900">Dashboard</h1>
-              <p className="mt-1 text-sm text-slate-600">
-                Tổng quan nhanh hồ sơ và tin nhắn đang chờ xử lý.
-              </p>
+              <h1 className="text-2xl font-black text-slate-900">Dashboard điều hành</h1>
+              <p className="mt-1 text-sm text-slate-600">Tổng quan số liệu hồ sơ và hỗ trợ người dân theo thời gian thực.</p>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <Widget title="Hồ sơ mới" value={String(dashboard.totalNew)} colorClass="text-emerald-700" />
-                <Widget
-                  title="Hồ sơ quá hạn"
-                  value={String(dashboard.totalOverdue)}
-                  colorClass="text-red-700"
-                />
-                <Widget title="Tin nhắn đang chờ" value={String(waitingCount)} colorClass="text-amber-700" />
+                <Widget title="Hồ sơ quá hạn" value={String(dashboard.totalOverdue)} colorClass="text-red-700" />
+                <Widget title="Tin nhắn chờ xử lý" value={String(dashboard.waitingMessages)} colorClass="text-amber-700" />
               </div>
             </div>
           ) : null}
 
           {activeTab === "records" ? (
             <div>
-              <h1 className="text-2xl font-black text-slate-900">Quản lý hồ sơ</h1>
-              <p className="mt-1 text-sm text-slate-600">
-                Tìm kiếm theo mã hồ sơ hoặc số điện thoại người dân.
-              </p>
-
-              <div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
-                <Search className="h-4 w-4 text-slate-500" />
-                <input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Nhập mã hồ sơ hoặc số điện thoại..."
-                  className="w-full bg-transparent text-sm outline-none"
-                />
-              </div>
-
-              <div className="mt-4 overflow-auto rounded-xl ring-1 ring-slate-200">
+              <h1 className="text-2xl font-black text-slate-900">Danh sách hồ sơ</h1>
+              <p className="mt-1 text-sm text-slate-600">Theo dõi hồ sơ mới để chủ động hỗ trợ người dân trong quá trình xử lý.</p>
+              <div className="mt-4 overflow-auto rounded-xl border border-slate-200">
                 <table className="min-w-full bg-white text-sm">
                   <thead className="bg-slate-50 text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left font-semibold">Mã hồ sơ</th>
                       <th className="px-3 py-2 text-left font-semibold">Người dân</th>
-                      <th className="px-3 py-2 text-left font-semibold">Số điện thoại</th>
+                      <th className="px-3 py-2 text-left font-semibold">SĐT</th>
                       <th className="px-3 py-2 text-left font-semibold">Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dossiers.map((item) => (
-                      <tr key={item.id} className="cursor-pointer border-t border-slate-200 hover:bg-slate-50">
-                        <td
-                          className="px-3 py-2 font-semibold"
-                          onClick={() => setSelectedDossierId(item.id)}
-                        >
-                          {item.id}
-                        </td>
+                      <tr key={item.id} className="border-t border-slate-200">
+                        <td className="px-3 py-2 font-semibold text-[#003366]">{item.id}</td>
                         <td className="px-3 py-2">{item.citizenName}</td>
                         <td className="px-3 py-2">{item.phone}</td>
-                        <td className="px-3 py-2">{viStatus(item.status)}</td>
+                        <td className="px-3 py-2">{item.status}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-
-              {dossierDetail ? (
-                <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="text-lg font-black text-slate-900">
-                      Chi tiết hồ sơ {dossierDetail.id} ({viStatus(dossierDetail.status)})
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={openChatFromDossier}
-                      className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700"
-                    >
-                      Chat với người dân
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
-                      <div className="text-sm font-black text-slate-900">Cột trái: Thông tin E-form</div>
-                      <div className="mt-3 space-y-2 text-sm text-slate-700">
-                        <div>
-                          <span className="font-semibold">Tên thủ tục:</span> {dossierDetail.procedureName}
-                        </div>
-                        <div>
-                          <span className="font-semibold">Người nộp:</span> {dossierDetail.citizenName}
-                        </div>
-                        <div>
-                          <span className="font-semibold">Thời gian nộp:</span>{" "}
-                          {new Date(dossierDetail.submittedAt).toLocaleString("vi-VN")}
-                        </div>
-                        <div>
-                          <span className="font-semibold">CCCD:</span> {dossierDetail.eform?.citizenId}
-                        </div>
-                        <div>
-                          <span className="font-semibold">Email:</span> {dossierDetail.eform?.email}
-                        </div>
-                        <div>
-                          <span className="font-semibold">Địa chỉ:</span> {dossierDetail.eform?.address}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-black text-slate-900">
-                          Cột phải: Tệp đính kèm (zoom / xoay)
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold hover:bg-slate-200"
-                            onClick={() => setZoom((z) => Math.min(2.5, z + 0.2))}
-                          >
-                            Zoom +
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold hover:bg-slate-200"
-                            onClick={() => setZoom((z) => Math.max(0.6, z - 0.2))}
-                          >
-                            Zoom -
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold hover:bg-slate-200"
-                            onClick={() => setRotation((r) => r + 90)}
-                          >
-                            <RotateCw className="inline-block h-3 w-3" /> Xoay
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        {(dossierDetail.attachments || []).map((file, idx) => (
-                          <button
-                            key={file.id}
-                            type="button"
-                            onClick={() => setPreviewIdx(idx)}
-                            className={`rounded-lg px-2 py-1 text-xs font-semibold ${
-                              idx === previewIdx ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"
-                            }`}
-                          >
-                            {file.name}
-                          </button>
-                        ))}
-                      </div>
-                      {activeAttachment ? (
-                        <div className="mt-3 overflow-hidden rounded-xl bg-slate-100 p-2 ring-1 ring-slate-200">
-                          <img
-                            src={activeAttachment.url}
-                            alt={activeAttachment.name}
-                            className="mx-auto max-h-80 object-contain transition"
-                            style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-xl bg-white p-3 ring-1 ring-slate-200">
-                    <div className="text-sm font-black text-slate-900">Bước 3: Ra quyết định</div>
-                    <textarea
-                      value={decisionNote}
-                      onChange={(e) => setDecisionNote(e.target.value)}
-                      placeholder="Nhập nội dung yêu cầu bổ sung / lý do từ chối..."
-                      className="mt-3 h-24 w-full rounded-lg bg-slate-50 p-3 text-sm ring-1 ring-slate-200 outline-none"
-                    />
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => submitDecision("approve")}
-                        className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-60"
-                      >
-                        Duyệt
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => submitDecision("request_more")}
-                        className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-500 disabled:opacity-60"
-                      >
-                        Yêu cầu bổ sung
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => submitDecision("reject")}
-                        className="rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-60"
-                      >
-                        Từ chối
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : null}
 
           {activeTab === "support" ? (
             <div>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl font-black text-slate-900">Trung tâm hỗ trợ (Chat 1v1)</h1>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Tập trung toàn bộ tin nhắn của người dân theo một nơi quản lý.
-                  </p>
+                  <h1 className="text-2xl font-black text-slate-900">Trung tâm hỗ trợ trực tuyến</h1>
+                  <p className="mt-1 text-sm text-slate-600">Kênh chat 1v1 giữa người dân và cán bộ xử lý.</p>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-700">
+                <div className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py Asc 1 text-sm font-bold text-red-700">
                   <Bell className="h-4 w-4" />
-                  {waitingCount} tin nhắn mới
+                  {dashboard.waitingMessages} hội thoại mới
                 </div>
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-12">
-                <div className="lg:col-span-4 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 lg:col-span-4">
                   <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm font-black text-slate-900">Danh sách hội thoại</div>
+                    <div className="text-sm font-black text-slate-900">Người dân đang chờ</div>
                     <button
                       type="button"
                       onClick={() => loadDashboard()}
@@ -516,83 +329,100 @@ export default function AdminPanel() {
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {filteredConversations.map((conv) => (
-                      <button
-                        key={conv.id}
-                        type="button"
-                        onClick={() => setActiveConversationId(conv.id)}
-                        className={`w-full rounded-lg px-3 py-2 text-left ring-1 ${
-                          activeConversationId === conv.id
-                            ? "bg-slate-900 text-white ring-slate-900"
-                            : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
-                        }`}
-                      >
-                        <div className="text-xs font-bold">{conv.citizenName}</div>
-                        <div className="mt-1 text-xs">
-                          Hồ sơ: {conv.dossierId} - {conv.status === "waiting" ? "Đang chờ" : "Đã giải quyết"}
-                        </div>
-                      </button>
-                    ))}
+                    {sortedConversations.map((conv) => {
+                      const waiting = conv.status === "active" || conv.status === "waiting";
+                      const lastMsg = conv.latestMessage;
+                      const preview = lastMsg?.text ? `${lastMsg.text.slice(0, 40)}${lastMsg.text.length > 40 ? '...' : ''}` : 'Chưa có tin nhắn';
+                      const timeStr = lastMsg?.createdAt || lastMsg?.at ? new Date(lastMsg.createdAt || lastMsg.at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : '';
+                      const citizenName = conv.citizenName || conv.fullName || conv.userId || 'Người dân';
+                      const userData = {fullName: citizenName, avatarUrl: conv.avatarUrl || conv.avatar || null};
+                      return (
+                        <button
+                          key={conv.id}
+                          type="button"
+                          onClick={() => setActiveConversationId(conv.id)}
+                          className={`group flex w-full items-start gap-3 rounded-xl p-3 text-left transition-all ring-1 hover:shadow-md ${
+                            activeConversationId === conv.id
+                              ? "bg-[#003366] text-white ring-[#003366]/50 shadow-md"
+                              : "bg-white text-slate-900 ring-slate-200 hover:bg-slate-50 hover:ring-[#003366]/20"
+                          }`}
+                        >
+                          <UserAvatar user={userData} size={40} className="flex-shrink-0 ring-2 ring-slate-200/50 group-hover:ring-[#003366]/30" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="font-bold text-sm leading-tight">{citizenName}</div>
+                              <div className="ml-2 flex items-center gap-1.5">
+                                {waiting && (
+                                  <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 ring-1 ring-red-100/50">
+                                    Mới
+                                  </span>
+                                )}
+                                {timeStr && <span className="text-xs text-slate-400">{timeStr}</span>}
+                              </div>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5">{conv.dossierId}</div>
+                            <div className="text-xs text-slate-500 truncate mt-1">{preview}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="lg:col-span-8 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 lg:col-span-8">
                   {conversationDetail ? (
                     <div>
-                      <div className="mb-3 flex items-center justify-between">
+                      <div className="mb-3 flex items-center justify-between gap-2">
                         <div className="text-sm font-black text-slate-900">
-                          Hội thoại với {conversationDetail.citizenName} ({conversationDetail.dossierId})
+                          Hội thoại với {conversationDetail?.citizenName || 'Đang tải...'}
                         </div>
                         <button
                           type="button"
                           onClick={markResolved}
                           className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-600"
                         >
-                          Đánh dấu đã giải quyết
+                          Đánh dấu đã xử lý
                         </button>
                       </div>
-                      <div className="max-h-72 space-y-2 overflow-auto rounded-lg bg-white p-3 ring-1 ring-slate-200">
-                        {(conversationDetail.messages || []).map((msg) => (
-                          <div key={msg.id} className="rounded-lg bg-slate-50 p-2 text-sm">
-                            <span className="font-bold">{msg.from === "admin" ? "Admin" : "Người dân"}:</span>{" "}
-                            {msg.text}
-                          </div>
-                        ))}
+                      <div className="max-h-72 space-y-2 overflow-auto rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+                        {conversationDetail.messages?.map(renderMessageBubble) || []}
                       </div>
                       <div className="mt-3">
                         <div className="mb-2 text-xs font-bold text-slate-600">Mẫu trả lời nhanh</div>
-                        <div className="space-y-2">
-                        {QUICK_REPLIES.map((q) => (
-                          <button
-                            key={q}
-                            type="button"
-                            onClick={() => sendSupportMessage(q)}
-                            className="block w-full rounded-lg bg-white px-3 py-2 text-left text-xs font-semibold ring-1 ring-slate-300 hover:bg-slate-100"
-                          >
-                            {q}
-                          </button>
-                        ))}
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {QUICK_REPLIES.map((q) => (
+                            <button
+                              key={q}
+                              type="button"
+                              onClick={() => sendSupportMessage(q)}
+                              className="rounded-lg bg-white px-3 py-2 text-left text-xs font-semibold ring-1 ring-slate-300 hover:bg-slate-100"
+                            >
+                              {q}
+                            </button>
+                          ))}
                         </div>
                       </div>
                       <div className="mt-3 flex gap-2">
                         <input
                           value={chatText}
                           onChange={(e) => setChatText(e.target.value)}
-                          placeholder="Nhập nội dung tư vấn..."
+                          placeholder="Nhập nội dung phản hồi..."
                           className="w-full rounded-lg bg-white px-3 py-2 text-sm ring-1 ring-slate-300 outline-none"
                         />
                         <button
                           type="button"
+                          disabled={busy}
                           onClick={() => sendSupportMessage(chatText)}
-                          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#003366] px-4 py-2 text-sm font-bold text-white hover:bg-[#052b53]"
                         >
+                          <Send className="h-4 w-4" />
                           Gửi
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-sm text-slate-600">
-                      Chọn một hội thoại ở cột trái để bắt đầu hỗ trợ trực tiếp.
+                    <div className="text-sm text-slate-600 text-center py-20">
+                      Chọn một hội thoại để xem chi tiết và phản hồi người dân.
                     </div>
                   )}
                 </div>
@@ -602,14 +432,11 @@ export default function AdminPanel() {
 
           {activeTab === "ai" ? (
             <div>
-              <h1 className="text-2xl font-black text-slate-900">Quản lý Chat AI (Dữ liệu nguồn)</h1>
-              <p className="mt-1 text-sm text-slate-600">
-                Theo dõi lịch sử trả lời của AI và cập nhật bộ quy tắc khi có luật mới.
-              </p>
-
+              <h1 className="text-2xl font-black text-slate-900">Quản trị tri thức AI</h1>
+              <p className="mt-1 text-sm text-slate-600">Cập nhật quy tắc trả lời để đồng bộ với quy trình nghiệp vụ mới.</p>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                  <h2 className="text-base font-black text-slate-900">Lịch sử câu hỏi AI đã trả lời</h2>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h2 className="text-base font-black text-slate-900">Lịch sử phản hồi AI</h2>
                   <div className="mt-3 space-y-3">
                     {aiHistory.map((item) => (
                       <div key={item.id} className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
@@ -621,20 +448,20 @@ export default function AdminPanel() {
                     ))}
                   </div>
                 </div>
-
-                <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                  <h2 className="text-base font-black text-slate-900">Bộ quy tắc trả lời AI</h2>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h2 className="text-base font-black text-slate-900">Bộ quy tắc trả lời</h2>
                   <textarea
-                    className="mt-3 h-64 w-full rounded-lg bg-white p-3 text-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-(--gov-navy)"
+                    className="mt-3 h-64 w-full rounded-lg bg-white p-3 text-sm ring-1 ring-slate-300 outline-none focus:ring-2 focus:ring-[#003366]"
                     value={ruleText}
                     onChange={(e) => setRuleText(e.target.value)}
                   />
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={saveAiRules}
-                    className="mt-3 rounded-lg bg-(--gov-navy) px-4 py-2 text-sm font-bold text-white hover:bg-[#19306f]"
+                    className="mt-3 rounded-lg bg-[#003366] px-4 py-2 text-sm font-bold text-white hover:bg-[#052b53]"
                   >
-                    Lưu bộ quy tắc mới
+                    Lưu bộ quy tắc
                   </button>
                 </div>
               </div>

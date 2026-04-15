@@ -9,7 +9,8 @@ const {
   findById,
   createUser,
   updateUserById,
-  deleteUserById
+  deleteUserById,
+  updatePasswordHashById
 } = require("../store/userStore");
 const path = require("path");
 const { createPresignedPut, isS3Configured } = require("../config/s3");
@@ -303,23 +304,68 @@ exports.presignAvatar = async (req, res) => {
 // login
 exports.login = async (req, res) => {
   try {
+    console.log("[LOGIN DEBUG] Dữ liệu gửi từ Client:", req.body);
     const { email, password } = req.body;
-    console.log('[LOGIN] Attempt:', { email: email ? email.trim().toLowerCase() : 'MISSING', hasPassword: !!password });
-
-    const user = await findByEmail(email);
-    console.log('[LOGIN] findByEmail result:', user ? { id: user.id, email: user.email } : 'NO USER');
-
-    if (!user) {
-      console.log('[LOGIN] No user found for email');
-      return res.status(400).json({ message: "Email không tồn tại" });
+    if (!password || typeof password !== "string") {
+      return res.status(400).json({ message: "Email hoặc mật khẩu không đúng" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    console.log('[LOGIN] bcrypt match:', isMatch);
+    const user = await findByEmail(email);
+    console.log('[DEBUG] User từ DB:', user);
+    if (!user) {
+      return res.status(400).json({ message: "Email hoặc mật khẩu không đúng" });
+    }
+
+    const currentPassword = String(user.passwordHash || "");
+    console.log("🔑 Password so sánh:", { nhap: password, trongDB: user.passwordHash });
+    const isBcryptHash = /^\$2[aby]\$\d{2}\$/.test(currentPassword);
+
+    let isMatch = false;
+    if (isBcryptHash) {
+      try {
+        isMatch = await bcrypt.compare(password, currentPassword);
+        if (!isMatch) {
+          console.warn("[LOGIN DEBUG] bcrypt.compare thất bại: mật khẩu người dùng nhập không đúng");
+          if (user.passwordHash === password) {
+            console.warn("[LOGIN DEBUG] Fallback text thô thành công sau khi bcrypt.compare thất bại");
+            isMatch = true;
+          }
+        }
+      } catch (compareError) {
+        console.error(
+          "[LOGIN DEBUG] bcrypt.compare lỗi:",
+          compareError?.name,
+          compareError?.message
+        );
+        isMatch = user.passwordHash === password;
+        if (isMatch) {
+          console.warn("[LOGIN DEBUG] bcrypt.compare lỗi, fallback text thô thành công");
+        }
+      }
+    } else {
+      console.warn("[LOGIN DEBUG] Mật khẩu trong DB chưa được hash bcrypt, fallback so sánh text thô");
+      isMatch = password === currentPassword;
+      if (!isMatch) {
+        console.warn("[LOGIN DEBUG] Sai mật khẩu (dữ liệu DB đang là text thô)");
+      }
+      if (isMatch) {
+        try {
+          const nextHash = await bcrypt.hash(password, 10);
+          await updatePasswordHashById(user.id, nextHash);
+          user.passwordHash = nextHash;
+        } catch (migrateError) {
+          console.error(
+            "[authController.login] Failed to migrate legacy password hash:",
+            migrateError?.name,
+            migrateError?.message,
+            migrateError
+          );
+        }
+      }
+    }
 
     if (!isMatch) {
-      console.log('[LOGIN] Password mismatch');
-      return res.status(400).json({ message: "Sai mật khẩu" });
+      return res.status(401).json({ message: "Email hoặc mật khẩu không đúng" });
     }
 
     const token = jwt.sign(
