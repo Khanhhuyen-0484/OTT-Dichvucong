@@ -304,16 +304,21 @@ exports.presignAvatar = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('[LOGIN] Attempt:', { email: email ? email.trim().toLowerCase() : 'MISSING', hasPassword: !!password });
 
     const user = await findByEmail(email);
+    console.log('[LOGIN] findByEmail result:', user ? { id: user.id, email: user.email } : 'NO USER');
 
     if (!user) {
+      console.log('[LOGIN] No user found for email');
       return res.status(400).json({ message: "Email không tồn tại" });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
+    console.log('[LOGIN] bcrypt match:', isMatch);
 
     if (!isMatch) {
+      console.log('[LOGIN] Password mismatch');
       return res.status(400).json({ message: "Sai mật khẩu" });
     }
 

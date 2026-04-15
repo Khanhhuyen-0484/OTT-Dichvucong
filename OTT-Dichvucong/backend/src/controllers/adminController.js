@@ -13,6 +13,7 @@ const {
   updateAiRules
 } = require("../store/adminStore");
 const { appendMessage } = require("../store/chatThreadStore");
+const { findById, updateUserRole } = require("../store/userStore");
 
 exports.dashboard = async (req, res) => {
   try {
@@ -152,5 +153,30 @@ exports.aiRulesUpdate = async (req, res) => {
     return res.json({ message: "Cập nhật bộ quy tắc thành công", rulesText: saved });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi cập nhật bộ quy tắc AI" });
+  }
+};
+
+exports.updateUserRole = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const role = String(req.body?.role || "").trim().toLowerCase();
+
+    if (!userId) {
+      return res.status(400).json({ message: "ID người dùng không hợp lệ" });
+    }
+
+    if (!["citizen", "admin"].includes(role)) {
+      return res.status(400).json({ message: "Vai trò không hợp lệ. Phải là 'citizen' hoặc 'admin'" });
+    }
+
+    const user = await findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    const updatedUser = await updateUserRole(userId, role);
+    return res.json({ message: `Cập nhật vai trò người dùng thành công`, user: updatedUser });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi cập nhật vai trò người dùng" });
   }
 };

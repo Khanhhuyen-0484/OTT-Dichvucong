@@ -22,4 +22,7 @@ router.get("/ai/history", c.aiHistory);
 router.get("/ai/rules", c.aiRulesGet);
 router.put("/ai/rules", c.aiRulesUpdate);
 
+// User role management
+router.put("/users/:userId/role", c.updateUserRole);
+
 module.exports = router;

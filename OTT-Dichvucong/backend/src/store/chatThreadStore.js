@@ -1,31 +1,22 @@
-const fs = require("fs/promises");
-const path = require("path");
+const { GetCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
+const { dynamo } = require("../config/dynamoClient");
 
-const FILE = path.join(__dirname, "..", "..", "data", "chat_threads.json");
-
-async function load() {
-  try {
-    const raw = await fs.readFile(FILE, "utf8");
-    const j = JSON.parse(raw);
-    return j.threads && typeof j.threads === "object" ? j : { threads: {} };
-  } catch {
-    return { threads: {} };
-  }
-}
-
-async function save(data) {
-  await fs.mkdir(path.dirname(FILE), { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(data, null, 2), "utf8");
-}
+const CHAT_THREADS_TABLE = process.env.DYNAMODB_CHAT_THREADS_TABLE || "ChatThreads";
 
 /**
  * @param {string} userId
  * @returns {Promise<Array<{from:string,text:string,at:string}>>}
  */
 async function getThread(userId) {
-  const data = await load();
-  const key = String(userId);
-  return Array.isArray(data.threads[key]) ? data.threads[key] : [];
+  const key = String(userId || "").trim();
+  if (!key) return [];
+  const result = await dynamo.send(
+    new GetCommand({
+      TableName: CHAT_THREADS_TABLE,
+      Key: { threadId: key }
+    })
+  );
+  return Array.isArray(result.Item?.messages) ? result.Item.messages : [];
 }
 
 /**
@@ -33,16 +24,27 @@ async function getThread(userId) {
  * @param {{ from: string, text: string }} msg
  */
 async function appendMessage(userId, msg) {
-  const data = await load();
-  const key = String(userId);
-  if (!Array.isArray(data.threads[key])) data.threads[key] = [];
   const row = {
     from: msg.from,
     text: String(msg.text || "").slice(0, 4000),
     at: new Date().toISOString()
   };
-  data.threads[key].push(row);
-  await save(data);
+
+  const key = String(userId || "").trim();
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: CHAT_THREADS_TABLE,
+      Key: { threadId: key },
+      UpdateExpression:
+        "SET messages = list_append(if_not_exists(messages, :empty_list), :new_message), lastMessage = :last_message, updatedAt = :updated_at",
+      ExpressionAttributeValues: {
+        ":empty_list": [],
+        ":new_message": [row],
+        ":last_message": row,
+        ":updated_at": row.at
+      }
+    })
+  );
   return row;
 }
 

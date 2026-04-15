@@ -1,152 +1,18 @@
-const fs = require("fs/promises");
-const path = require("path");
+const {
+  GetCommand,
+  PutCommand,
+  ScanCommand,
+  UpdateCommand
+} = require("@aws-sdk/lib-dynamodb");
+const { dynamo } = require("../config/dynamoClient");
 
-const FILE = path.join(__dirname, "..", "..", "data", "admin_data.json");
+const DOSSIERS_TABLE = process.env.DYNAMODB_DOSSIERS_TABLE || "Dossiers";
+const SUPPORT_CONVERSATIONS_TABLE =
+  process.env.DYNAMODB_SUPPORT_CONVERSATIONS_TABLE || "SupportConversations";
+const ADMIN_AI_TABLE = process.env.DYNAMODB_ADMIN_AI_TABLE || "AdminAi";
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-function makeSeed() {
-  return {
-    dossiers: [
-      {
-        id: "HS-2026-001",
-        procedureName: "Cấp đổi giấy phép lái xe",
-        citizenName: "Nguyễn Văn A",
-        phone: "0912345678",
-        submittedAt: "2026-04-10T08:00:00.000Z",
-        dueAt: "2026-04-15T08:00:00.000Z",
-        status: "new",
-        eform: {
-          fullName: "Nguyễn Văn A",
-          citizenId: "079123456789",
-          email: "vana@example.com",
-          address: "Quận 1, TP.HCM"
-        },
-        attachments: [
-          {
-            id: "att-1",
-            name: "cccd-mat-truoc.jpg",
-            type: "image",
-            url: "https://picsum.photos/seed/cccd1/1200/800"
-          },
-          {
-            id: "att-2",
-            name: "bang-lai-cu.jpg",
-            type: "image",
-            url: "https://picsum.photos/seed/gplx1/1200/800"
-          }
-        ],
-        timeline: [{ at: "2026-04-10T08:00:00.000Z", by: "system", action: "Tiep nhan ho so" }]
-      },
-      {
-        id: "HS-2026-002",
-        procedureName: "Đăng ký tạm trú",
-        citizenName: "Trần Thị B",
-        phone: "0987123456",
-        submittedAt: "2026-04-09T09:30:00.000Z",
-        dueAt: "2026-04-12T09:30:00.000Z",
-        status: "overdue",
-        eform: {
-          fullName: "Trần Thị B",
-          citizenId: "079222233334",
-          email: "thib@example.com",
-          address: "Thủ Đức, TP.HCM"
-        },
-        attachments: [
-          {
-            id: "att-3",
-            name: "cccd.jpg",
-            type: "image",
-            url: "https://picsum.photos/seed/cccd2/1200/800"
-          }
-        ],
-        timeline: [{ at: "2026-04-09T09:30:00.000Z", by: "system", action: "Tiep nhan ho so" }]
-      },
-      {
-        id: "HS-2026-003",
-        procedureName: "Cấp hộ chiếu phổ thông",
-        citizenName: "Lê Văn C",
-        phone: "0933123987",
-        submittedAt: "2026-04-13T10:30:00.000Z",
-        dueAt: "2026-04-20T10:30:00.000Z",
-        status: "processing",
-        eform: {
-          fullName: "Lê Văn C",
-          citizenId: "079111122223",
-          email: "vanc@example.com",
-          address: "Gò Vấp, TP.HCM"
-        },
-        attachments: [
-          {
-            id: "att-4",
-            name: "chan-dung.jpg",
-            type: "image",
-            url: "https://picsum.photos/seed/passport1/1200/800"
-          }
-        ],
-        timeline: [{ at: "2026-04-13T10:30:00.000Z", by: "system", action: "Tiep nhan ho so" }]
-      }
-    ],
-    supportConversations: [
-      {
-        id: "sup-1",
-        dossierId: "HS-2026-001",
-        citizenName: "Nguyễn Văn A",
-        status: "waiting",
-        messages: [
-          { id: "msg-1", from: "citizen", text: "Em đã nộp hồ sơ rồi ạ.", at: "2026-04-10T08:20:00.000Z" }
-        ]
-      },
-      {
-        id: "sup-2",
-        dossierId: "HS-2026-002",
-        citizenName: "Trần Thị B",
-        status: "resolved",
-        messages: [
-          { id: "msg-2", from: "citizen", text: "Nhờ kiểm tra hồ sơ giúp tôi.", at: "2026-04-11T09:20:00.000Z" },
-          { id: "msg-3", from: "admin", text: "Hồ sơ đã đủ, vui lòng chờ xử lý.", at: "2026-04-11T09:25:00.000Z" }
-        ]
-      }
-    ],
-    ai: {
-      rulesText:
-        "1) Trả lời ngắn gọn, bám đúng quy định hiện hành.\n2) Nếu thiếu thông tin, yêu cầu bổ sung rõ ràng.\n3) Không suy diễn khi chưa có căn cứ pháp lý.",
-      history: [
-        {
-          id: "ai-1",
-          question: "Lệ phí đổi GPLX là bao nhiêu?",
-          answer: "Mức lệ phí hiện hành là 135.000đ/hồ sơ.",
-          at: "2026-04-13T09:10:00.000Z"
-        },
-        {
-          id: "ai-2",
-          question: "Đăng ký tạm trú cần giấy tờ gì?",
-          answer: "CCCD, biểu mẫu cư trú và giấy tờ chỗ ở hợp pháp.",
-          at: "2026-04-13T10:15:00.000Z"
-        }
-      ]
-    }
-  };
-}
-
-async function load() {
-  try {
-    const raw = await fs.readFile(FILE, "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-    // ignore
-  }
-  const seed = makeSeed();
-  await save(seed);
-  return seed;
-}
-
-async function save(data) {
-  await fs.mkdir(path.dirname(FILE), { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(data, null, 2), "utf8");
 }
 
 function normalizeDossierStatus(status) {
@@ -155,107 +21,148 @@ function normalizeDossierStatus(status) {
 }
 
 async function getDashboardStats() {
-  const data = await load();
-  const totalNew = data.dossiers.filter((x) => x.status === "new").length;
-  const totalOverdue = data.dossiers.filter((x) => x.status === "overdue").length;
-  const waitingMessages = data.supportConversations.filter((x) => x.status === "waiting").length;
+  const [dossiersRs, conversationsRs] = await Promise.all([
+    dynamo.send(new ScanCommand({ TableName: DOSSIERS_TABLE })),
+    dynamo.send(new ScanCommand({ TableName: SUPPORT_CONVERSATIONS_TABLE }))
+  ]);
+  const dossiers = dossiersRs.Items || [];
+  const conversations = conversationsRs.Items || [];
+  const totalNew = dossiers.filter((x) => x.status === "new").length;
+  const totalOverdue = dossiers.filter((x) => x.status === "overdue").length;
+  const waitingMessages = conversations.filter((x) => x.status === "waiting").length;
   return { totalNew, totalOverdue, waitingMessages };
 }
 
 async function listDossiers(query = "") {
-  const data = await load();
+  const result = await dynamo.send(new ScanCommand({ TableName: DOSSIERS_TABLE }));
+  const dossiers = result.Items || [];
   const q = String(query || "").trim().toLowerCase();
-  if (!q) return data.dossiers;
-  return data.dossiers.filter(
+  if (!q) return dossiers;
+  return dossiers.filter(
     (d) => d.id.toLowerCase().includes(q) || String(d.phone || "").toLowerCase().includes(q)
   );
 }
 
 async function getDossierById(id) {
-  const data = await load();
-  return data.dossiers.find((d) => d.id === id) || null;
+  const result = await dynamo.send(
+    new GetCommand({
+      TableName: DOSSIERS_TABLE,
+      Key: { id }
+    })
+  );
+  return result.Item || null;
 }
 
 async function decideDossier({ dossierId, action, note, adminEmail }) {
-  const data = await load();
-  const index = data.dossiers.findIndex((d) => d.id === dossierId);
-  if (index < 0) return null;
-
-  let nextStatus = data.dossiers[index].status;
+  const current = await getDossierById(dossierId);
+  if (!current) return null;
+  let nextStatus = current.status;
   if (action === "approve") {
-    nextStatus = data.dossiers[index].status === "processing" ? "completed" : "processing";
+    nextStatus = current.status === "processing" ? "completed" : "processing";
   } else if (action === "request_more") {
     nextStatus = "need_more";
   } else if (action === "reject") {
     nextStatus = "rejected";
   }
-  data.dossiers[index].status = normalizeDossierStatus(nextStatus);
-  data.dossiers[index].timeline = Array.isArray(data.dossiers[index].timeline)
-    ? data.dossiers[index].timeline
-    : [];
-  data.dossiers[index].timeline.push({
+
+  const timelineItem = {
     at: nowIso(),
     by: adminEmail || "admin",
     action,
     note: String(note || "")
-  });
-
-  await save(data);
-  return data.dossiers[index];
+  };
+  const result = await dynamo.send(
+    new UpdateCommand({
+      TableName: DOSSIERS_TABLE,
+      Key: { id: dossierId },
+      UpdateExpression:
+        "SET #status = :status, timeline = list_append(if_not_exists(timeline, :empty_list), :new_timeline), updatedAt = :updated_at",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":status": normalizeDossierStatus(nextStatus),
+        ":empty_list": [],
+        ":new_timeline": [timelineItem],
+        ":updated_at": timelineItem.at
+      },
+      ConditionExpression: "attribute_exists(id)",
+      ReturnValues: "ALL_NEW"
+    })
+  );
+  return result.Attributes || null;
 }
 
 async function getOrCreateConversationByDossier(dossierId) {
-  const data = await load();
-  let conv = data.supportConversations.find((x) => x.dossierId === dossierId);
+  const found = await dynamo.send(
+    new ScanCommand({
+      TableName: SUPPORT_CONVERSATIONS_TABLE,
+      FilterExpression: "dossierId = :dossierId",
+      ExpressionAttributeValues: {
+        ":dossierId": dossierId
+      },
+      Limit: 1
+    })
+  );
+  let conv = found.Items?.[0] || null;
   if (!conv) {
-    const dossier = data.dossiers.find((d) => d.id === dossierId);
+    const dossier = await getDossierById(dossierId);
     conv = {
       id: `sup-${Date.now()}`,
       dossierId,
       citizenName: dossier?.citizenName || "Người dân",
       status: "waiting",
-      messages: []
+      messages: [],
+      lastMessage: null,
+      updatedAt: nowIso()
     };
-    data.supportConversations.unshift(conv);
-    await save(data);
+    await dynamo.send(
+      new PutCommand({
+        TableName: SUPPORT_CONVERSATIONS_TABLE,
+        Item: conv
+      })
+    );
   }
   return conv;
 }
 
 async function upsertConversationFromCitizen({ citizenUserId, citizenName, text }) {
-  const data = await load();
   const uid = String(citizenUserId || "").trim();
   if (!uid) return null;
-
-  let conv = data.supportConversations.find((x) => String(x.citizenUserId || "") === uid);
-  if (!conv) {
-    conv = {
-      id: `sup-${Date.now()}`,
-      dossierId: `CHAT-${uid}`,
-      citizenUserId: uid,
-      citizenName: citizenName || "Người dân",
-      status: "waiting",
-      messages: []
-    };
-    data.supportConversations.unshift(conv);
-  }
-
-  conv.messages = Array.isArray(conv.messages) ? conv.messages : [];
-  conv.messages.push({
+  const message = {
     id: `msg-${Date.now()}`,
     from: "citizen",
     text: String(text || "").slice(0, 2000),
     at: nowIso()
-  });
-  conv.status = "waiting";
-
-  await save(data);
-  return conv;
+  };
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: SUPPORT_CONVERSATIONS_TABLE,
+      Key: { id: uid },
+      UpdateExpression:
+        "SET citizenUserId = if_not_exists(citizenUserId, :citizen_user_id), dossierId = if_not_exists(dossierId, :dossier_id), citizenName = if_not_exists(citizenName, :citizen_name), #status = :status, messages = list_append(if_not_exists(messages, :empty_list), :new_message), lastMessage = :last_message, updatedAt = :updated_at",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":citizen_user_id": uid,
+        ":dossier_id": `CHAT-${uid}`,
+        ":citizen_name": citizenName || "Người dân",
+        ":status": "waiting",
+        ":empty_list": [],
+        ":new_message": [message],
+        ":last_message": message,
+        ":updated_at": message.at
+      }
+    })
+  );
+  return getConversationById(uid);
 }
 
 async function listConversations() {
-  const data = await load();
-  return data.supportConversations.map((conv) => ({
+  const result = await dynamo.send(new ScanCommand({ TableName: SUPPORT_CONVERSATIONS_TABLE }));
+  const conversations = result.Items || [];
+  return conversations.map((conv) => ({
     ...conv,
     latestMessage: conv.messages?.[conv.messages.length - 1] || null,
     unreadCount: conv.status === "waiting" ? 1 : 0
@@ -263,62 +170,121 @@ async function listConversations() {
 }
 
 async function getConversationById(id) {
-  const data = await load();
-  return data.supportConversations.find((x) => x.id === id) || null;
+  const result = await dynamo.send(
+    new GetCommand({
+      TableName: SUPPORT_CONVERSATIONS_TABLE,
+      Key: { id }
+    })
+  );
+  return result.Item || null;
 }
 
 async function addConversationMessage({ conversationId, from, text }) {
-  const data = await load();
-  const index = data.supportConversations.findIndex((x) => x.id === conversationId);
-  if (index < 0) return null;
-  data.supportConversations[index].messages = Array.isArray(data.supportConversations[index].messages)
-    ? data.supportConversations[index].messages
-    : [];
-  data.supportConversations[index].messages.push({
+  const current = await getConversationById(conversationId);
+  if (!current) return null;
+  const message = {
     id: `msg-${Date.now()}`,
     from,
     text: String(text).slice(0, 2000),
     at: nowIso()
-  });
-  if (from === "citizen") {
-    data.supportConversations[index].status = "waiting";
-  }
-  await save(data);
-  return data.supportConversations[index];
+  };
+  const shouldWaiting = from === "citizen";
+  const result = await dynamo.send(
+    new UpdateCommand({
+      TableName: SUPPORT_CONVERSATIONS_TABLE,
+      Key: { id: conversationId },
+      UpdateExpression: shouldWaiting
+        ? "SET #status = :status, messages = list_append(if_not_exists(messages, :empty_list), :new_message), lastMessage = :last_message, updatedAt = :updated_at"
+        : "SET messages = list_append(if_not_exists(messages, :empty_list), :new_message), lastMessage = :last_message, updatedAt = :updated_at",
+      ExpressionAttributeNames: shouldWaiting
+        ? {
+            "#status": "status"
+          }
+        : undefined,
+      ExpressionAttributeValues: shouldWaiting
+        ? {
+            ":status": "waiting",
+            ":empty_list": [],
+            ":new_message": [message],
+            ":last_message": message,
+            ":updated_at": message.at
+          }
+        : {
+            ":empty_list": [],
+            ":new_message": [message],
+            ":last_message": message,
+            ":updated_at": message.at
+          },
+      ConditionExpression: "attribute_exists(id)",
+      ReturnValues: "ALL_NEW"
+    })
+  );
+  return result.Attributes || null;
 }
 
 async function resolveConversation(conversationId) {
-  const data = await load();
-  const index = data.supportConversations.findIndex((x) => x.id === conversationId);
-  if (index < 0) return null;
-  data.supportConversations[index].status = "resolved";
-  await save(data);
-  return data.supportConversations[index];
+  const result = await dynamo.send(
+    new UpdateCommand({
+      TableName: SUPPORT_CONVERSATIONS_TABLE,
+      Key: { id: conversationId },
+      UpdateExpression: "SET #status = :status, updatedAt = :updated_at",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":status": "resolved",
+        ":updated_at": nowIso()
+      },
+      ConditionExpression: "attribute_exists(id)",
+      ReturnValues: "ALL_NEW"
+    })
+  );
+  return result.Attributes || null;
 }
 
 async function getAiHistory() {
-  const data = await load();
-  return Array.isArray(data.ai?.history) ? data.ai.history : [];
+  const result = await dynamo.send(
+    new GetCommand({
+      TableName: ADMIN_AI_TABLE,
+      Key: { id: "default" }
+    })
+  );
+  return Array.isArray(result.Item?.history) ? result.Item.history : [];
 }
 
 async function getAiRules() {
-  const data = await load();
-  return String(data.ai?.rulesText || "");
+  const result = await dynamo.send(
+    new GetCommand({
+      TableName: ADMIN_AI_TABLE,
+      Key: { id: "default" }
+    })
+  );
+  return String(result.Item?.rulesText || "");
 }
 
 async function updateAiRules(rulesText, adminEmail) {
-  const data = await load();
-  data.ai = data.ai || {};
-  data.ai.rulesText = String(rulesText || "");
-  data.ai.history = Array.isArray(data.ai.history) ? data.ai.history : [];
-  data.ai.history.unshift({
+  const historyItem = {
     id: `ai-${Date.now()}`,
     question: "Cập nhật bộ quy tắc trả lời",
     answer: `Admin ${adminEmail || "unknown"} đã cập nhật rules`,
     at: nowIso()
-  });
-  await save(data);
-  return data.ai.rulesText;
+  };
+  const result = await dynamo.send(
+    new UpdateCommand({
+      TableName: ADMIN_AI_TABLE,
+      Key: { id: "default" },
+      UpdateExpression:
+        "SET rulesText = :rules_text, history = list_append(:new_history, if_not_exists(history, :empty_list)), updatedAt = :updated_at",
+      ExpressionAttributeValues: {
+        ":rules_text": String(rulesText || ""),
+        ":empty_list": [],
+        ":new_history": [historyItem],
+        ":updated_at": historyItem.at
+      },
+      ReturnValues: "ALL_NEW"
+    })
+  );
+  return result.Attributes?.rulesText || "";
 }
 
 module.exports = {
