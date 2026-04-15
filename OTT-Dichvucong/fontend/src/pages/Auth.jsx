@@ -244,7 +244,7 @@ export default function Auth() {
       if (token) {
         const role = decodeRoleFromToken(token);
         await loginWithToken(token);
-        navigate(role === "admin" ? "/admin" : "/", { replace: true });
+        navigate(role === "admin" ? "/admin/chat" : "/", { replace: true });
       } else {
         setAlert({
           variant: "error",

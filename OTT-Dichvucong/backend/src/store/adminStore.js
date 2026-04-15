@@ -222,6 +222,37 @@ async function getOrCreateConversationByDossier(dossierId) {
   return conv;
 }
 
+async function upsertConversationFromCitizen({ citizenUserId, citizenName, text }) {
+  const data = await load();
+  const uid = String(citizenUserId || "").trim();
+  if (!uid) return null;
+
+  let conv = data.supportConversations.find((x) => String(x.citizenUserId || "") === uid);
+  if (!conv) {
+    conv = {
+      id: `sup-${Date.now()}`,
+      dossierId: `CHAT-${uid}`,
+      citizenUserId: uid,
+      citizenName: citizenName || "Người dân",
+      status: "waiting",
+      messages: []
+    };
+    data.supportConversations.unshift(conv);
+  }
+
+  conv.messages = Array.isArray(conv.messages) ? conv.messages : [];
+  conv.messages.push({
+    id: `msg-${Date.now()}`,
+    from: "citizen",
+    text: String(text || "").slice(0, 2000),
+    at: nowIso()
+  });
+  conv.status = "waiting";
+
+  await save(data);
+  return conv;
+}
+
 async function listConversations() {
   const data = await load();
   return data.supportConversations.map((conv) => ({
@@ -249,9 +280,7 @@ async function addConversationMessage({ conversationId, from, text }) {
     text: String(text).slice(0, 2000),
     at: nowIso()
   });
-  if (from === "admin") {
-    data.supportConversations[index].status = "resolved";
-  } else {
+  if (from === "citizen") {
     data.supportConversations[index].status = "waiting";
   }
   await save(data);
@@ -298,6 +327,7 @@ module.exports = {
   getDossierById,
   decideDossier,
   getOrCreateConversationByDossier,
+  upsertConversationFromCitizen,
   listConversations,
   getConversationById,
   addConversationMessage,
