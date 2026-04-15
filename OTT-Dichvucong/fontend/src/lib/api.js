@@ -141,5 +141,53 @@ export async function postAiChat(payload) {
   return await api.post("/chat/ai", payload);
 }
 
+export async function getAdminDashboard() {
+  return await api.get("/admin/dashboard");
+}
+
+export async function getAdminDossiers(query = "") {
+  return await api.get("/admin/dossiers", { params: { q: query } });
+}
+
+export async function getAdminDossierDetail(id) {
+  return await api.get(`/admin/dossiers/${id}`);
+}
+
+export async function postAdminDossierDecision(id, payload) {
+  return await api.post(`/admin/dossiers/${id}/decision`, payload);
+}
+
+export async function postAdminOpenDossierChat(id) {
+  return await api.post(`/admin/dossiers/${id}/chat-open`);
+}
+
+export async function getAdminSupportConversations() {
+  return await api.get("/admin/support/conversations");
+}
+
+export async function getAdminSupportConversation(id) {
+  return await api.get(`/admin/support/conversations/${id}`);
+}
+
+export async function postAdminSupportMessage(id, text) {
+  return await api.post(`/admin/support/conversations/${id}/messages`, { text });
+}
+
+export async function postAdminSupportResolve(id) {
+  return await api.post(`/admin/support/conversations/${id}/resolve`);
+}
+
+export async function getAdminAiHistory() {
+  return await api.get("/admin/ai/history");
+}
+
+export async function getAdminAiRules() {
+  return await api.get("/admin/ai/rules");
+}
+
+export async function putAdminAiRules(rulesText) {
+  return await api.put("/admin/ai/rules", { rulesText });
+}
+
 export default api;
 

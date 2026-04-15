@@ -21,6 +21,19 @@ function secondsToLabel(s) {
   return `${n}s`;
 }
 
+function decodeRoleFromToken(token) {
+  try {
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) return "citizen";
+    const base64 = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+    return payload?.role === "admin" ? "admin" : "citizen";
+  } catch {
+    return "citizen";
+  }
+}
+
 export default function Auth() {
   const navigate = useNavigate();
   const { loginWithToken } = useAuth();
@@ -229,8 +242,9 @@ export default function Auth() {
       const res = await login({ email: email.trim(), password });
       const token = res?.data?.token ?? res?.data?.accessToken;
       if (token) {
+        const role = decodeRoleFromToken(token);
         await loginWithToken(token);
-        navigate("/", { replace: true });
+        navigate(role === "admin" ? "/admin" : "/", { replace: true });
       } else {
         setAlert({
           variant: "error",

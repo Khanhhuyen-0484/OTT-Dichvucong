@@ -31,6 +31,7 @@ function normalizePublicUser(u) {
     fullName: u.fullName != null ? String(u.fullName) : "",
     phone: u.phone != null ? String(u.phone) : "",
     address: u.address != null ? String(u.address) : "",
+    role: u.role === "admin" ? "admin" : "citizen",
     avatarUrl: av ? String(av).trim() : null,
     createdAt: u.createdAt
   };
@@ -317,7 +318,11 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role === "admin" ? "admin" : "citizen"
+      },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );

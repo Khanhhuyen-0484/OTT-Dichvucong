@@ -1,0 +1,152 @@
+const {
+  getDashboardStats,
+  listDossiers,
+  getDossierById,
+  decideDossier,
+  getOrCreateConversationByDossier,
+  listConversations,
+  getConversationById,
+  addConversationMessage,
+  resolveConversation,
+  getAiHistory,
+  getAiRules,
+  updateAiRules
+} = require("../store/adminStore");
+
+exports.dashboard = async (req, res) => {
+  try {
+    const stats = await getDashboardStats();
+    return res.json(stats);
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy dashboard" });
+  }
+};
+
+exports.dossierList = async (req, res) => {
+  try {
+    const q = req.query.q || "";
+    const dossiers = await listDossiers(q);
+    return res.json({ dossiers });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy danh sách hồ sơ" });
+  }
+};
+
+exports.dossierDetail = async (req, res) => {
+  try {
+    const dossier = await getDossierById(req.params.id);
+    if (!dossier) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+    return res.json({ dossier });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy chi tiết hồ sơ" });
+  }
+};
+
+exports.dossierDecision = async (req, res) => {
+  try {
+    const action = String(req.body?.action || "");
+    const note = String(req.body?.note || "").trim();
+    if (!["approve", "request_more", "reject"].includes(action)) {
+      return res.status(400).json({ message: "Hành động không hợp lệ" });
+    }
+    if ((action === "request_more" || action === "reject") && note.length < 5) {
+      return res.status(400).json({ message: "Vui lòng nhập nội dung tối thiểu 5 ký tự" });
+    }
+
+    const dossier = await decideDossier({
+      dossierId: req.params.id,
+      action,
+      note,
+      adminEmail: req.user?.email
+    });
+    if (!dossier) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+    return res.json({ message: "Đã cập nhật quyết định", dossier });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi xử lý quyết định hồ sơ" });
+  }
+};
+
+exports.openDossierChat = async (req, res) => {
+  try {
+    const conversation = await getOrCreateConversationByDossier(req.params.id);
+    return res.json({ conversation });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi mở hội thoại hồ sơ" });
+  }
+};
+
+exports.supportConversations = async (req, res) => {
+  try {
+    const conversations = await listConversations();
+    return res.json({ conversations });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy danh sách hội thoại" });
+  }
+};
+
+exports.supportConversationDetail = async (req, res) => {
+  try {
+    const conversation = await getConversationById(req.params.id);
+    if (!conversation) return res.status(404).json({ message: "Không tìm thấy hội thoại" });
+    return res.json({ conversation });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy chi tiết hội thoại" });
+  }
+};
+
+exports.supportSendMessage = async (req, res) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ message: "Nội dung không được để trống" });
+    const conversation = await addConversationMessage({
+      conversationId: req.params.id,
+      from: "admin",
+      text
+    });
+    if (!conversation) return res.status(404).json({ message: "Không tìm thấy hội thoại" });
+    return res.json({ message: "Đã gửi tin nhắn", conversation });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi gửi tin nhắn hỗ trợ" });
+  }
+};
+
+exports.supportResolve = async (req, res) => {
+  try {
+    const conversation = await resolveConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ message: "Không tìm thấy hội thoại" });
+    return res.json({ message: "Đã đánh dấu đã giải quyết", conversation });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi cập nhật trạng thái hội thoại" });
+  }
+};
+
+exports.aiHistory = async (req, res) => {
+  try {
+    const history = await getAiHistory();
+    return res.json({ history });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy lịch sử AI" });
+  }
+};
+
+exports.aiRulesGet = async (req, res) => {
+  try {
+    const rulesText = await getAiRules();
+    return res.json({ rulesText });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy bộ quy tắc AI" });
+  }
+};
+
+exports.aiRulesUpdate = async (req, res) => {
+  try {
+    const rulesText = String(req.body?.rulesText || "").trim();
+    if (rulesText.length < 10) {
+      return res.status(400).json({ message: "Bộ quy tắc cần tối thiểu 10 ký tự" });
+    }
+    const saved = await updateAiRules(rulesText, req.user?.email);
+    return res.json({ message: "Cập nhật bộ quy tắc thành công", rulesText: saved });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi cập nhật bộ quy tắc AI" });
+  }
+};
