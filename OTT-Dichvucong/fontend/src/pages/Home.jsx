@@ -6,20 +6,22 @@ import {
   CarFront,
   ClipboardList,
   FileText,
-  IdCard,
-  Landmark
+  FolderKanban,
+  Landmark,
+  Search,
+  SendHorizonal
 } from "lucide-react";
 
 function ServiceCard({ icon: Icon, title, desc }) {
   return (
-    <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200 hover:ring-slate-300 transition">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start gap-4">
-        <div className="rounded-xl p-2.5 bg-slate-50 ring-1 ring-slate-200">
-          <Icon className="h-6 w-6 text-[var(--gov-navy)]" aria-hidden="true" />
+        <div className="rounded-xl bg-[#003366]/5 p-2.5 ring-1 ring-[#003366]/10">
+          <Icon className="h-6 w-6 text-[#003366]" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <div className="font-extrabold">{title}</div>
-          <div className="text-sm text-slate-600 mt-1">{desc}</div>
+          <div className="font-extrabold text-slate-900">{title}</div>
+          <div className="mt-1 text-sm text-slate-600">{desc}</div>
         </div>
       </div>
     </div>
@@ -32,34 +34,34 @@ export default function Home() {
   const services = useMemo(
     () => [
       {
-        icon: IdCard,
-        title: "Cư trú",
-        desc: "Đăng ký tạm trú/tạm vắng, xác nhận thông tin cư trú."
+        icon: FileText,
+        title: "Hộ tịch",
+        desc: "Khai sinh, kết hôn, trích lục bản sao theo quy trình điện tử."
+      },
+      {
+        icon: FolderKanban,
+        title: "Đất đai",
+        desc: "Đăng ký biến động đất đai, cấp đổi giấy chứng nhận quyền sử dụng."
+      },
+      {
+        icon: Building2,
+        title: "Xây dựng",
+        desc: "Xin cấp phép xây dựng, điều chỉnh hồ sơ và theo dõi tiến độ."
       },
       {
         icon: Landmark,
         title: "Hộ chiếu",
-        desc: "Hướng dẫn và nộp hồ sơ cấp/đổi hộ chiếu."
+        desc: "Nộp hồ sơ cấp/đổi hộ chiếu và nhận thông báo xử lý trực tuyến."
       },
       {
         icon: CarFront,
-        title: "Giấy phép lái xe",
-        desc: "Đổi GPLX, tra cứu tiến độ xử lý hồ sơ."
-      },
-      {
-        icon: FileText,
-        title: "Hộ tịch",
-        desc: "Đăng ký khai sinh, kết hôn, trích lục."
+        title: "Giao thông",
+        desc: "Đổi giấy phép lái xe, đăng ký phương tiện và tra cứu vi phạm."
       },
       {
         icon: ClipboardList,
-        title: "Thủ tục hành chính",
-        desc: "Tra cứu thủ tục, biểu mẫu và yêu cầu hồ sơ."
-      },
-      {
-        icon: Building2,
         title: "Doanh nghiệp",
-        desc: "Đăng ký, thay đổi thông tin và dịch vụ liên quan."
+        desc: "Đăng ký kinh doanh, thay đổi thông tin và dịch vụ chuyên ngành."
       }
     ],
     []
@@ -75,85 +77,75 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-slate-50">
       <GovHeader />
 
       <main>
-        <section className="mx-auto max-w-6xl px-4 py-10">
-          <div className="grid lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-7">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white ring-1 ring-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                <span className="h-2 w-2 rounded-full bg-[var(--gov-red)]" />
-                Cổng thông tin chính thức
+        <section className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#0a3f74] to-[#003366] text-white">
+          <div className="absolute -right-24 -top-28 h-72 w-72 rounded-full bg-white/10 blur-2xl" />
+          <div className="mx-auto max-w-7xl px-4 py-14 md:py-18">
+            <div className="grid items-center gap-10 lg:grid-cols-12">
+              <div className="lg:col-span-8">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+                  <span className="h-2 w-2 rounded-full bg-[#7a1f1f]" />
+                  Cổng tiếp nhận hồ sơ trực tuyến cấp quốc gia
+                </div>
+                <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
+                  Tra cứu thủ tục hành chính
+                  <span className="block text-sky-100">Nhanh hơn. Rõ ràng hơn. Minh bạch hơn.</span>
+                </h1>
+                <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/90 sm:text-base">
+                  Nộp hồ sơ, thanh toán lệ phí, theo dõi trạng thái và nhận hỗ trợ tức thời từ trợ lý ảo
+                  hoặc cán bộ chuyên trách, tất cả trong một nền tảng thống nhất.
+                </p>
+
+                <form onSubmit={onSubmit} className="mt-6">
+                  <div className="rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-200">
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <label className="sr-only" htmlFor="search">
+                        Tìm kiếm thủ tục hành chính
+                      </label>
+                      <div className="flex flex-1 items-center rounded-xl bg-slate-50 px-3 ring-1 ring-slate-200">
+                        <Search className="h-4 w-4 text-slate-500" />
+                        <input
+                          id="search"
+                          value={q}
+                          onChange={(e) => setQ(e.target.value)}
+                          placeholder="Ví dụ: Đăng ký khai sinh, đổi GPLX, cấp phép xây dựng..."
+                          className="h-12 w-full bg-transparent px-2 text-sm text-slate-800 outline-none"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="rounded-xl bg-[#003366] px-6 py-3 text-sm font-bold text-white hover:bg-[#052b53]"
+                      >
+                        Tra cứu ngay
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#003366] shadow-sm hover:bg-slate-100">
+                    <SendHorizonal className="h-4 w-4" />
+                    Nộp hồ sơ
+                  </button>
+                  <button className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
+                    <FileText className="h-4 w-4" />
+                    Tra cứu kết quả
+                  </button>
+                </div>
               </div>
-              <h1 className="mt-4 text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-                Tra cứu và thực hiện{" "}
-                <span className="text-[var(--gov-navy)]">
-                  thủ tục hành chính
-                </span>{" "}
-                trực tuyến
-              </h1>
-              <p className="mt-3 text-slate-600 max-w-prose">
-                Giao diện chuyên nghiệp theo phong cách cơ quan nhà nước, tối ưu
-                cho thiết bị di động và hỗ trợ truy cập (accessibility).
-              </p>
 
-              <form onSubmit={onSubmit} className="mt-6">
-                <div className="rounded-2xl bg-white ring-1 ring-slate-200 p-3">
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <label className="sr-only" htmlFor="search">
-                      Tìm kiếm thủ tục hành chính
-                    </label>
-                    <input
-                      id="search"
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      placeholder="Tìm kiếm thủ tục hành chính…"
-                      className="flex-1 rounded-xl bg-slate-50 px-3 py-3 text-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-[rgba(30,58,138,0.35)]"
-                    />
-                    <button
-                      type="submit"
-                      className="rounded-xl bg-[var(--gov-navy)] px-4 py-3 text-sm font-bold text-white hover:bg-[#19306f]"
-                    >
-                      Tra cứu
-                    </button>
-                  </div>
-                  <div className="mt-2 text-xs text-slate-600">
-                    Gợi ý: “đổi giấy phép lái xe”, “đăng ký tạm trú”, “cấp hộ
-                    chiếu”.
-                  </div>
+              <div className="lg:col-span-4">
+                <div className="rounded-2xl bg-white/10 p-5 ring-1 ring-white/20 backdrop-blur-sm">
+                  <div className="text-sm font-bold uppercase tracking-wide text-sky-100">Thông báo hệ thống</div>
+                  <ul className="mt-3 space-y-3 text-sm text-white/90">
+                    <li className="rounded-xl bg-white/10 p-3">Tỷ lệ hồ sơ xử lý đúng hạn: <strong>96.2%</strong></li>
+                    <li className="rounded-xl bg-white/10 p-3">Hỗ trợ trực tuyến từ <strong>07:30 - 17:00</strong> mỗi ngày làm việc.</li>
+                    <li className="rounded-xl bg-white/10 p-3">Kênh AI hoạt động <strong>24/7</strong> cho tra cứu thủ tục phổ biến.</li>
+                  </ul>
                 </div>
-              </form>
-            </div>
-
-            <div className="lg:col-span-5">
-              <div className="rounded-2xl bg-white ring-1 ring-slate-200 p-6">
-                <div className="font-extrabold text-slate-900">
-                  Thông tin nổi bật
-                </div>
-                <ul className="mt-3 space-y-3 text-sm text-slate-700">
-                  <li className="flex gap-2">
-                    <span
-                      className="mt-2 h-2 w-2 rounded-full bg-[var(--gov-navy)]"
-                      aria-hidden="true"
-                    />
-                    Tiếp nhận hồ sơ trực tuyến, theo dõi tiến độ minh bạch.
-                  </li>
-                  <li className="flex gap-2">
-                    <span
-                      className="mt-2 h-2 w-2 rounded-full bg-[var(--gov-navy)]"
-                      aria-hidden="true"
-                    />
-                    Xác thực email bằng OTP, bảo vệ an toàn thông tin.
-                  </li>
-                  <li className="flex gap-2">
-                    <span
-                      className="mt-2 h-2 w-2 rounded-full bg-[var(--gov-red)]"
-                      aria-hidden="true"
-                    />
-                    Hỗ trợ 24/7 (demo) và chuẩn responsive.
-                  </li>
-                </ul>
               </div>
             </div>
           </div>
@@ -161,18 +153,16 @@ export default function Home() {
 
         <HomeChatSection />
 
-        <section id="dichvu" className="mx-auto max-w-6xl px-4 pb-12">
+        <section id="dichvu" className="mx-auto max-w-7xl px-4 pb-14 pt-10">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <h2 className="text-xl font-black text-slate-900">
-                Dịch vụ phổ biến
-              </h2>
-              <p className="text-sm text-slate-600 mt-1">
-                Danh mục minh họa (3×2), có thể mở rộng theo nhu cầu.
+              <h2 className="text-2xl font-black text-slate-900">Danh mục dịch vụ trọng điểm</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Chọn nhóm dịch vụ để bắt đầu nộp hồ sơ điện tử hoặc xem yêu cầu biểu mẫu chi tiết.
               </p>
             </div>
           </div>
-          <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {services.map((s) => (
               <ServiceCard key={s.title} {...s} />
             ))}
@@ -181,11 +171,11 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-2 px-4 py-6 text-sm text-slate-600 sm:flex-row sm:items-center">
           <div className="font-semibold">
             © {new Date().getFullYear()} Cổng Dịch vụ công
           </div>
-          <div>Demo UI — tích hợp OTP/Email ở trang Đăng nhập/Đăng ký.</div>
+          <div>Thiết kế UI mới: Portal công dân + hỗ trợ AI + chat cán bộ 1v1.</div>
         </div>
       </footer>
     </div>

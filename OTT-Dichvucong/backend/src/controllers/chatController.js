@@ -1,9 +1,10 @@
-const { getThread, appendMessage } = require("../store/chatThreadStore");
-const { upsertConversationFromCitizen } = require("../store/adminStore");
+const { getChatHistory, sendMessage } = require("../store/supportConversationsStore");
+const userStore = require("../store/userStore");
 
 exports.staffHistory = async (req, res) => {
   try {
-    const messages = await getThread(req.user.id);
+    const conversation = await getChatHistory(req.user.id);
+    const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
     res.json({ messages });
   } catch (err) {
     res.status(500).json({ message: err.message || "Lỗi đọc hội thoại" });
@@ -20,16 +21,27 @@ exports.staffSend = async (req, res) => {
       return res.status(400).json({ message: "Tối đa 2000 ký tự" });
     }
 
-    const userId = req.user.id;
-    const citizenName = req.user.email || "Người dân";
-    await appendMessage(userId, { from: "citizen", text });
-    await upsertConversationFromCitizen({
-      citizenUserId: userId,
-      citizenName,
-      text
+    const conversationId = req.user.id;
+    const userData = await userStore.findById(req.user.id);
+    const fullName = userData?.fullName || "Người dùng";
+    const avatarUrl =
+      userData?.avatarUrl ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&size=128`;
+    const sender = {
+      id: req.user.id,
+      fullName,
+      avatarUrl
+    };
+
+    await sendMessage({
+      userId: conversationId,
+      from: "user",
+      text,
+      sender
     });
 
-    const messages = await getThread(userId);
+    const conversation = await getChatHistory(conversationId);
+    const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
     res.json({ ok: true, messages });
   } catch (err) {
     res.status(500).json({ message: err.message || "Lỗi gửi tin" });
