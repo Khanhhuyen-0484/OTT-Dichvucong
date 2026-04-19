@@ -6,6 +6,7 @@ const {
 } = require("@aws-sdk/lib-dynamodb");
 const { dynamo } = require("../config/dynamoClient");
 const { sendMessage, getChatHistory } = require("./supportConversationsStore");
+const { findById } = require("./userStore");
 
 const DOSSIERS_TABLE = process.env.DYNAMODB_DOSSIERS_TABLE || "Dossiers";
 const SUPPORT_CONVERSATIONS_TABLE =
@@ -174,15 +175,56 @@ async function upsertConversationFromCitizen({ citizenUserId, citizenName, text 
   }
 }
 
+// ── FIX: join với Users table để lấy fullName + avatarUrl thật ──
 async function listConversations() {
   try {
     const result = await dynamo.send(new ScanCommand({ TableName: SUPPORT_CONVERSATIONS_TABLE }));
     const conversations = result.Items || [];
-    return conversations.map((conv) => ({
-      ...conv,
-      latestMessage: conv.messages?.[conv.messages.length - 1] || null,
-      unreadCount: conv.status === "active" || conv.status === "waiting" ? 1 : 0
-    }));
+
+    // Gom tất cả citizenUserId duy nhất cần lookup
+    const userIds = [...new Set(
+      conversations
+        .map((c) => c.citizenUserId || c.id)
+        .filter(Boolean)
+    )];
+
+    // Fetch song song tất cả user records
+    const userRecords = await Promise.all(
+      userIds.map((uid) => findById(uid).catch(() => null))
+    );
+
+    // Map userId -> user record
+    const userMap = {};
+    userIds.forEach((uid, i) => {
+      if (userRecords[i]) userMap[uid] = userRecords[i];
+    });
+
+    return conversations.map((conv) => {
+      const uid = conv.citizenUserId || conv.id;
+      const userRecord = userMap[uid] || null;
+
+      // Ưu tiên: tên thật từ Users table > citizenName trong conversation > fallback
+      const citizenName =
+        (userRecord?.fullName && userRecord.fullName.trim())
+          ? userRecord.fullName.trim()
+          : (conv.citizenName && conv.citizenName !== "Người dân" && conv.citizenName.trim())
+            ? conv.citizenName.trim()
+            : conv.citizenName || "Người dân";
+
+      // Avatar: ưu tiên Users table (có thể do user tự upload)
+      const avatarUrl =
+        userRecord?.avatarUrl && userRecord.avatarUrl.trim()
+          ? userRecord.avatarUrl.trim()
+          : null;
+
+      return {
+        ...conv,
+        citizenName,
+        avatarUrl,
+        latestMessage: conv.messages?.[conv.messages.length - 1] || null,
+        unreadCount: conv.status === "active" || conv.status === "waiting" ? 1 : 0
+      };
+    });
   } catch (error) {
     console.error("[adminStore.listConversations] DynamoDB error:", error?.name, error?.message, error);
     throw error;
