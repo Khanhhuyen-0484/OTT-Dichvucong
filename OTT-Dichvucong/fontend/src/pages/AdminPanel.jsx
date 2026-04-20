@@ -378,7 +378,7 @@ export default function AdminPanel() {
                   <h1 className="text-2xl font-black text-slate-900">Trung tâm hỗ trợ trực tuyến</h1>
                   <p className="mt-1 text-sm text-slate-600">Kênh chat 1v1 giữa người dân và cán bộ xử lý.</p>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-700">
+                <div className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py Asc 1 text-sm font-bold text-red-700">
                   <Bell className="h-4 w-4" />
                   {dashboard.waitingMessages} hội thoại mới
                 </div>

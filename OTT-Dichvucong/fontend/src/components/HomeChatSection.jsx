@@ -44,6 +44,7 @@ export default function HomeChatSection() {
   const [staffInput, setStaffInput] = useState("");
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffErr, setStaffErr] = useState(null);
+  const supportAgent = { fullName: "Nguyễn Minh An", status: "Online" };
 
   // State cho AI
   const [aiMessages, setAiMessages] = useState([
@@ -232,6 +233,12 @@ export default function HomeChatSection() {
               <div className="text-center py-10 text-slate-400 text-xs">
                 Hãy để lại tin nhắn, cán bộ sẽ phản hồi bạn sớm nhất.
               </div>
+            )}
+            
+            {isAi ? (
+              aiMessages.map((m, i) => (
+                <Bubble key={i} from={m.role} text={m.content} label={m.role === "user" ? "Bạn" : "AI"} />
+              ))
             ) : (
               staffMessages.map((m, i) => {
                 // ── FIX 1: xác định đúng "mine" — tin của người dân đang đăng nhập ──
