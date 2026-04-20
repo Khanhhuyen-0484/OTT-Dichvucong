@@ -1,5 +1,7 @@
 const { getChatHistory, sendMessage } = require("../store/supportConversationsStore");
 const userStore = require("../store/userStore");
+const { getIo } = require("../socket");
+const multiChatStore = require("../store/multiChatStore");
 
 exports.staffHistory = async (req, res) => {
   try {
@@ -42,6 +44,20 @@ exports.staffSend = async (req, res) => {
 
     const conversation = await getChatHistory(conversationId);
     const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+
+    try {
+      const io = getIo();
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage) {
+        io.to("admin").emit("supportConversationMessage", {
+          userId: conversationId,
+          message: lastMessage
+        });
+      }
+    } catch (socketError) {
+      console.warn("[Socket] Không thể gửi sự kiện supportConversationMessage:", socketError.message);
+    }
+
     res.json({ ok: true, messages });
   } catch (err) {
     res.status(500).json({ message: err.message || "Lỗi gửi tin" });
@@ -171,5 +187,223 @@ exports.aiChat = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: err.message || "Lỗi trợ lý AI" });
+  }
+};
+
+async function emitRoomUpdate(roomId, eventName, payload) {
+  try {
+    const io = getIo();
+    io.to(`chat_${roomId}`).emit(eventName, payload);
+  } catch (e) {
+    console.warn(`[Socket] Không thể phát sự kiện ${eventName}:`, e.message);
+  }
+}
+
+exports.chatContacts = async (req, res) => {
+  try {
+    const q = req.query?.q || "";
+    const contacts = await multiChatStore.searchContacts({
+      keyword: q,
+      currentUserId: req.user.id
+    });
+    return res.json({ contacts });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi tải danh bạ" });
+  }
+};
+
+exports.chatRooms = async (req, res) => {
+  try {
+    const rooms = await multiChatStore.listRoomsForUser(req.user.id);
+    const hydrated = await Promise.all(rooms.map((r) => multiChatStore.hydrateRoomForUser(r, req.user.id)));
+    return res.json({ rooms: hydrated });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi tải phòng chat" });
+  }
+};
+
+exports.chatRoomDetail = async (req, res) => {
+  try {
+    const room = await multiChatStore.getRoomById(req.params.roomId);
+    if (!room) return res.status(404).json({ message: "Không tìm thấy phòng chat" });
+    const isMember = room.members?.some((m) => m.id === req.user.id);
+    if (!isMember) return res.status(403).json({ message: "Bạn không có quyền truy cập phòng này" });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi tải chi tiết phòng chat" });
+  }
+};
+
+exports.ensureDirectChat = async (req, res) => {
+  try {
+    const targetUserId = String(req.body?.userId || "").trim();
+    if (!targetUserId) return res.status(400).json({ message: "Thiếu ID người dùng" });
+    const room = await multiChatStore.ensureDirectRoom(req.user.id, targetUserId);
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể khởi tạo hội thoại" });
+  }
+};
+
+exports.createGroupChat = async (req, res) => {
+  try {
+    const room = await multiChatStore.createGroupRoom({
+      ownerId: req.user.id,
+      name: req.body?.name,
+      avatarUrl: req.body?.avatarUrl,
+      memberIds: req.body?.memberIds
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể tạo nhóm chat" });
+  }
+};
+
+exports.sendRoomMessage = async (req, res) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    const media = req.body?.media || null;
+    if (!text && !media) return res.status(400).json({ message: "Tin nhắn không được để trống" });
+    const room = await multiChatStore.appendMessage({
+      roomId: req.params.roomId,
+      senderId: req.user.id,
+      text,
+      media
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    const lastMessage = hydrated.messages[hydrated.messages.length - 1];
+    await emitRoomUpdate(req.params.roomId, "multiChatMessage", {
+      roomId: req.params.roomId,
+      message: lastMessage
+    });
+    return res.json({ room: hydrated, message: lastMessage });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể gửi tin nhắn" });
+  }
+};
+
+exports.unsendRoomMessage = async (req, res) => {
+  try {
+    const room = await multiChatStore.unsendMessage({
+      roomId: req.params.roomId,
+      messageId: req.params.messageId,
+      requesterId: req.user.id
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    await emitRoomUpdate(req.params.roomId, "multiChatRoomUpdated", {
+      roomId: req.params.roomId
+    });
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể thu hồi tin nhắn" });
+  }
+};
+
+exports.deleteRoomMessageForMe = async (req, res) => {
+  try {
+    const room = await multiChatStore.deleteMessageForUser({
+      roomId: req.params.roomId,
+      messageId: req.params.messageId,
+      userId: req.user.id
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể xóa tin nhắn" });
+  }
+};
+
+exports.forwardRoomMessage = async (req, res) => {
+  try {
+    const targetRoomId = String(req.body?.targetRoomId || "").trim();
+    if (!targetRoomId) return res.status(400).json({ message: "Thiếu phòng chuyển tiếp" });
+    const room = await multiChatStore.forwardMessage({
+      sourceRoomId: req.params.roomId,
+      messageId: req.params.messageId,
+      targetRoomId,
+      senderId: req.user.id
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    const lastMessage = hydrated.messages[hydrated.messages.length - 1];
+    await emitRoomUpdate(targetRoomId, "multiChatMessage", {
+      roomId: targetRoomId,
+      message: lastMessage
+    });
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể chuyển tiếp tin nhắn" });
+  }
+};
+
+exports.addGroupMember = async (req, res) => {
+  try {
+    const room = await multiChatStore.addGroupMember({
+      roomId: req.params.roomId,
+      requesterId: req.user.id,
+      memberId: req.body?.memberId
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể thêm thành viên" });
+  }
+};
+
+exports.removeGroupMember = async (req, res) => {
+  try {
+    const room = await multiChatStore.removeGroupMember({
+      roomId: req.params.roomId,
+      requesterId: req.user.id,
+      memberId: req.params.memberId
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể xóa thành viên" });
+  }
+};
+
+exports.assignDeputy = async (req, res) => {
+  try {
+    const room = await multiChatStore.assignDeputy({
+      roomId: req.params.roomId,
+      requesterId: req.user.id,
+      memberId: req.params.memberId,
+      enabled: true
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể gán quyền phó nhóm" });
+  }
+};
+
+exports.removeDeputy = async (req, res) => {
+  try {
+    const room = await multiChatStore.assignDeputy({
+      roomId: req.params.roomId,
+      requesterId: req.user.id,
+      memberId: req.params.memberId,
+      enabled: false
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể gỡ quyền phó nhóm" });
+  }
+};
+
+exports.dissolveGroup = async (req, res) => {
+  try {
+    await multiChatStore.dissolveGroup({
+      roomId: req.params.roomId,
+      requesterId: req.user.id
+    });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể giải tán nhóm" });
   }
 };

@@ -4,6 +4,7 @@ import Home from "./pages/Home.jsx";
 import Auth from "./pages/Auth.jsx";
 import Profile from "./pages/Profile.jsx";
 import AdminPanel from "./pages/AdminPanel.jsx";
+import ChatPage from "./pages/ChatPage.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/profile" element={<Profile />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route
         path="/admin"
         element={<Navigate to="/admin/dashboard" replace />}

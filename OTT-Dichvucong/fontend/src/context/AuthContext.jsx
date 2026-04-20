@@ -146,8 +146,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Không tự đăng nhập lại bằng token cũ khi vừa chạy ứng dụng.
-    localStorage.removeItem("token");
+    // Tự động đăng nhập lại bằng token cũ nếu có
     refreshProfile();
   }, [refreshProfile]);
 

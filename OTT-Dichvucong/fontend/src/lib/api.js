@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const baseURL = "/api";
+const envBase = String(import.meta.env.VITE_API_BASE_URL || "").trim();
+const baseURL = envBase || "/api";
 
 const api = axios.create({
   baseURL,
@@ -10,6 +11,8 @@ const API = api;
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
+  config.headers = config.headers || {};
+  config.headers.Accept = "application/json";
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -136,6 +139,62 @@ export async function postStaffChat(text) {
 
 export async function postAiChat(payload) {
   return await api.post("/chat/ai", payload);
+}
+
+export async function getChatContacts(query = "") {
+  return await api.get("/chat/contacts", { params: { q: query } });
+}
+
+export async function getChatRooms() {
+  return await api.get("/chat/rooms");
+}
+
+export async function getChatRoomDetail(roomId) {
+  return await api.get(`/chat/rooms/${roomId}`);
+}
+
+export async function ensureDirectRoom(userId) {
+  return await api.post("/chat/direct/ensure", { userId });
+}
+
+export async function createGroupRoom(payload) {
+  return await api.post("/chat/groups", payload);
+}
+
+export async function postRoomMessage(roomId, payload) {
+  return await api.post(`/chat/rooms/${roomId}/messages`, payload);
+}
+
+export async function unsendRoomMessage(roomId, messageId) {
+  return await api.post(`/chat/rooms/${roomId}/messages/${messageId}/unsend`);
+}
+
+export async function deleteRoomMessageForMe(roomId, messageId) {
+  return await api.post(`/chat/rooms/${roomId}/messages/${messageId}/delete`);
+}
+
+export async function forwardRoomMessage(roomId, messageId, targetRoomId) {
+  return await api.post(`/chat/rooms/${roomId}/messages/${messageId}/forward`, { targetRoomId });
+}
+
+export async function addGroupMember(roomId, memberId) {
+  return await api.post(`/chat/groups/${roomId}/members`, { memberId });
+}
+
+export async function removeGroupMember(roomId, memberId) {
+  return await api.delete(`/chat/groups/${roomId}/members/${memberId}`);
+}
+
+export async function assignGroupDeputy(roomId, memberId) {
+  return await api.post(`/chat/groups/${roomId}/deputies/${memberId}`);
+}
+
+export async function removeGroupDeputy(roomId, memberId) {
+  return await api.delete(`/chat/groups/${roomId}/deputies/${memberId}`);
+}
+
+export async function dissolveGroup(roomId) {
+  return await api.delete(`/chat/groups/${roomId}`);
 }
 
 export async function getAdminDashboard() {

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import GovHeader from "../components/GovHeader.jsx";
 import HomeChatSection from "../components/HomeChatSection.jsx";
 import {
@@ -8,6 +9,7 @@ import {
   FileText,
   FolderKanban,
   Landmark,
+  MessageCircle,
   Search,
   SendHorizonal
 } from "lucide-react";
@@ -29,6 +31,7 @@ function ServiceCard({ icon: Icon, title, desc }) {
 }
 
 export default function Home() {
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
 
   const services = useMemo(
@@ -133,6 +136,13 @@ export default function Home() {
                   <button className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
                     <FileText className="h-4 w-4" />
                     Tra cứu kết quả
+                  </button>
+                  <button
+                    onClick={() => navigate("/chat")}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#003366] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#052b53]"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Chat đa năng
                   </button>
                 </div>
               </div>

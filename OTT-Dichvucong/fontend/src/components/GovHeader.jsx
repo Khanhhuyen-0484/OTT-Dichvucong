@@ -45,13 +45,13 @@ export default function GovHeader() {
                 <FileSearch className="h-4 w-4" />
                 Dịch vụ
               </a>
-              <a
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white/90 hover:text-white hover:bg-white/10"
-                href="#hotro"
+              <NavLink
+                className={navItem}
+                to="/chat"
               >
                 <Send className="h-4 w-4" />
                 Hỗ trợ trực tuyến
-              </a>
+              </NavLink>
             </nav>
 
             {!ready ? (

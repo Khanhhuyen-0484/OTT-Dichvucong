@@ -368,13 +368,21 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: "Email hoặc mật khẩu không đúng" });
     }
 
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error("[LOGIN ERROR] JWT_SECRET not configured");
+      return res.status(500).json({ message: "Server configuration error" });
+    }
+
+    console.log("[LOGIN DEBUG] Creating JWT token with secret:", jwtSecret.substring(0, 3) + "...");
+
     const token = jwt.sign(
       {
         id: user.id,
         email: user.email,
         role: user.role === "admin" ? "admin" : "citizen"
       },
-      process.env.JWT_SECRET,
+      jwtSecret,
       { expiresIn: "1d" }
     );
 
