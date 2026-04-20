@@ -4,8 +4,10 @@ console.log(
   "[env] EMAIL_USER:",
   process.env.EMAIL_USER ? "đã set" : "THIẾU — kiểm tra backend/.env và restart server"
 );
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
+const { initSocket } = require("./socket");
 const app = express();
 const authMiddleware = require("./middleware/authMiddleware");
 const { verifyTransport } = require("./config/mailer");
@@ -53,7 +55,10 @@ app.get("/", (req, res) => {
   res.send("API OK 🚀");
 });
 
-app.listen(3000, () => {
+const server = http.createServer(app);
+initSocket(server);
+
+server.listen(3000, () => {
   console.log("Server chạy http://localhost:3000");
   console.log(
     "[API] Có GET/PATCH /api/me, POST /api/me/avatar/presign, /api/login, /api/chat/… — nếu không thấy dòng này, đang chạy sai file hoặc chưa restart."

@@ -13,6 +13,7 @@ const {
 } = require("../store/adminStore");
 const { sendMessage } = require("../store/supportConversationsStore");
 const { findById, updateUserRole } = require("../store/userStore");
+const { getIo } = require("../socket");
 
 exports.dashboard = async (req, res) => {
   try {
@@ -145,6 +146,22 @@ exports.supportSendMessage = async (req, res) => {
     });
     const conversation = await getConversationById(req.params.id);
     if (!conversation) return res.status(404).json({ message: "Không tìm thấy hội thoại" });
+
+    try {
+      const io = getIo();
+      const lastMessage = Array.isArray(conversation.messages)
+        ? conversation.messages[conversation.messages.length - 1]
+        : null;
+      if (lastMessage) {
+        io.to(`user_${req.params.id}`).emit("supportConversationMessage", {
+          userId: req.params.id,
+          message: lastMessage
+        });
+      }
+    } catch (socketError) {
+      console.warn("[Socket] Không thể gửi sự kiện supportConversationMessage:", socketError.message);
+    }
+
     return res.json({ message: "Đã gửi tin nhắn", conversation });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi gửi tin nhắn hỗ trợ" });
