@@ -303,9 +303,20 @@ exports.presignChatMediaUpload = async (req, res) => {
       .trim()
       .toLowerCase();
     let fileName = String(req.body?.fileName || "file").trim();
-    if (!contentType || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+    // Accept images, videos, and common document formats (PDF, DOC, DOCX)
+    const isAllowedType = 
+      contentType.startsWith("image/") ||
+      contentType.startsWith("video/") ||
+      contentType === "application/pdf" ||
+      contentType === "application/msword" ||
+      contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      fileName.toLowerCase().endsWith(".pdf") ||
+      fileName.toLowerCase().endsWith(".doc") ||
+      fileName.toLowerCase().endsWith(".docx");
+    
+    if (!contentType || !isAllowedType) {
       return res.status(400).json({
-        message: "Chỉ chấp nhận media ảnh/video"
+        message: "Chỉ chấp nhận media ảnh/video hoặc file PDF/DOC/DOCX"
       });
     }
 
@@ -350,9 +361,19 @@ exports.uploadChatMedia = async (req, res) => {
     }
 
     const contentType = file.mimetype;
-    if (!contentType || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+    const allowedDocs = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ];
+    if (
+      !contentType ||
+      (!contentType.startsWith("image/") &&
+        !contentType.startsWith("video/") &&
+        !allowedDocs.includes(contentType))
+    ) {
       return res.status(400).json({
-        message: "Chỉ chấp nhận media ảnh/video"
+        message: "Chỉ chấp nhận ảnh, video, file .doc/.docx/.pdf"
       });
     }
 
@@ -528,5 +549,21 @@ exports.dissolveGroup = async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể giải tán nhóm" });
+  }
+};
+
+exports.updateGroupInfo = async (req, res) => {
+  try {
+    const room = await multiChatStore.updateGroupInfo({
+      roomId: req.params.roomId,
+      requesterId: req.user.id,
+      name: req.body?.name,
+      avatarUrl: req.body?.avatarUrl
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    await emitRoomUpdate(req.params.roomId, "multiChatRoomUpdated", { roomId: req.params.roomId });
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể cập nhật thông tin nhóm" });
   }
 };

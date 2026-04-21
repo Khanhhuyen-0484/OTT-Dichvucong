@@ -64,13 +64,13 @@ export default function GovHeader() {
             ) : user ? (
               <Link
                 to="/profile"
-                className="flex items-center gap-2 rounded-xl pl-1 pr-3 py-1.5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                className="flex items-center gap-2 rounded-xl pl-3 pr-1 py-1.5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 aria-label="Hồ sơ cá nhân"
               >
-                <UserAvatar user={user} src={displayAvatarSrc} size={36} />
                 <span className="hidden md:inline max-w-[120px] truncate text-sm font-semibold">
                   {user.fullName || "Tài khoản"}
                 </span>
+                <UserAvatar user={user} src={displayAvatarSrc} size={36} />
               </Link>
             ) : (
               <NavLink

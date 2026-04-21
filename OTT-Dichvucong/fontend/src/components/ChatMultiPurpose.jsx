@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   MoreHorizontal,
   Undo2,
@@ -6,12 +6,16 @@ import {
   Forward,
   Paperclip,
   Send,
-  UserPlus,
-  UserMinus,
-  Shield,
-  ShieldOff,
   CornerUpLeft,
-  Video
+  Video,
+  Settings,
+  Edit2,
+  Check,
+  Image,
+  Smile,
+  UserPlus,
+  Clock,
+  ThumbsUp
 } from "lucide-react";
 import Bubble from "./Bubble.jsx";
 import UserAvatar from "./UserAvatar.jsx";
@@ -42,12 +46,82 @@ function ChatMultiPurpose({
   onReplyMessage,
   onStartVideoCall,
   replyToMessage,
-  clearReply
+  clearReply,
+  onUpdateGroupInfo
 }) {
   const myName = user?.fullName || "Bạn";
   const [reactionMap, setReactionMap] = useState({});
+  const [showGroupDrawer, setShowGroupDrawer] = useState(false);
+  const [groupNameInput, setGroupNameInput] = useState("");
+  const [groupAvatarFile, setGroupAvatarFile] = useState(null);
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [isSavingGroup, setIsSavingGroup] = useState(false);
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const groupNameInputRef = useRef(null);
+  const chatBottomRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const reactionOptions = useMemo(() => ["👍", "❤️", "😄", "😲", "😭", "😡"], []);
   const messages = activeRoom?.messages || [];
+  const peerUser = activeRoom?.members?.find((m) => m.id !== user?.id);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, activeRoom?.id]);
+
+  useEffect(() => {
+    setGroupNameInput(activeRoom?.name || "");
+    setGroupAvatarFile(null);
+    setIsEditingGroupName(false);
+  }, [activeRoom?.id, activeRoom?.name]);
+
+  // Auto focus name input when entering edit mode
+  useEffect(() => {
+    if (isEditingGroupName && groupNameInputRef.current) {
+      groupNameInputRef.current?.focus();
+    }
+  }, [isEditingGroupName]);
+
+  const handleSaveGroupInfo = async () => {
+    if (!groupNameInput.trim()) return;
+    setIsSavingGroup(true);
+    try {
+      await onUpdateGroupInfo?.({
+        name: groupNameInput.trim(),
+        avatarFile: groupAvatarFile
+      });
+      setGroupAvatarFile(null);
+      setIsEditingGroupName(false);
+    } finally {
+      setIsSavingGroup(false);
+    }
+  };
+
+  const handleGroupNameKeyDown = (e) => {
+    if (e.key === "Enter") {
+      handleSaveGroupInfo();
+    } else if (e.key === "Escape") {
+      setIsEditingGroupName(false);
+      setGroupNameInput(activeRoom?.name || "");
+    }
+  };
+
+  const handleAvatarFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setGroupAvatarFile(file);
+    // Auto-save avatar immediately
+    setIsSavingGroup(true);
+    try {
+      await onUpdateGroupInfo?.({
+        name: groupNameInput || activeRoom?.name,
+        avatarFile: file
+      });
+      setGroupAvatarFile(null);
+    } finally {
+      setIsSavingGroup(false);
+    }
+  };
 
   const toggleReaction = (messageId, emoji) => {
     setReactionMap((prev) => {
@@ -69,25 +143,44 @@ function ChatMultiPurpose({
         <div className="text-sm text-slate-500 text-center py-16">Chọn hội thoại để bắt đầu chat</div>
       ) : (
         <>
-          <div className="mb-2 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
-            <div>
-              <div className="text-sm font-semibold text-slate-800">
-                {activeRoom.type === "group"
-                  ? activeRoom.name || "Nhóm chat"
-                  : activeRoom.members?.find((m) => m.id !== user?.id)?.fullName || "Hội thoại"}
-              </div>
-              <div className="text-[11px] text-slate-500">
-                {activeRoom.type === "group" ? `${(activeRoom.members || []).length} thành viên` : "Đang hoạt động"}
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              {activeRoom.type === "group" ? (
+                <UserAvatar user={{ fullName: activeRoom.name || "Nhóm chat" }} src={activeRoom.avatarUrl} size={40} />
+              ) : (
+                <UserAvatar user={peerUser || { fullName: "Người dùng" }} src={peerUser?.avatarUrl} size={40} showActive />
+              )}
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-800 truncate">
+                  {activeRoom.type === "group"
+                    ? activeRoom.name || "Nhóm chat"
+                    : peerUser?.fullName || "Hội thoại"}
+                </div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  {activeRoom.type === "group" ? `${(activeRoom.members || []).length} thành viên` : "Đang hoạt động"}
+                </div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onStartVideoCall}
-              className="rounded-lg bg-[#003366] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#00284f]"
-            >
-              <Video className="mr-1 inline h-3.5 w-3.5" />
-              Video Call
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {activeRoom.type === "group" && (
+                <button
+                  type="button"
+                  onClick={() => setShowGroupDrawer(true)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <Settings className="mr-1 inline h-3.5 w-3.5" />
+                  Thông tin
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onStartVideoCall}
+                className="rounded-lg bg-[#003366] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#00284f]"
+              >
+                <Video className="mr-1 inline h-3.5 w-3.5" />
+                Video
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto rounded-xl border border-slate-200 bg-[#F5F7FA] p-3 sm:p-4 space-y-2">
             {messages.map((m, idx) => {
@@ -106,26 +199,32 @@ function ChatMultiPurpose({
               return (
                 <div
                   key={m.id}
-                  className={`group flex ${isMine ? "justify-end" : "justify-start"} items-start gap-2 px-2`}
+                  className={`group flex ${isMine ? "justify-end" : "justify-start"} items-end gap-2 px-2`}
+                  onMouseEnter={() => setHoveredMessageId(m.id)}
+                  onMouseLeave={() => setHoveredMessageId(null)}
                 >
-                  {/* Left spacer for receiver messages - for action menu alignment */}
-                  {!isMine && canShowMenu && <div className="w-8 flex-shrink-0" />}
+                  {/* Avatar for receiver messages - only show at cluster end */}
+                  {!isMine && (
+                    <div className="w-8 flex-shrink-0 flex items-center justify-center">
+                      {isClusterEnd && (
+                        <UserAvatar user={sender || { fullName: senderName }} src={senderAvatar} size={32} />
+                      )}
+                    </div>
+                  )}
 
                   {/* Message Container */}
-                  <div className={`flex flex-col ${isMine ? "items-end" : "items-start"} max-w-[min(85vw,450px)]`}>
-                    {/* Reaction Picker */}
-                    {canShowMenu && (
-                      <div
-                        className={`pointer-events-none mb-1 inline-flex gap-1 rounded-full bg-white px-2 py-1 shadow-sm ring-1 ring-slate-200 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 ${
-                          isMine ? "self-end" : "self-start"
-                        }`}
-                      >
+                  <div className={`flex flex-col ${isMine ? "items-end" : "items-start"} max-w-[min(85vw,450px)] relative`}>
+                    {/* Emoji Reactions Bar - Shows on Hover */}
+                    {canShowMenu && hoveredMessageId === m.id && (
+                      <div className={`mb-1 inline-flex gap-1 rounded-full bg-white px-2 py-1 shadow-lg ring-1 ring-slate-200 ${
+                        isMine ? "self-end mr-2" : "self-start ml-2"
+                      }`}>
                         {reactionOptions.map((emoji) => (
                           <button
                             key={emoji}
                             type="button"
                             onClick={() => toggleReaction(m.id, emoji)}
-                            className="text-xs transition-transform hover:scale-125 active:scale-100"
+                            className="text-xs transition-transform hover:scale-125 active:scale-100 cursor-pointer"
                             title="React"
                           >
                             {emoji}
@@ -156,9 +255,9 @@ function ChatMultiPurpose({
                           <button
                             type="button"
                             onClick={() => setMessageMenuId(messageMenuId === m.id ? null : m.id)}
-                            className={`absolute top-2 text-slate-400 opacity-0 transition hover:text-slate-600 group-hover:opacity-100 ${
-                              isMine ? "-left-8" : "-right-8"
-                            }`}
+                            className={`absolute top-2 text-slate-400 transition hover:text-slate-600 ${
+                              hoveredMessageId === m.id ? "opacity-100" : "opacity-0"
+                            } ${isMine ? "-left-8" : "-right-8"}`}
                             aria-label="Menu"
                           >
                             <MoreHorizontal className="h-4 w-4" />
@@ -166,7 +265,7 @@ function ChatMultiPurpose({
 
                           {messageMenuId === m.id && (
                             <div
-                              className={`absolute top-0 z-40 flex flex-col gap-1 rounded-[12px] bg-white shadow-lg border border-slate-200 overflow-hidden ${
+                              className={`absolute top-0 z-40 flex flex-col gap-1 rounded-[12px] bg-white shadow-xl border border-slate-200 overflow-hidden ${
                                 isMine
                                   ? "-left-[180px]"
                                   : "-right-[180px]"
@@ -222,6 +321,7 @@ function ChatMultiPurpose({
                 </div>
               );
             })}
+            <div ref={chatBottomRef} />
           </div>
 
           <style>{`
@@ -260,114 +360,103 @@ function ChatMultiPurpose({
               </button>
             </div>
           )}
-          {activeRoom.type === "group" && (myGroupRole === "owner" || myGroupRole === "deputy") && (
-            <div className="mb-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm space-y-3">
-              <div className="font-bold text-slate-700 flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                Quản lý nhóm ({myGroupRole === "owner" ? "Trưởng nhóm" : "Phó nhóm"})
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={newMemberId}
-                  onChange={(e) => setNewMemberId(e.target.value)}
-                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                >
-                  <option value="">Chọn thành viên</option>
-                  {contacts
-                    .filter((c) => !(activeRoom.members || []).some((m) => m.id === c.id))
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.fullName}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => performGroupAction("add", newMemberId)}
-                  className="px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition font-medium"
-                >
-                  <UserPlus className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="max-h-32 overflow-y-auto space-y-2">
-                {(activeRoom.members || [])
-                  .filter((m) => m.id !== user?.id)
-                  .map((m) => (
-                    <div key={m.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-slate-200">
-                      <span className="text-sm font-medium text-slate-700">
-                        {m.fullName} <span className="text-xs text-slate-500">({m.role})</span>
-                      </span>
-                      <div className="flex gap-2">
-                        {myGroupRole === "owner" && m.role !== "owner" && (
-                          <>
-                            {m.role === "deputy" ? (
-                              <button
-                                type="button"
-                                onClick={() => performGroupAction("demote", m.id)}
-                                className="text-amber-600 hover:text-amber-700 transition"
-                                title="Hạ xuống thành viên"
-                              >
-                                <ShieldOff className="h-4 w-4" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => performGroupAction("promote", m.id)}
-                                className="text-blue-600 hover:text-blue-700 transition"
-                                title="Nâng lên phó nhóm"
-                              >
-                                <Shield className="h-4 w-4" />
-                              </button>
-                            )}
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => performGroupAction("remove", m.id)}
-                          className="text-red-600 hover:text-red-700 transition"
-                          title="Xóa khỏi nhóm"
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-              {myGroupRole === "owner" && (
-                <button
-                  type="button"
-                  onClick={() => performGroupAction("dissolve")}
-                  className="w-full px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition font-medium text-sm border border-red-200"
-                >
-                  Giải tán nhóm
-                </button>
-              )}
-            </div>
-          )}
-          <form onSubmit={sendRoom} className="mt-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="flex gap-2 items-end">
-              <label className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100 transition flex-shrink-0">
-                <Paperclip className="h-4 w-4 text-slate-600" />
+          <form onSubmit={sendRoom} className="mt-3 flex flex-col gap-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-3">
+            {/* Toolbar - Tính năng */}
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-200/50">
+              {/* Nút Gửi Ảnh */}
+              <label
+                className="p-2 rounded-full hover:bg-slate-100 cursor-pointer transition text-slate-600 hover:text-slate-800"
+                title="Gửi ảnh"
+              >
+                <Image className="h-5 w-5" />
                 <input
+                  ref={imageInputRef}
                   type="file"
-                  accept="image/*,video/*"
+                  accept="image/*"
                   className="hidden"
                   onChange={(e) => onPickMedia(e.target.files?.[0] || null)}
                 />
               </label>
+
+              {/* Nút Gửi File */}
+              <label
+                className="p-2 rounded-full hover:bg-slate-100 cursor-pointer transition text-slate-600 hover:text-slate-800"
+                title="Gửi file"
+              >
+                <Paperclip className="h-5 w-5" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
+                  className="hidden"
+                  onChange={(e) => onPickMedia(e.target.files?.[0] || null)}
+                />
+              </label>
+
+              {/* Nút Sticker */}
+              <button
+                type="button"
+                onClick={(e) => e.preventDefault()}
+                className="p-2 rounded-full hover:bg-slate-100 cursor-pointer transition text-slate-600 hover:text-slate-800"
+                title="Sticker"
+              >
+                <Smile className="h-5 w-5" />
+              </button>
+
+              {/* Nút Danh Thiếp */}
+              <button
+                type="button"
+                onClick={(e) => e.preventDefault()}
+                className="p-2 rounded-full hover:bg-slate-100 cursor-pointer transition text-slate-600 hover:text-slate-800"
+                title="Danh thiếp"
+              >
+                <UserPlus className="h-5 w-5" />
+              </button>
+
+              {/* Nút Nhắc Hẹn */}
+              <button
+                type="button"
+                onClick={(e) => e.preventDefault()}
+                className="p-2 rounded-full hover:bg-slate-100 cursor-pointer transition text-slate-600 hover:text-slate-800"
+                title="Nhắc hẹn"
+              >
+                <Clock className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Input Section */}
+            <div className="flex gap-2 items-end">
+              {/* Input Tin Nhắn */}
               <input
                 value={roomInput}
                 onChange={(e) => setRoomInput(e.target.value)}
-                placeholder="Nhắn tin..."
-                className="flex-1 text-sm p-2.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                placeholder="Nhập tin nhắn..."
+                className="flex-1 text-sm px-4 py-3 rounded-full border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-slate-400"
               />
-              <button
-                type="submit"
-                disabled={roomLoading || (!roomInput.trim() && !roomMedia)}
-                className="bg-[#0084ff] text-white p-2.5 rounded-2xl hover:bg-[#0073e6] disabled:opacity-50 disabled:cursor-not-allowed transition flex-shrink-0"
-              >
-                <Send size={18} />
-              </button>
+
+              {/* Nút Like / Send */}
+              {!roomInput.trim() && !roomMedia ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    // Có thể thêm logic like message hoặc reaction tại đây
+                  }}
+                  className="p-2.5 rounded-full hover:bg-yellow-100 cursor-pointer transition text-yellow-500 hover:text-yellow-600 flex-shrink-0"
+                  title="Thích"
+                >
+                  <ThumbsUp className="h-5 w-5 fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={roomLoading}
+                  className="p-2.5 rounded-full bg-[#0084ff] text-white hover:bg-[#0073e6] disabled:opacity-50 disabled:cursor-not-allowed transition flex-shrink-0"
+                  title="Gửi"
+                >
+                  <Send size={20} />
+                </button>
+              )}
             </div>
           </form>
         </>
@@ -386,6 +475,96 @@ function ChatMultiPurpose({
                 ))}
             </div>
             <button type="button" onClick={() => setForwardingMessageId(null)} className="mt-3 text-xs text-slate-500">Đóng</button>
+          </div>
+        </div>
+      )}
+      {showGroupDrawer && activeRoom?.type === "group" && (
+        <div className="fixed inset-0 z-[65] flex justify-end bg-black/30">
+          <div className="h-full w-full max-w-md bg-white shadow-xl p-4 overflow-y-auto">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-800">Thông tin nhóm</h3>
+              <button type="button" onClick={() => setShowGroupDrawer(false)} className="text-xs text-slate-500">
+                Đóng
+              </button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-600">Ảnh nhóm</label>
+              <label className="inline-flex cursor-pointer items-center gap-3 group">
+                <UserAvatar user={{ fullName: groupNameInput || activeRoom.name }} src={activeRoom.avatarUrl} size={56} className="group-hover:opacity-75 transition" />
+                <div>
+                  <span className="text-xs text-blue-600 font-semibold">Chọn ảnh</span>
+                  <div className="text-[10px] text-slate-500">Ảnh sẽ được cập nhật ngay lập tức</div>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarFileChange}
+                  disabled={isSavingGroup}
+                />
+              </label>
+              <div className="flex items-center gap-2 justify-between">
+                <label className="block text-xs font-semibold text-slate-600">Tên nhóm</label>
+                {(myGroupRole === "owner" || myGroupRole === "deputy") && !isEditingGroupName && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingGroupName(true)}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                  >
+                    <Edit2 className="inline h-3 w-3 mr-1" />
+                    Sửa
+                  </button>
+                )}
+              </div>
+              {isEditingGroupName ? (
+                <div className="flex gap-2">
+                  <input
+                    ref={groupNameInputRef}
+                    value={groupNameInput}
+                    onChange={(e) => setGroupNameInput(e.target.value)}
+                    onBlur={handleSaveGroupInfo}
+                    onKeyDown={handleGroupNameKeyDown}
+                    disabled={isSavingGroup}
+                    className="flex-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    placeholder="Nhập tên nhóm"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveGroupInfo}
+                    disabled={isSavingGroup}
+                    className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-800 bg-slate-50">
+                  {groupNameInput || activeRoom?.name || "Nhóm chat"}
+                </div>
+              )}
+              <div className="border-t border-slate-200 pt-3">
+                <div className="mb-2 text-xs font-semibold text-slate-600">Thành viên</div>
+                <div className="space-y-2">
+                  {(activeRoom.members || []).map((m) => (
+                    <div key={m.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                      <UserAvatar user={m} src={m.avatarUrl} size={28} showActive={m.id !== user?.id} />
+                      <div className="text-xs text-slate-700">
+                        {m.fullName} <span className="text-slate-500">({m.role})</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {myGroupRole === "owner" && (
+                <button
+                  type="button"
+                  onClick={() => performGroupAction("dissolve")}
+                  className="w-full rounded-lg border border-red-200 bg-red-100 px-3 py-2 text-sm font-semibold text-red-700"
+                >
+                  Giải tán nhóm
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

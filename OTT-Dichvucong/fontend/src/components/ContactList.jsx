@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Search, Plus } from "lucide-react";
+import UserAvatar from "./UserAvatar.jsx";
 
 function ContactList({
   chatModeTab,
@@ -13,7 +14,8 @@ function ContactList({
   openDirectChat,
   openStaffChat,
   setShowGroupModal,
-  user
+  user,
+  unreadMap = {}
 }) {
   const listItems = useMemo(() => (chatModeTab === "contacts" ? contacts : rooms), [chatModeTab, contacts, rooms]);
 
@@ -91,6 +93,10 @@ function ContactList({
             );
           }
           const isActive = activeRoomId === item.id;
+          const targetUser = item.members?.find((m) => m.id !== user?.id) || null;
+          const roomTitle = item.type === "group" ? item.name || "Nhóm chat" : targetUser?.fullName || "Hội thoại";
+          const roomAvatar = item.type === "group" ? item.avatarUrl : targetUser?.avatarUrl;
+          const unreadCount = unreadMap[item.id] || 0;
           return (
             <button
               key={item.id}
@@ -102,13 +108,24 @@ function ContactList({
                   : "border-slate-200 bg-white hover:bg-slate-50"
               }`}
             >
-              <div className="text-sm font-semibold truncate">
-                {item.type === "group"
-                  ? item.name || "Nhóm chat"
-                  : item.members?.find((m) => m.id !== user?.id)?.fullName || "Hội thoại"}
-              </div>
-              <div className={`text-[11px] truncate ${isActive ? "text-white/80" : "text-slate-500"}`}>
-                {item.type === "group" ? "Nhóm chat" : "Chat cá nhân"}
+              <div className="flex items-center gap-2">
+                <UserAvatar
+                  user={{ fullName: roomTitle }}
+                  src={roomAvatar}
+                  size={34}
+                  showActive={item.type === "direct"}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold truncate">{roomTitle}</div>
+                  <div className={`text-[11px] truncate ${isActive ? "text-white/80" : "text-slate-500"}`}>
+                    {item.type === "group" ? "Nhóm chat" : "Chat cá nhân"}
+                  </div>
+                </div>
+                {unreadCount > 0 && (
+                  <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </div>
             </button>
           );

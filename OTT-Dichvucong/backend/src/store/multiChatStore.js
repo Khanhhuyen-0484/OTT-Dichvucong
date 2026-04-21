@@ -41,7 +41,14 @@ function canManageGroup(room, userId) {
 
 function sanitizeMedia(media) {
   if (!media || typeof media !== "object") return null;
-  const type = media.type === "video" ? "video" : media.type === "image" ? "image" : null;
+  const type =
+    media.type === "video"
+      ? "video"
+      : media.type === "image"
+      ? "image"
+      : media.type === "file"
+      ? "file"
+      : null;
   const url = String(media.url || "").trim();
   if (!type || !url) return null;
   return {
@@ -323,6 +330,23 @@ async function dissolveGroup({ roomId, requesterId }) {
   return saveRoom(next);
 }
 
+async function updateGroupInfo({ roomId, requesterId, name, avatarUrl }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền cập nhật thông tin nhóm");
+
+  const nextName = typeof name === "string" ? name.trim().slice(0, 120) : room.name;
+  const nextAvatar = typeof avatarUrl === "string" ? avatarUrl.trim().slice(0, 500) : room.avatarUrl;
+
+  const next = {
+    ...room,
+    name: nextName || room.name || "Nhóm chat",
+    avatarUrl: nextAvatar,
+    updatedAt: nowIso()
+  };
+  return saveRoom(next);
+}
+
 async function searchContacts({ keyword, currentUserId }) {
   const q = String(keyword || "").trim().toLowerCase();
   const rs = await dynamo.send(new ScanCommand({ TableName: process.env.USERS_TABLE || process.env.DYNAMODB_USERS_TABLE || "Users" }));
@@ -409,6 +433,7 @@ module.exports = {
   removeGroupMember,
   assignDeputy,
   dissolveGroup,
+  updateGroupInfo,
   searchContacts,
   hydrateRoomForUser
 };

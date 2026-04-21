@@ -19,29 +19,51 @@ export default function UserAvatar({
   user,
   src,
   size = 40,
-  className = ""
+  className = "",
+  showActive = false
 }) {
   const label = initialsFromUser(user);
   const px = `${size}px`;
+  const hasRealAvatar = Boolean(src && !String(src).includes("ui-avatars.com"));
   if (src) {
     return (
-      <img
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        className={`rounded-full object-cover ring-2 ring-white/30 ${className}`}
-        style={{ width: px, height: px }}
-      />
+      <div className="relative shrink-0" style={{ width: px, height: px }}>
+        {hasRealAvatar ? (
+          <img
+            src={src}
+            alt=""
+            width={size}
+            height={size}
+            className={`rounded-full object-cover ring-2 ring-white/30 ${className}`}
+            style={{ width: px, height: px }}
+          />
+        ) : (
+          <div
+            className={`rounded-full bg-gradient-to-br from-[#003366] to-[#0b7dda] grid place-items-center font-bold text-white ring-2 ring-white/30 shrink-0 ${className}`}
+            style={{ width: px, height: px, fontSize: size * 0.35 }}
+            aria-hidden
+          >
+            {label.slice(0, 1)}
+          </div>
+        )}
+        {showActive && (
+          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white" />
+        )}
+      </div>
     );
   }
   return (
-    <div
-      className={`rounded-full bg-gradient-to-br from-[#003366] to-[#052b53] grid place-items-center font-bold text-white ring-2 ring-white/30 shrink-0 ${className}`}
-      style={{ width: px, height: px, fontSize: size * 0.35 }}
-      aria-hidden
-    >
-      {label}
+    <div className="relative shrink-0" style={{ width: px, height: px }}>
+      <div
+        className={`rounded-full bg-gradient-to-br from-[#003366] to-[#0b7dda] grid place-items-center font-bold text-white ring-2 ring-white/30 shrink-0 ${className}`}
+        style={{ width: px, height: px, fontSize: size * 0.35 }}
+        aria-hidden
+      >
+        {label.slice(0, 1)}
+      </div>
+      {showActive && (
+        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white" />
+      )}
     </div>
   );
 }

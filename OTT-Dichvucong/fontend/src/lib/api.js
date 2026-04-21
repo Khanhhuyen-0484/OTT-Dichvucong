@@ -201,6 +201,10 @@ export async function dissolveGroup(roomId) {
   return await api.delete(`/chat/groups/${roomId}`);
 }
 
+export async function updateGroupInfo(roomId, payload) {
+  return await api.patch(`/chat/groups/${roomId}`, payload);
+}
+
 export async function getAdminDashboard() {
   return await api.get("/admin/dashboard");
 }

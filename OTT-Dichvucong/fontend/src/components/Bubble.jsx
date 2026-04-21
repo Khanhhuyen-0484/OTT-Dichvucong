@@ -1,4 +1,5 @@
 import React from "react";
+import FileMessageCard from "./FileMessageCard.jsx";
 
 const IMAGE_URL_PATTERN = /(https?:\/\/[^\s]+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?[^\s]*)?)/i;
 
@@ -72,6 +73,10 @@ function Bubble({
             className={`rounded-[12px] ${onlyImageMessage ? "" : "mb-2"}`}
             style={{ maxWidth: "280px", maxHeight: "320px" }}
           />
+        )}
+
+        {media?.type === "file" && media?.url && (
+          <FileMessageCard url={media.url} name={media.name} isMine={isMine} />
         )}
 
         {!onlyImageMessage && <div className="whitespace-pre-wrap break-words">{text}</div>}

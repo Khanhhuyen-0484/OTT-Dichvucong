@@ -30,7 +30,8 @@ import {
   postStaffChat,
   removeGroupDeputy,
   removeGroupMember,
-  unsendRoomMessage
+  unsendRoomMessage,
+  updateGroupInfo
 } from "../lib/api.js";
 import { connectSocket } from "../lib/socket.js";
 import { uploadToS3 } from "../lib/uploadToS3.js";
@@ -57,6 +58,7 @@ export default function ChatPage() {
   const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [newMemberId, setNewMemberId] = useState("");
   const [replyToMessage, setReplyToMessage] = useState(null);
+  const [roomUnreadMap, setRoomUnreadMap] = useState({});
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
   const [camMuted, setCamMuted] = useState(false);
@@ -129,6 +131,12 @@ export default function ChatPage() {
     if (tabState === "multi") {
       const handleMultiChatMessage = (data) => {
         if (!data || !data.roomId) return;
+        if (data.roomId !== activeRoomId) {
+          setRoomUnreadMap((prev) => ({
+            ...prev,
+            [data.roomId]: (prev[data.roomId] || 0) + 1
+          }));
+        }
         loadRooms();
         if (data.roomId === activeRoomId) {
           setTimeout(scrollToBottom, 100);
@@ -199,6 +207,11 @@ export default function ChatPage() {
     }
   }, [rooms, activeRoomId]);
 
+  useEffect(() => {
+    if (!activeRoomId) return;
+    setRoomUnreadMap((prev) => ({ ...prev, [activeRoomId]: 0 }));
+  }, [activeRoomId]);
+
   const activeRoom = useMemo(() => {
     return rooms.find((r) => r.id === activeRoomId) || null;
   }, [rooms, activeRoomId]);
@@ -231,8 +244,19 @@ export default function ChatPage() {
       let mediaPayload = null;
       if (roomMedia instanceof File) {
         const uploaded = await uploadToS3(roomMedia);
+        // Determine media type based on MIME type and file extension
+        const fileName = roomMedia.name.toLowerCase();
+        const isDocFile =
+          roomMedia.type === "application/pdf" ||
+          roomMedia.type === "application/msword" ||
+          roomMedia.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+          fileName.endsWith(".pdf") ||
+          fileName.endsWith(".doc") ||
+          fileName.endsWith(".docx");
+        const isVideo = roomMedia.type.startsWith("video/");
+        const mediaType = isDocFile ? "file" : isVideo ? "video" : "image";
         mediaPayload = {
-          type: roomMedia.type.startsWith("video/") ? "video" : "image",
+          type: mediaType,
           url: uploaded.url,
           name: roomMedia.name
         };
@@ -333,6 +357,24 @@ export default function ChatPage() {
       setRoomErr(getApiErrorMessage(err));
     }
   }, [activeRoomId, newMemberId, loadRooms]);
+
+  const updateActiveGroupInfo = useCallback(
+    async ({ name, avatarFile }) => {
+      if (!activeRoomId) return;
+      try {
+        let avatarUrl = undefined;
+        if (avatarFile instanceof File) {
+          const uploaded = await uploadToS3(avatarFile);
+          avatarUrl = uploaded?.url || "";
+        }
+        await updateGroupInfo(activeRoomId, { name, avatarUrl });
+        loadRooms();
+      } catch (err) {
+        setRoomErr(getApiErrorMessage(err));
+      }
+    },
+    [activeRoomId, loadRooms]
+  );
 
   const createGroup = useCallback(async () => {
     if (!groupName.trim()) return;
@@ -450,6 +492,7 @@ export default function ChatPage() {
                   openStaffChat={openStaffChat}
                   setShowGroupModal={setShowGroupModal}
                   user={user}
+                  unreadMap={roomUnreadMap}
                 />
               </div>
 
@@ -483,6 +526,7 @@ export default function ChatPage() {
                     onStartVideoCall={startVideoCall}
                     replyToMessage={replyToMessage}
                     clearReply={() => setReplyToMessage(null)}
+                    onUpdateGroupInfo={updateActiveGroupInfo}
                 />
               </div>
             </div>

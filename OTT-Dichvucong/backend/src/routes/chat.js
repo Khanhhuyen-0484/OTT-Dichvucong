@@ -21,7 +21,8 @@ const {
   removeGroupMember,
   assignDeputy,
   removeDeputy,
-  dissolveGroup
+  dissolveGroup,
+  updateGroupInfo
 } = require("../controllers/chatController");
 
 router.get("/staff", authMiddleware, staffHistory);
@@ -42,6 +43,7 @@ router.delete("/groups/:roomId/members/:memberId", authMiddleware, removeGroupMe
 router.post("/groups/:roomId/deputies/:memberId", authMiddleware, assignDeputy);
 router.delete("/groups/:roomId/deputies/:memberId", authMiddleware, removeDeputy);
 router.delete("/groups/:roomId", authMiddleware, dissolveGroup);
+router.patch("/groups/:roomId", authMiddleware, updateGroupInfo);
 
 // Media upload with multer
 const upload = multer({ storage: multer.memoryStorage() });
