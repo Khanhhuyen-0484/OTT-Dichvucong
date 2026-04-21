@@ -112,6 +112,34 @@ export default function AdminPanel() {
       ),
     [conversations]
   );
+  const sortedAiHistory = useMemo(
+    () => [...aiHistory].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))),
+    [aiHistory]
+  );
+  const aiSessions = useMemo(() => {
+    const grouped = new Map();
+    sortedAiHistory.forEach((item) => {
+      const key = item.sessionId || `single-${item.id}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          sessionId: key,
+          userName: item.userName || "Khách",
+          mode: item.mode || "fallback",
+          source: item.source || "home_chat",
+          detectedTopic: item.meta?.detectedTopic || "",
+          updatedAt: item.at || "",
+          items: []
+        });
+      }
+      const session = grouped.get(key);
+      session.items.push(item);
+      if ((item.at || "") > session.updatedAt) session.updatedAt = item.at || session.updatedAt;
+      if (!session.detectedTopic && item.meta?.detectedTopic) {
+        session.detectedTopic = item.meta.detectedTopic;
+      }
+    });
+    return [...grouped.values()].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  }, [sortedAiHistory]);
 
   async function loadDashboard() {
     const [statsRes, dossierRes, convRes] = await Promise.all([
@@ -577,16 +605,70 @@ export default function AdminPanel() {
               <p className="mt-1 text-sm text-slate-600">Cập nhật quy tắc trả lời để đồng bộ với quy trình nghiệp vụ mới.</p>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <h2 className="text-base font-black text-slate-900">Lịch sử phản hồi AI</h2>
-                  <div className="mt-3 space-y-3 max-h-96 overflow-y-auto">
-                    {aiHistory.map((item) => (
-                      <div key={item.id} className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
-                        <div className="text-xs font-semibold text-slate-500">Câu hỏi</div>
-                        <div className="text-sm font-semibold text-slate-800">{item.question}</div>
-                        <div className="mt-2 text-xs font-semibold text-slate-500">Câu trả lời</div>
-                        <div className="text-sm text-slate-700">{item.answer}</div>
+                  <h2 className="text-base font-black text-slate-900">Lịch sử phản hồi AI theo phiên</h2>
+                  <div className="mt-3 space-y-3 max-h-96 overflow-y-auto pr-1">
+                    {aiSessions.map((session) => (
+                      <div key={session.sessionId} className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
+                        <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">
+                          <span className="rounded-full bg-slate-100 px-2 py-1">
+                            {session.mode === "openai" ? "AI model" : "Fallback"}
+                          </span>
+                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                            {session.source}
+                          </span>
+                          <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">
+                            {session.userName}
+                          </span>
+                          {session.detectedTopic ? (
+                            <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">
+                              topic: {session.detectedTopic}
+                            </span>
+                          ) : null}
+                          {session.updatedAt ? <span>{new Date(session.updatedAt).toLocaleString("vi-VN")}</span> : null}
+                        </div>
+                        <div className="space-y-3">
+                          {session.items
+                            .sort((a, b) => (a.turnIndex || 0) - (b.turnIndex || 0))
+                            .map((item) => (
+                              <div key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                                <div className="mb-2 text-[11px] font-semibold text-slate-500">
+                                  Lượt {item.turnIndex || 1}
+                                </div>
+                                <div className="text-xs font-semibold text-slate-500">Câu hỏi</div>
+                                <div className="text-sm font-semibold text-slate-800">{item.question}</div>
+                                <div className="mt-2 text-xs font-semibold text-slate-500">Câu trả lời</div>
+                                <div className="text-sm text-slate-700">{item.answer}</div>
+                                {item.meta?.suggestions?.length ? (
+                                  <>
+                                    <div className="mt-2 text-xs font-semibold text-slate-500">Gợi ý AI đã đưa</div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {item.meta.suggestions.map((suggestion) => (
+                                        <span
+                                          key={suggestion}
+                                          className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200"
+                                        >
+                                          {suggestion}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </>
+                                ) : null}
+                                {item.note ? (
+                                  <>
+                                    <div className="mt-2 text-xs font-semibold text-slate-500">Ghi chú hệ thống</div>
+                                    <div className="text-xs text-slate-600">{item.note}</div>
+                                  </>
+                                ) : null}
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     ))}
+                    {!aiSessions.length ? (
+                      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
+                        Chưa có lịch sử phản hồi AI để kiểm tra.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

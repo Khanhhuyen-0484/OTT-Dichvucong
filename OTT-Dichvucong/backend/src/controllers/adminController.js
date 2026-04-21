@@ -71,6 +71,7 @@ exports.dossierDecision = async (req, res) => {
 exports.openDossierChat = async (req, res) => {
   try {
     const conversation = await getOrCreateConversationByDossier(req.params.id);
+    const normalizedMessages = Array.isArray(conversation?.messages) ? conversation.messages : [];
     return res.json({
       conversation: {
         ...conversation,
@@ -118,7 +119,12 @@ exports.supportConversationDetail = async (req, res) => {
           };
         })
       : [];
-    return res.json({ conversation });
+    return res.json({
+      conversation: {
+        ...conversation,
+        messages: normalizedMessages
+      }
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi lấy chi tiết hội thoại" });
   }
