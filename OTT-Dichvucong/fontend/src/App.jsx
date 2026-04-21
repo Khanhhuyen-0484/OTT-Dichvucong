@@ -13,7 +13,7 @@ export default function App() {
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600">
-        Đang tải...
+        Đang tải hệ thống...
       </div>
     );
   }
@@ -23,6 +23,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/profile" element={<Profile />} />
+<<<<<<< HEAD
       <Route
         path="/admin"
         element={<Navigate to="/admin/dashboard" replace />}
@@ -43,8 +44,15 @@ export default function App() {
         path="/admin/ai"
         element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />}
       />
+=======
+      <Route path="/chat" element={<ChatPage />} />
+      <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="/admin/chat" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+      <Route path="/admin/dashboard" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+      <Route path="/admin/documents" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+      <Route path="/admin/ai" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+>>>>>>> 49573e7 (update videocall)
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
-
