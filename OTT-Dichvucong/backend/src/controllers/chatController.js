@@ -2,6 +2,10 @@ const { getChatHistory, sendMessage } = require("../store/supportConversationsSt
 const userStore = require("../store/userStore");
 const { getIo } = require("../socket");
 const multiChatStore = require("../store/multiChatStore");
+const crypto = require("crypto");
+const path = require("path");
+const multer = require("multer");
+const { createPresignedPut, isS3Configured } = require("../config/s3");
 
 exports.staffHistory = async (req, res) => {
   try {
@@ -266,12 +270,14 @@ exports.sendRoomMessage = async (req, res) => {
   try {
     const text = String(req.body?.text || "").trim();
     const media = req.body?.media || null;
+    const replyToMessageId = String(req.body?.replyToMessageId || "").trim();
     if (!text && !media) return res.status(400).json({ message: "Tin nhắn không được để trống" });
     const room = await multiChatStore.appendMessage({
       roomId: req.params.roomId,
       senderId: req.user.id,
       text,
-      media
+      media,
+      replyToMessageId
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     const lastMessage = hydrated.messages[hydrated.messages.length - 1];
@@ -282,6 +288,123 @@ exports.sendRoomMessage = async (req, res) => {
     return res.json({ room: hydrated, message: lastMessage });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể gửi tin nhắn" });
+  }
+};
+
+exports.presignChatMediaUpload = async (req, res) => {
+  if (!isS3Configured()) {
+    return res.status(503).json({
+      message:
+        "Chưa cấu hình S3. Đặt S3_BUCKET (hoặc AWS_S3_BUCKET), AWS_REGION và AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY trong backend/.env."
+    });
+  }
+  try {
+    const contentType = String(req.body?.contentType || "")
+      .trim()
+      .toLowerCase();
+    let fileName = String(req.body?.fileName || "file").trim();
+    if (!contentType || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+      return res.status(400).json({
+        message: "Chỉ chấp nhận media ảnh/video"
+      });
+    }
+
+    const ext = path.extname(fileName).toLowerCase();
+    if (!ext) {
+      const inferred = contentType.startsWith("video/") ? ".mp4" : ".jpg";
+      fileName += inferred;
+    }
+    const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
+    const key = `chat-media/${req.user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName}`;
+
+    const { uploadUrl, publicUrl } = await createPresignedPut({
+      key,
+      contentType,
+      expiresSec: 300
+    });
+
+    return res.json({
+      uploadUrl,
+      publicUrl,
+      key,
+      method: "PUT",
+      headers: { "Content-Type": contentType }
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message || "Không tạo được link upload media chat"
+    });
+  }
+};
+
+exports.uploadChatMedia = async (req, res) => {
+  if (!isS3Configured()) {
+    return res.status(503).json({
+      message: "Chưa cấu hình S3."
+    });
+  }
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ message: "Không có file được upload" });
+    }
+
+    const contentType = file.mimetype;
+    if (!contentType || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+      return res.status(400).json({
+        message: "Chỉ chấp nhận media ảnh/video"
+      });
+    }
+
+    const fileName = file.originalname || "file";
+    const ext = path.extname(fileName).toLowerCase();
+    let safeName = path.basename(fileName, ext).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
+    if (!ext) {
+      const inferred = contentType.startsWith("video/") ? ".mp4" : ".jpg";
+      safeName += inferred;
+    } else {
+      safeName += ext;
+    }
+    const key = `chat-media/${req.user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName}`;
+
+    // Upload to S3
+    const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+    const cfg = require("../config/s3").getConfig();
+    const client = new S3Client({
+      region: cfg.region,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      }
+    });
+
+    const command = new PutObjectCommand({
+      Bucket: cfg.bucket,
+      Key: key,
+      Body: file.buffer,
+      ContentType: contentType
+    });
+
+    await client.send(command);
+
+    // Generate GET URL
+    const { GetObjectCommand } = require("@aws-sdk/client-s3");
+    const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+    const getCommand = new GetObjectCommand({
+      Bucket: cfg.bucket,
+      Key: key
+    });
+    const publicUrl = await getSignedUrl(client, getCommand, { expiresIn: 3600 * 24 * 7 });
+
+    return res.json({
+      url: publicUrl,
+      key,
+      contentType
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message || "Không upload được media chat"
+    });
   }
 };
 

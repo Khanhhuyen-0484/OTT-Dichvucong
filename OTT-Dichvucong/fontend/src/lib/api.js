@@ -165,6 +165,10 @@ export async function postRoomMessage(roomId, payload) {
   return await api.post(`/chat/rooms/${roomId}/messages`, payload);
 }
 
+export async function presignChatMediaUpload(payload) {
+  return await api.post("/chat/media/presign", payload);
+}
+
 export async function unsendRoomMessage(roomId, messageId) {
   return await api.post(`/chat/rooms/${roomId}/messages/${messageId}/unsend`);
 }
@@ -244,6 +248,8 @@ export async function getAdminAiRules() {
 export async function putAdminAiRules(rulesText) {
   return await api.put("/admin/ai/rules", { rulesText });
 }
+
+export { api };
 
 export default api;
 

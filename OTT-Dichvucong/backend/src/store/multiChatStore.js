@@ -60,6 +60,7 @@ function sanitizeMessage(message) {
     senderId: String(message?.senderId || ""),
     text: String(message?.text || "").slice(0, 4000),
     media: sanitizeMedia(message?.media),
+    replyToMessageId: String(message?.replyToMessageId || "").trim(),
     createdAt: message?.createdAt || nowIso(),
     unsentForAll: Boolean(message?.unsentForAll),
     deletedFor
@@ -170,17 +171,23 @@ async function createGroupRoom({ ownerId, name, avatarUrl, memberIds }) {
   return saveRoom(room);
 }
 
-async function appendMessage({ roomId, senderId, text, media }) {
+async function appendMessage({ roomId, senderId, text, media, replyToMessageId }) {
   const room = await getRoomById(roomId);
   if (!room) throw new Error("Không tìm thấy phòng chat");
   const sid = String(senderId || "").trim();
   if (!isRoomMember(room, sid)) throw new Error("Bạn không phải thành viên của phòng chat");
+  const replyId = String(replyToMessageId || "").trim();
+  if (replyId) {
+    const target = room.messages.find((m) => m.id === replyId);
+    if (!target) throw new Error("Tin nhắn trả lời không tồn tại");
+  }
 
   const message = sanitizeMessage({
     id: makeId("msg"),
     senderId: sid,
     text,
     media,
+    replyToMessageId: replyId,
     createdAt: nowIso(),
     unsentForAll: false,
     deletedFor: []
@@ -365,10 +372,27 @@ async function hydrateRoomForUser(room, currentUserId) {
         avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent("Nguoi dung")}&size=128`
       }
     }));
+  const messageMap = new Map(visibleMessages.map((m) => [m.id, m]));
+  const hydratedMessages = visibleMessages.map((m) => {
+    const replied = m.replyToMessageId ? messageMap.get(m.replyToMessageId) : null;
+    return {
+      ...m,
+      replyTo: replied
+        ? {
+            id: replied.id,
+            text: replied.text,
+            media: replied.media,
+            senderId: replied.senderId,
+            senderName: replied.sender?.fullName || "Người dùng",
+            unsentForAll: Boolean(replied.unsentForAll)
+          }
+        : null
+    };
+  });
   return {
     ...room,
     members,
-    messages: visibleMessages
+    messages: hydratedMessages
   };
 }
 

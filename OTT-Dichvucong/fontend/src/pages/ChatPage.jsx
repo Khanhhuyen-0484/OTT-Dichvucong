@@ -9,8 +9,6 @@ import {
   VideoOff,
   PhoneOff
 } from "lucide-react";
-import UserAvatar from "../components/UserAvatar.jsx";
-import Bubble from "../components/Bubble.jsx";
 import ContactList from "../components/ContactList.jsx";
 import ChatMultiPurpose from "../components/ChatMultiPurpose.jsx";
 import GroupCreator from "../components/GroupCreator.jsx";
@@ -205,20 +203,6 @@ export default function ChatPage() {
     return rooms.find((r) => r.id === activeRoomId) || null;
   }, [rooms, activeRoomId]);
 
-  const roomTitle = useMemo(() => {
-    if (!activeRoom) return "Chat đa năng";
-    if (activeRoom.type === "group") return activeRoom.name || "Nhóm";
-    const otherMember = activeRoom.members?.find((m) => m.id !== user?.id);
-    return otherMember?.fullName || "Hội thoại";
-  }, [activeRoom, user]);
-
-  const roomAvatar = useMemo(() => {
-    if (!activeRoom) return null;
-    if (activeRoom.type === "group") return activeRoom.avatarUrl;
-    const otherMember = activeRoom.members?.find((m) => m.id !== user?.id);
-    return otherMember?.avatarUrl;
-  }, [activeRoom, user]);
-
   const myGroupRole = useMemo(() => {
     if (!activeRoom || activeRoom.type !== "group") return null;
     return activeRoom.members?.find((m) => m.id === user?.id)?.role || null;
@@ -255,12 +239,10 @@ export default function ChatPage() {
       } else if (roomMedia && typeof roomMedia === "object") {
         mediaPayload = roomMedia;
       }
-      const nextText = replyToMessage
-        ? `↪ ${replyToMessage.sender?.fullName || "Tin nhắn"}: ${String(replyToMessage.text || "").slice(0, 120)}\n${roomInput.trim()}`
-        : roomInput.trim();
       await postRoomMessage(activeRoomId, {
-        text: nextText,
-        media: mediaPayload
+        text: roomInput.trim(),
+        media: mediaPayload,
+        replyToMessageId: replyToMessage?.id || ""
       });
       setRoomInput("");
       setRoomMedia(null);
@@ -406,7 +388,7 @@ export default function ChatPage() {
     <div className="min-h-screen bg-slate-50">
       <GovHeader />
 
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-6">
         <div className="mb-4 flex items-center gap-3">
           <button
             onClick={() => navigate("/")}
@@ -419,7 +401,7 @@ export default function ChatPage() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 flex gap-1 rounded-xl bg-slate-100 p-1">
+        <div className="mb-4 sm:mb-6 flex gap-1 rounded-xl bg-slate-100 p-1">
           <button
             onClick={() => setTabState("multi")}
             className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
@@ -450,7 +432,7 @@ export default function ChatPage() {
           </button>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-12">
+        <div className="grid gap-4 lg:gap-6 lg:grid-cols-12">
           {tabState === "multi" ? (
             <>
               {/* Sidebar */}
@@ -473,7 +455,7 @@ export default function ChatPage() {
 
               {/* Main Chat */}
               <div className="lg:col-span-8">
-                <div className="h-[calc(100vh-220px)] min-h-[420px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
+                <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
                   <ChatMultiPurpose
                     roomErr={roomErr}
                     activeRoom={activeRoom}
@@ -508,7 +490,7 @@ export default function ChatPage() {
           ) : (
             // Staff chat tab
             <div className="lg:col-span-12">
-              <div className="h-[calc(100vh-220px)] min-h-[420px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+              <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="border-b border-slate-200 bg-[#003366] text-white p-4">
                   <h2 className="font-bold text-sm">👤 Cán bộ hỗ trợ</h2>
@@ -537,6 +519,7 @@ export default function ChatPage() {
                           text={m.content || m.text}
                           isMine={isMine}
                           label={isMine ? user.fullName : "Cán bộ"}
+                          createdAt={m.createdAt}
                         />
                       );
                     })
