@@ -8,6 +8,8 @@ const {
   register,
   login,
   forgotPassword,
+  forgotPasswordOtp,
+  resetPasswordWithOtp,
   me,
   patchMe,
   presignAvatar,
@@ -23,5 +25,7 @@ router.post("/verify-otp", verifyOtp);
 router.post("/register", register);
 router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
+router.post("/forgot-password/otp", forgotPasswordOtp);
+router.post("/reset-password/otp", resetPasswordWithOtp);
 
 module.exports = router;

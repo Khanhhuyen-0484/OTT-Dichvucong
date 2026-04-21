@@ -22,6 +22,7 @@ const AVATAR_TYPES = new Set([
   "image/webp",
   "image/gif"
 ]);
+const REGISTER_PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z\d]).{6,12}$/;
 
 function normalizePublicUser(u) {
   if (!u) return null;
@@ -95,10 +96,13 @@ exports.register = async (req, res) => {
     if (!email || typeof email !== "string") {
       return res.status(400).json({ message: "Email không hợp lệ" });
     }
-    if (!password || typeof password !== "string" || password.length < 6) {
+    if (!password || typeof password !== "string" || !REGISTER_PASSWORD_RE.test(password)) {
       return res
         .status(400)
-        .json({ message: "Mật khẩu phải có ít nhất 6 ký tự" });
+        .json({
+          message:
+            "Mật khẩu phải từ 6-12 ký tự, gồm chữ thường, chữ hoa và ký tự đặc biệt"
+        });
     }
     if (!otp || typeof otp !== "string") {
       return res.status(400).json({ message: "OTP không hợp lệ" });
@@ -445,6 +449,91 @@ exports.forgotPassword = async (req, res) => {
       error: err.message,
       smtp: serializeSmtpError(err)
     });
+  }
+};
+
+// forgot password via OTP
+exports.forgotPasswordOtp = async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({ message: "Email không hợp lệ" });
+    }
+
+    const emailNorm = String(email).trim().toLowerCase();
+    const user = await findByEmail(emailNorm);
+    const safeOk = {
+      message:
+        "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi OTP đặt lại mật khẩu."
+    };
+
+    // Do not reveal whether email exists
+    if (!user) return res.json(safeOk);
+
+    const otp = generateOtp();
+    const html = otpEmail({ otp, minutes: 5 });
+    await sendMail({
+      to: emailNorm,
+      subject: "Mã OTP đặt lại mật khẩu",
+      html,
+      text: `Mã OTP đặt lại mật khẩu của bạn: ${otp} (hiệu lực 5 phút).`
+    });
+    setOtp(emailNorm, otp, 5 * 60_000);
+
+    return res.json(safeOk);
+  } catch (err) {
+    console.error("FORGOT PASSWORD OTP FAILED ❌", err?.message, err);
+    return res.status(500).json({
+      message: "Không gửi được OTP đặt lại mật khẩu",
+      error: err.message,
+      smtp: serializeSmtpError(err)
+    });
+  }
+};
+
+exports.resetPasswordWithOtp = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body || {};
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({ message: "Email không hợp lệ" });
+    }
+    if (!otp || typeof otp !== "string") {
+      return res.status(400).json({ message: "OTP không hợp lệ" });
+    }
+    if (
+      !newPassword ||
+      typeof newPassword !== "string" ||
+      !REGISTER_PASSWORD_RE.test(newPassword)
+    ) {
+      return res.status(400).json({
+        message:
+          "Mật khẩu mới phải từ 6-12 ký tự, gồm chữ thường, chữ hoa và ký tự đặc biệt"
+      });
+    }
+
+    const emailNorm = String(email).trim().toLowerCase();
+    const user = await findByEmail(emailNorm);
+    if (!user) {
+      return res.status(400).json({ message: "Email hoặc OTP không hợp lệ" });
+    }
+
+    const result = verifyOtp(emailNorm, otp);
+    if (!result.ok) {
+      return res.status(400).json({
+        message:
+          result.reason === "NOT_FOUND"
+            ? "OTP không tồn tại hoặc đã hết hạn"
+            : "OTP không đúng"
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await updatePasswordHashById(user.id, hashedPassword);
+    consumeOtp(emailNorm);
+
+    return res.json({ message: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại." });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi hệ thống" });
   }
 };
 

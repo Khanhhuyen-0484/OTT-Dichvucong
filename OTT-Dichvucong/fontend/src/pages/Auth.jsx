@@ -6,15 +6,44 @@ import Alert from "../components/Alert.jsx";
 import Button from "../components/Button.jsx";
 import Input from "../components/Input.jsx";
 import {
-  forgotPassword,
+  forgotPasswordOtp,
   getApiErrorMessage,
   login,
   register,
+  resetPasswordWithOtp,
   resolvedApiBaseUrl,
   sendOtp
 } from "../lib/api.js";
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function getPasswordChecks(rawPassword) {
+  const password = String(rawPassword || "");
+  return {
+    lengthOk: password.length >= 6 && password.length <= 12,
+    hasUpperAndLower: /[a-z]/.test(password) && /[A-Z]/.test(password),
+    hasSpecialChar: /[^A-Za-z0-9]/.test(password)
+  };
+}
+
+function PasswordRuleItem({ ok, label }) {
+  return (
+    <div
+      className={`flex items-center gap-2 text-xs transition ${
+        ok ? "text-emerald-700 opacity-100 font-semibold" : "text-slate-500 opacity-45"
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+          ok ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"
+        }`}
+      >
+        {ok ? "✓" : "•"}
+      </span>
+      <span>{label}</span>
+    </div>
+  );
+}
 
 function secondsToLabel(s) {
   const n = Math.max(0, Number(s) || 0);
@@ -39,10 +68,14 @@ export default function Auth() {
   const { loginWithToken } = useAuth();
   const [mode, setMode] = useState("login"); // login | register | forgot
   const [registerStep, setRegisterStep] = useState(1); // 1 email, 2 otp+pass
+  const [forgotStep, setForgotStep] = useState(1); // 1 email, 2 otp+new pass
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -62,10 +95,14 @@ export default function Auth() {
   const resetForm = () => {
     setPassword("");
     setOtp("");
+    setForgotOtp("");
+    setNewPassword("");
+    setConfirmNewPassword("");
     setFullName("");
     setPhone("");
     setAddress("");
     setRegisterStep(1);
+    setForgotStep(1);
     setResendLeft(0);
     setAlert(null);
   };
@@ -87,11 +124,18 @@ export default function Auth() {
     return null;
   }, [email]);
 
-  const passwordError = useMemo(() => {
+  const registerPasswordChecks = useMemo(() => getPasswordChecks(password), [password]);
+  const registerPasswordError = useMemo(() => {
     if (!password) return null;
-    if (password.length < 6) return "Mật khẩu phải có ít nhất 6 ký tự";
+    if (
+      !registerPasswordChecks.lengthOk ||
+      !registerPasswordChecks.hasUpperAndLower ||
+      !registerPasswordChecks.hasSpecialChar
+    ) {
+      return "Mật khẩu chưa đúng yêu cầu.";
+    }
     return null;
-  }, [password]);
+  }, [password, registerPasswordChecks]);
 
   const otpError = useMemo(() => {
     if (!otp) return null;
@@ -99,6 +143,32 @@ export default function Auth() {
     if (digits.length !== 6) return "OTP gồm đúng 6 chữ số";
     return null;
   }, [otp]);
+
+  const forgotOtpError = useMemo(() => {
+    if (!forgotOtp) return null;
+    const digits = forgotOtp.replace(/\D/g, "");
+    if (digits.length !== 6) return "OTP gồm đúng 6 chữ số";
+    return null;
+  }, [forgotOtp]);
+
+  const forgotPasswordChecks = useMemo(() => getPasswordChecks(newPassword), [newPassword]);
+  const newPasswordError = useMemo(() => {
+    if (!newPassword) return null;
+    if (
+      !forgotPasswordChecks.lengthOk ||
+      !forgotPasswordChecks.hasUpperAndLower ||
+      !forgotPasswordChecks.hasSpecialChar
+    ) {
+      return "Mật khẩu mới chưa đúng yêu cầu.";
+    }
+    return null;
+  }, [newPassword, forgotPasswordChecks]);
+
+  const confirmNewPasswordError = useMemo(() => {
+    if (!confirmNewPassword) return null;
+    if (confirmNewPassword !== newPassword) return "Mật khẩu nhập lại không khớp";
+    return null;
+  }, [confirmNewPassword, newPassword]);
 
   const fullNameError = useMemo(() => {
     if (!fullName.trim()) return null;
@@ -123,11 +193,21 @@ export default function Auth() {
     phone.trim() &&
     otp.replace(/\D/g, "").length === 6 &&
     !emailError &&
-    !passwordError &&
+    !registerPasswordError &&
     !otpError &&
     !fullNameError &&
     !phoneError;
-  const canLogin = email && password && !emailError && !passwordError;
+  const canLogin = email && password && !emailError;
+  const canForgotRequest = email && !emailError;
+  const canForgotReset =
+    email &&
+    forgotOtp.replace(/\D/g, "").length === 6 &&
+    newPassword &&
+    confirmNewPassword &&
+    !emailError &&
+    !forgotOtpError &&
+    !newPasswordError &&
+    !confirmNewPasswordError;
 
   const handleSendOtp = async () => {
     setAlert(null);
@@ -194,7 +274,7 @@ export default function Auth() {
         variant: "error",
         title: "Thiếu thông tin",
         message:
-          "Kiểm tra: họ tên (≥2 ký tự), số điện thoại, email, OTP 6 số, mật khẩu (≥6 ký tự)."
+          "Kiểm tra: họ tên (≥2 ký tự), số điện thoại, email, OTP 6 số, mật khẩu đúng định dạng."
       });
       return;
     }
@@ -267,7 +347,7 @@ export default function Auth() {
   const handleForgot = async (e) => {
     e.preventDefault();
     setAlert(null);
-    if (!canSendOtp) {
+    if (!canForgotRequest) {
       setAlert({
         variant: "error",
         title: "Thiếu thông tin",
@@ -277,19 +357,58 @@ export default function Auth() {
     }
     setLoading((x) => ({ ...x, forgot: true }));
     try {
-      const res = await forgotPassword(email.trim());
+      const res = await forgotPasswordOtp(email.trim());
       setAlert({
         variant: "success",
-        title: "Yêu cầu đã được tiếp nhận",
+        title: "Đã gửi OTP",
         message:
           res?.data?.message ||
-          "Nếu email tồn tại, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu."
+          "Nếu email tồn tại, bạn sẽ nhận được OTP đặt lại mật khẩu."
       });
+      setForgotStep(2);
+      setResendLeft(60);
     } catch (err) {
       console.error(err);
       setAlert({
         variant: "error",
         title: "Thất bại",
+        message: getApiErrorMessage(err)
+      });
+    } finally {
+      setLoading((x) => ({ ...x, forgot: false }));
+    }
+  };
+
+  const handleResetWithOtp = async (e) => {
+    e.preventDefault();
+    setAlert(null);
+    if (!canForgotReset) {
+      setAlert({
+        variant: "error",
+        title: "Thiếu thông tin",
+        message:
+          "Kiểm tra OTP 6 số, mật khẩu mới đúng định dạng và nhập lại trùng khớp."
+      });
+      return;
+    }
+    setLoading((x) => ({ ...x, forgot: true }));
+    try {
+      const res = await resetPasswordWithOtp({
+        email: email.trim(),
+        otp: forgotOtp.replace(/\D/g, ""),
+        newPassword
+      });
+      setAlert({
+        variant: "success",
+        title: "Đặt lại mật khẩu thành công",
+        message: res?.data?.message || "Bạn có thể đăng nhập bằng mật khẩu mới."
+      });
+      setMode("login");
+    } catch (err) {
+      console.error(err);
+      setAlert({
+        variant: "error",
+        title: "Đặt lại mật khẩu thất bại",
         message: getApiErrorMessage(err)
       });
     } finally {
@@ -421,7 +540,7 @@ export default function Auth() {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    error={passwordError}
+                    error={null}
                     required
                   />
                   <div className="flex items-center justify-between gap-3">
@@ -550,12 +669,21 @@ export default function Auth() {
                         name="password"
                         type="password"
                         autoComplete="new-password"
-                        placeholder="Tối thiểu 6 ký tự"
+                        placeholder="6-12 ký tự, có chữ hoa-thường và ký tự đặc biệt"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        error={passwordError}
+                        error={registerPasswordError}
                         required
+                        hint="Mật khẩu cần đủ 3 yêu cầu bên dưới."
                       />
+                      <div className="-mt-2 space-y-1 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+                        <PasswordRuleItem ok={registerPasswordChecks.lengthOk} label="6 đến 12 ký tự" />
+                        <PasswordRuleItem
+                          ok={registerPasswordChecks.hasUpperAndLower}
+                          label="Bao gồm chữ cái in hoa và chữ cái thường"
+                        />
+                        <PasswordRuleItem ok={registerPasswordChecks.hasSpecialChar} label="Có ký tự đặc biệt" />
+                      </div>
 
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                         <Button type="submit" loading={loading.register}>
@@ -595,23 +723,155 @@ export default function Auth() {
               ) : null}
 
               {mode === "forgot" ? (
-                <form onSubmit={handleForgot} className="mt-4 space-y-4">
-                  <Input
-                    label="Email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    error={emailError}
-                    required
-                    hint="Chúng tôi sẽ gửi liên kết đặt lại mật khẩu (nếu email tồn tại)."
-                  />
-                  <Button type="submit" variant="danger" loading={loading.forgot}>
-                    Gửi yêu cầu đặt lại mật khẩu
-                  </Button>
-                </form>
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        forgotStep === 1 ? "bg-[var(--gov-red)]" : "bg-slate-300"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    Bước 1: Nhập email nhận OTP
+                    <span className="mx-1 text-slate-300">/</span>
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        forgotStep === 2 ? "bg-[var(--gov-red)]" : "bg-slate-300"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    Bước 2: OTP + mật khẩu mới
+                  </div>
+
+                  {forgotStep === 1 ? (
+                    <form onSubmit={handleForgot} className="mt-4 space-y-4">
+                      <Input
+                        label="Email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="name@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        error={emailError}
+                        required
+                        hint="Hệ thống sẽ gửi OTP đặt lại mật khẩu vào email này."
+                      />
+                      <Button type="submit" variant="danger" loading={loading.forgot}>
+                        Gửi OTP đặt lại mật khẩu
+                      </Button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleResetWithOtp} className="mt-4 space-y-4" noValidate>
+                      <Input
+                        label="Email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        error={emailError}
+                        required
+                      />
+                      <Input
+                        label="Mã OTP (6 số)"
+                        name="forgotOtp"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        maxLength={6}
+                        value={forgotOtp}
+                        onChange={(e) =>
+                          setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                        }
+                        error={forgotOtpError}
+                        required
+                      />
+                      <Input
+                        label="Mật khẩu mới"
+                        name="newPassword"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="6-12 ký tự, có chữ hoa-thường và ký tự đặc biệt"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        error={newPasswordError}
+                        required
+                        hint="Mật khẩu mới cần đủ 3 yêu cầu bên dưới."
+                      />
+                      <div className="-mt-2 space-y-1 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+                        <PasswordRuleItem ok={forgotPasswordChecks.lengthOk} label="6 đến 12 ký tự" />
+                        <PasswordRuleItem
+                          ok={forgotPasswordChecks.hasUpperAndLower}
+                          label="Bao gồm chữ cái in hoa và chữ cái thường"
+                        />
+                        <PasswordRuleItem ok={forgotPasswordChecks.hasSpecialChar} label="Có ký tự đặc biệt" />
+                      </div>
+                      <Input
+                        label="Nhập lại mật khẩu mới"
+                        name="confirmNewPassword"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="Nhập lại mật khẩu mới"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        error={confirmNewPasswordError}
+                        required
+                      />
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <Button type="submit" variant="danger" loading={loading.forgot}>
+                          Xác minh OTP &amp; đổi mật khẩu
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          loading={loading.resendOtp}
+                          disabled={resendLeft > 0}
+                          onClick={async () => {
+                            setAlert(null);
+                            if (!canForgotRequest) return;
+                            setLoading((x) => ({ ...x, resendOtp: true }));
+                            try {
+                              const res = await forgotPasswordOtp(email.trim());
+                              setAlert({
+                                variant: "success",
+                                title: "Đã gửi lại OTP",
+                                message:
+                                  res?.data?.message ||
+                                  "Nếu email tồn tại, OTP đặt lại mật khẩu đã được gửi lại."
+                              });
+                              setResendLeft(60);
+                            } catch (err) {
+                              setAlert({
+                                variant: "error",
+                                title: "Gửi lại OTP thất bại",
+                                message: getApiErrorMessage(err)
+                              });
+                            } finally {
+                              setLoading((x) => ({ ...x, resendOtp: false }));
+                            }
+                          }}
+                        >
+                          {resendLeft > 0
+                            ? `Gửi lại OTP (${secondsToLabel(resendLeft)})`
+                            : "Gửi lại OTP"}
+                        </Button>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-sm font-semibold text-slate-700 underline underline-offset-2"
+                        onClick={() => {
+                          setForgotStep(1);
+                          setForgotOtp("");
+                          setNewPassword("");
+                          setConfirmNewPassword("");
+                          setResendLeft(0);
+                        }}
+                      >
+                        Quay lại bước 1
+                      </button>
+                    </form>
+                  )}
+                </div>
               ) : null}
             </div>
           </div>

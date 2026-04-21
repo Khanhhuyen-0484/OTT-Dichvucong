@@ -92,6 +92,14 @@ export async function forgotPassword(email) {
   return await api.post("/forgot-password", { email });
 }
 
+export async function forgotPasswordOtp(email) {
+  return await api.post("/forgot-password/otp", { email });
+}
+
+export async function resetPasswordWithOtp(payload) {
+  return await api.post("/reset-password/otp", payload);
+}
+
 export async function login(data) {
   return API.post("/login", data);
 }

@@ -13,6 +13,8 @@ const {
   sendOtp,
   register,
   forgotPassword,
+  forgotPasswordOtp,
+  resetPasswordWithOtp,
   login,
   me,
   patchMe,
@@ -30,6 +32,8 @@ router.post("/me/avatar/upload", authMiddleware, upload.single("file"), uploadAv
 router.post("/send-otp", sendOtp);
 router.post("/register", register);
 router.post("/forgot-password", forgotPassword);
+router.post("/forgot-password/otp", forgotPasswordOtp);
+router.post("/reset-password/otp", resetPasswordWithOtp);
 
 // Keep login reachable at /api/login too
 router.post("/login", login);
