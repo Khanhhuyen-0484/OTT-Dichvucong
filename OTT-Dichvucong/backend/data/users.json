@@ -1,0 +1,48 @@
+{
+  "users": [
+    {
+      "id": "u_1775766651629",
+      "email": "ttkh1310@gmail.com",
+      "fullName": "Trần Khánh Huyền",
+      "phone": "0912345678",
+      "address": "Hà Nội",
+      "role": "citizen",
+      "avatarUrl": "",
+      "passwordHash": "$2b$10$Hb5Y5e4yJHk.NkwqLzGz3OxUO7wv7/k3nVXwaYNT/t2F1Z5kRmkDK",
+      "createdAt": "2026-04-09T20:30:51.629Z"
+    },
+    {
+      "id": "u_1775769861513",
+      "email": "tkhanhhuyen0484@gmail.com",
+      "fullName": "Trần Khánh Huyền",
+      "phone": "0984567890",
+      "address": "Gò vấp Thành phố Hồ Chí Minh",
+      "role": "citizen",
+      "avatarUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/avatars/u_1775769861513/1775772543090-d54b30acb0891bbe.jpg",
+      "passwordHash": "$2b$10$HiGyAvDT.wZ0sUZm/ebgsOX8Zx/pg5WkmHOWemq6NZ0FS5CqHaZtS",
+      "createdAt": "2026-04-09T21:24:21.513Z"
+    },
+    {
+      "id": "u_1776070377957",
+      "email": "kimmlienn04@gmail.com",
+      "fullName": "Kim Lien",
+      "phone": "0966777777",
+      "address": "Huỳnh Khương An",
+      "role": "admin",
+      "avatarUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/avatars/u_1776070377957/1776158255284-61984bcdf593065b.jpg",
+      "passwordHash": "$2b$10$1MGWrCkz/eIdPtXIH0uFHOShRm.DyTImNQyKqDnNurIkVIe3VOymG",
+      "createdAt": "2026-04-13T08:52:57.957Z"
+    },
+    {
+      "id": "u_1776261166230",
+      "email": "lkimngan268@gmail.com",
+      "fullName": "KimNgan",
+      "phone": "0966423541",
+      "address": "Nguyen Van Bao",
+      "role": "citizen",
+      "avatarUrl": "",
+      "passwordHash": "$2b$10$Ed71dFhO.NaKzU4bczQQneN2ThduKqaqV9JOYSJ1w7fczipeS4Aqe",
+      "createdAt": "2026-04-15T13:52:46.230Z"
+    }
+  ]
+}
