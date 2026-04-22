@@ -1,6 +1,14 @@
+// frontend/src/components/Bubble.jsx
 import React from "react";
 
 function Bubble({ from, text, label, isMine, media }) {
+
+  const handleImgError = (e) => {
+    e.target.style.display = "none";
+    const placeholder = e.target.nextElementSibling;
+    if (placeholder) placeholder.style.display = "flex";
+  };
+
   return (
     <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
       <div
@@ -17,12 +25,34 @@ function Bubble({ from, text, label, isMine, media }) {
             {label}
           </div>
         )}
+
         {media?.type === "image" && media?.url && (
-          <img src={media.url} alt={media.name || "image"} className="mb-2 max-w-[220px] rounded-lg" />
+          <div className="mb-2">
+            <img
+              src={media.url}
+              alt={media.name || "image"}
+              className="max-w-[220px] rounded-lg"
+              onError={handleImgError}
+            />
+            <div
+              style={{ display: "none" }}
+              className="max-w-[220px] h-[120px] bg-slate-200 rounded-lg items-center justify-center flex-col gap-1 text-slate-400 text-xs"
+            >
+              <span className="text-xl">🖼️</span>
+              <span>Ảnh không tải được</span>
+            </div>
+          </div>
         )}
+
         {media?.type === "video" && media?.url && (
-          <video src={media.url} controls className="mb-2 max-w-[220px] rounded-lg" />
+          <video
+            src={media.url}
+            controls
+            className="mb-2 max-w-[220px] rounded-lg"
+            onError={(e) => (e.target.style.display = "none")}
+          />
         )}
+
         <div className="whitespace-pre-wrap">{text}</div>
       </div>
     </div>

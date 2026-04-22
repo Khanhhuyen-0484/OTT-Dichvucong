@@ -1,0 +1,10 @@
+# ~/.config/ngrok/ngrok.yml
+version: "2"
+authtoken: 3Cf3KbneKPjK1NMASskxoeDKMxV_7S9KrHk7aKJchnfmnQymp
+tunnels:
+  frontend:
+    proto: http
+    addr: 5173
+  backend:
+    proto: http
+    addr: 3000
