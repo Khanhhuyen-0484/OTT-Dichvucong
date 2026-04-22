@@ -145,6 +145,46 @@ export async function getChatContacts(query = "") {
   return await api.get("/chat/contacts", { params: { q: query } });
 }
 
+export async function getFriendDiscovery(query = "") {
+  return await api.get("/chat/friends/discovery", { params: { q: query } });
+}
+
+export async function getFriendSuggestions(limit = 5) {
+  return await api.get("/chat/friends/suggestions", { params: { limit } });
+}
+
+export async function getFriendRequests() {
+  return await api.get("/chat/friends/requests");
+}
+
+export async function getBlockedFriends() {
+  return await api.get("/chat/friends/blocked");
+}
+
+export async function postFriendRequest(targetUserId) {
+  return await api.post("/chat/friends/request", { targetUserId });
+}
+
+export async function postFriendRequestResponse(userId, action) {
+  return await api.post(`/chat/friends/request/${userId}/respond`, { action });
+}
+
+export async function deleteFriendRequest(userId) {
+  return await api.delete(`/chat/friends/request/${userId}`);
+}
+
+export async function deleteFriend(userId) {
+  return await api.delete(`/chat/friends/${userId}`);
+}
+
+export async function postBlockFriend(userId) {
+  return await api.post(`/chat/friends/${userId}/block`);
+}
+
+export async function postUnblockFriend(userId) {
+  return await api.post(`/chat/friends/${userId}/unblock`);
+}
+
 export async function getChatRooms() {
   return await api.get("/chat/rooms");
 }
@@ -161,8 +201,24 @@ export async function createGroupRoom(payload) {
   return await api.post("/chat/groups", payload);
 }
 
+export async function getGroupInvites() {
+  return await api.get("/chat/groups/invites");
+}
+
+export async function postGroupInvites(roomId, memberIds) {
+  return await api.post(`/chat/groups/${roomId}/invites`, { memberIds });
+}
+
+export async function postGroupInviteResponse(roomId, action) {
+  return await api.post(`/chat/groups/${roomId}/invites/respond`, { action });
+}
+
 export async function postRoomMessage(roomId, payload) {
   return await api.post(`/chat/rooms/${roomId}/messages`, payload);
+}
+
+export async function presignChatMediaUpload(payload) {
+  return await api.post("/chat/media/presign", payload);
 }
 
 export async function unsendRoomMessage(roomId, messageId) {
@@ -245,5 +301,6 @@ export async function putAdminAiRules(rulesText) {
   return await api.put("/admin/ai/rules", { rulesText });
 }
 
-export default api;
+export { api };
 
+export default api;

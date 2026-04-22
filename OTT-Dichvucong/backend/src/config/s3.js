@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 function getConfig() {
@@ -49,10 +49,12 @@ async function createPresignedPut(opts) {
   const expiresSec = opts.expiresSec ?? 300;
   const uploadUrl = await getSignedUrl(client, command, { expiresIn: expiresSec });
 
-  const prefix = process.env.S3_PUBLIC_URL_PREFIX?.replace(/\/+$/, "");
-  const publicUrl = prefix
-    ? `${prefix}/${opts.key}`
-    : `https://${bucket}.s3.${region}.amazonaws.com/${opts.key}`;
+  // Generate GET URL for reading the uploaded file
+  const getCommand = new GetObjectCommand({
+    Bucket: bucket,
+    Key: opts.key
+  });
+  const publicUrl = await getSignedUrl(client, getCommand, { expiresIn: 3600 * 24 * 7 }); // 7 days
 
   return { uploadUrl, publicUrl, key: opts.key };
 }

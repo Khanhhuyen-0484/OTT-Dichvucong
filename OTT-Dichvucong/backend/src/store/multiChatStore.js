@@ -13,6 +13,10 @@ function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function uniqueIds(values = []) {
+  return Array.from(new Set((Array.isArray(values) ? values : []).map(String).filter(Boolean)));
+}
+
 function normalizeRole(role) {
   if (role === "owner" || role === "deputy") return role;
   return "member";
@@ -60,6 +64,7 @@ function sanitizeMessage(message) {
     senderId: String(message?.senderId || ""),
     text: String(message?.text || "").slice(0, 4000),
     media: sanitizeMedia(message?.media),
+    replyToMessageId: String(message?.replyToMessageId || "").trim(),
     createdAt: message?.createdAt || nowIso(),
     unsentForAll: Boolean(message?.unsentForAll),
     deletedFor
@@ -71,6 +76,15 @@ function sanitizeRoom(room) {
     ? room.members.map(normalizeMember).filter(Boolean)
     : [];
   const messages = Array.isArray(room?.messages) ? room.messages.map(sanitizeMessage) : [];
+  const pendingInvites = Array.isArray(room?.pendingInvites)
+    ? room.pendingInvites
+        .map((invite) => ({
+          userId: String(invite?.userId || "").trim(),
+          invitedBy: String(invite?.invitedBy || "").trim(),
+          createdAt: invite?.createdAt || nowIso()
+        }))
+        .filter((invite) => invite.userId && invite.invitedBy)
+    : [];
   return {
     id: String(room?.id || makeId("room")),
     type: room?.type === "group" ? "group" : "direct",
@@ -78,6 +92,7 @@ function sanitizeRoom(room) {
     avatarUrl: String(room?.avatarUrl || ""),
     createdBy: String(room?.createdBy || ""),
     members,
+    pendingInvites,
     messages,
     lastMessage: messages[messages.length - 1] || null,
     updatedAt: room?.updatedAt || nowIso(),
@@ -170,17 +185,23 @@ async function createGroupRoom({ ownerId, name, avatarUrl, memberIds }) {
   return saveRoom(room);
 }
 
-async function appendMessage({ roomId, senderId, text, media }) {
+async function appendMessage({ roomId, senderId, text, media, replyToMessageId }) {
   const room = await getRoomById(roomId);
   if (!room) throw new Error("Không tìm thấy phòng chat");
   const sid = String(senderId || "").trim();
   if (!isRoomMember(room, sid)) throw new Error("Bạn không phải thành viên của phòng chat");
+  const replyId = String(replyToMessageId || "").trim();
+  if (replyId) {
+    const target = room.messages.find((m) => m.id === replyId);
+    if (!target) throw new Error("Tin nhắn trả lời không tồn tại");
+  }
 
   const message = sanitizeMessage({
     id: makeId("msg"),
     senderId: sid,
     text,
     media,
+    replyToMessageId: replyId,
     createdAt: nowIso(),
     unsentForAll: false,
     deletedFor: []
@@ -191,6 +212,59 @@ async function appendMessage({ roomId, senderId, text, media }) {
     lastMessage: message,
     updatedAt: message.createdAt
   };
+  return saveRoom(next);
+}
+
+async function inviteMembersToGroup({ roomId, requesterId, memberIds }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền mời vào nhóm");
+  const ids = uniqueIds(memberIds);
+  if (!ids.length) throw new Error("Chưa chọn bạn bè để mời");
+
+  const existingMemberIds = room.members.map((member) => member.id);
+  const pendingMap = new Map((room.pendingInvites || []).map((invite) => [invite.userId, invite]));
+  ids.forEach((userId) => {
+    if (existingMemberIds.includes(userId)) return;
+    pendingMap.set(userId, {
+      userId,
+      invitedBy: requesterId,
+      createdAt: nowIso()
+    });
+  });
+
+  const next = {
+    ...room,
+    pendingInvites: Array.from(pendingMap.values()),
+    updatedAt: nowIso()
+  };
+  return saveRoom(next);
+}
+
+async function listGroupInvitesForUser(userId) {
+  const rooms = await listRoomsForUser(userId);
+  const allRooms = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
+  const visibleGroupIds = new Set(rooms.map((room) => room.id));
+  return (allRooms.Items || [])
+    .map(sanitizeRoom)
+    .filter((room) => room.type === "group" && !visibleGroupIds.has(room.id))
+    .filter((room) => (room.pendingInvites || []).some((invite) => invite.userId === userId));
+}
+
+async function respondToGroupInvite({ roomId, userId, action }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  const invite = (room.pendingInvites || []).find((item) => item.userId === userId);
+  if (!invite) throw new Error("Không tìm thấy lời mời vào nhóm");
+
+  const next = {
+    ...room,
+    pendingInvites: (room.pendingInvites || []).filter((item) => item.userId !== userId),
+    updatedAt: nowIso()
+  };
+  if (action === "accept" && !next.members.some((member) => member.id === userId)) {
+    next.members = [...next.members, { id: userId, role: "member" }];
+  }
   return saveRoom(next);
 }
 
@@ -317,26 +391,7 @@ async function dissolveGroup({ roomId, requesterId }) {
 }
 
 async function searchContacts({ keyword, currentUserId }) {
-  const q = String(keyword || "").trim().toLowerCase();
-  const rs = await dynamo.send(new ScanCommand({ TableName: process.env.USERS_TABLE || process.env.DYNAMODB_USERS_TABLE || "Users" }));
-  const users = (rs.Items || []).filter((u) => u.id !== currentUserId);
-  const filtered = !q
-    ? users
-    : users.filter((u) => {
-        const fullName = String(u.fullName || "").toLowerCase();
-        const email = String(u.email || "").toLowerCase();
-        const phone = String(u.phone || "").toLowerCase();
-        return fullName.includes(q) || email.includes(q) || phone.includes(q);
-      });
-  return filtered.map((u) => ({
-    id: u.id,
-    fullName: u.fullName || "Người dùng",
-    email: u.email || "",
-    phone: u.phone || "",
-    avatarUrl:
-      u.avatarUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || "Nguoi dung")}&size=128`
-  }));
+  return await userStore.listFriends(currentUserId, keyword);
 }
 
 async function hydrateRoomForUser(room, currentUserId) {
@@ -365,10 +420,27 @@ async function hydrateRoomForUser(room, currentUserId) {
         avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent("Nguoi dung")}&size=128`
       }
     }));
+  const messageMap = new Map(visibleMessages.map((m) => [m.id, m]));
+  const hydratedMessages = visibleMessages.map((m) => {
+    const replied = m.replyToMessageId ? messageMap.get(m.replyToMessageId) : null;
+    return {
+      ...m,
+      replyTo: replied
+        ? {
+            id: replied.id,
+            text: replied.text,
+            media: replied.media,
+            senderId: replied.senderId,
+            senderName: replied.sender?.fullName || "Người dùng",
+            unsentForAll: Boolean(replied.unsentForAll)
+          }
+        : null
+    };
+  });
   return {
     ...room,
     members,
-    messages: visibleMessages
+    messages: hydratedMessages
   };
 }
 
@@ -385,6 +457,9 @@ module.exports = {
   removeGroupMember,
   assignDeputy,
   dissolveGroup,
+  inviteMembersToGroup,
+  listGroupInvitesForUser,
+  respondToGroupInvite,
   searchContacts,
   hydrateRoomForUser
 };
