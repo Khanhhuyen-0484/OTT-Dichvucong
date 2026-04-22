@@ -931,15 +931,27 @@ exports.presignChatMediaUpload = async (req, res) => {
       .trim()
       .toLowerCase();
     let fileName = String(req.body?.fileName || "file").trim();
-    if (!contentType || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+    const isImageOrVideo = contentType.startsWith("image/") || contentType.startsWith("video/");
+    const isDocument = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ].includes(contentType);
+    if (!contentType || (!isImageOrVideo && !isDocument)) {
       return res.status(400).json({
-        message: "Chỉ chấp nhận media ảnh/video"
+        message: "Chỉ chấp nhận ảnh, video hoặc tài liệu (.pdf/.doc/.docx)"
       });
     }
 
     const ext = path.extname(fileName).toLowerCase();
     if (!ext) {
-      const inferred = contentType.startsWith("video/") ? ".mp4" : ".jpg";
+      const inferred = contentType.startsWith("video/")
+        ? ".mp4"
+        : contentType === "application/pdf"
+          ? ".pdf"
+          : contentType.includes("word")
+            ? ".docx"
+            : ".jpg";
       fileName += inferred;
     }
     const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
@@ -978,9 +990,15 @@ exports.uploadChatMedia = async (req, res) => {
     }
 
     const contentType = file.mimetype;
-    if (!contentType || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+    const isImageOrVideo = contentType.startsWith("image/") || contentType.startsWith("video/");
+    const isDocument = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ].includes(contentType);
+    if (!contentType || (!isImageOrVideo && !isDocument)) {
       return res.status(400).json({
-        message: "Chỉ chấp nhận media ảnh/video"
+        message: "Chỉ chấp nhận ảnh, video hoặc tài liệu (.pdf/.doc/.docx)"
       });
     }
 
@@ -988,7 +1006,13 @@ exports.uploadChatMedia = async (req, res) => {
     const ext = path.extname(fileName).toLowerCase();
     let safeName = path.basename(fileName, ext).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
     if (!ext) {
-      const inferred = contentType.startsWith("video/") ? ".mp4" : ".jpg";
+      const inferred = contentType.startsWith("video/")
+        ? ".mp4"
+        : contentType === "application/pdf"
+          ? ".pdf"
+          : contentType.includes("word")
+            ? ".docx"
+            : ".jpg";
       safeName += inferred;
     } else {
       safeName += ext;

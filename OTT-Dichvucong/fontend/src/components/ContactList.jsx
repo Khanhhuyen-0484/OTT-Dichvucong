@@ -1,5 +1,24 @@
 import React, { useMemo } from "react";
 import { ContactRound, Search } from "lucide-react";
+const AVATAR_BG = ["bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
+
+function getAvatarUrl(entity) {
+  if (!entity) return "";
+  return entity.avatarUrl || entity.photoURL || entity.avatar || "";
+}
+
+function getInitials(name) {
+  const n = String(name || "").trim();
+  if (!n) return "?";
+  const words = n.split(/\s+/).filter(Boolean);
+  return (words[0][0] + (words[1]?.[0] || "")).toUpperCase();
+}
+
+function Avatar({ src, name, className = "" }) {
+  if (src) return <img src={src} alt={name || "avatar"} className={className} />;
+  const idx = (String(name || "A").charCodeAt(0) || 0) % AVATAR_BG.length;
+  return <div className={`${className} ${AVATAR_BG[idx]} flex items-center justify-center text-[11px] font-bold text-white`}>{getInitials(name)}</div>;
+}
 
 function AddFriendIcon({ className = "" }) {
   return (
@@ -40,7 +59,8 @@ function ContactList({
   onOpenAddFriend,
   onOpenFriendHub,
   pendingHubCount = 0,
-  user
+  user,
+  onSelectRoom
 }) {
   const listItems = useMemo(() => (chatModeTab === "contacts" ? contacts : rooms), [chatModeTab, contacts, rooms]);
 
@@ -148,20 +168,39 @@ function ContactList({
             <button
               key={item.id}
               type="button"
-              onClick={() => setActiveRoomId(item.id)}
+              onClick={() => {
+                setActiveRoomId(item.id);
+                onSelectRoom?.(item.id);
+              }}
               className={`w-full rounded-xl border px-2.5 py-2 text-left transition ${
                 isActive
                   ? "border-[#003366] bg-[#003366] text-white shadow-sm"
                   : "border-slate-200 bg-white hover:bg-slate-50"
               }`}
             >
-              <div className="text-sm font-semibold truncate">
-                {item.type === "group"
-                  ? item.name || "Nhóm chat"
-                  : item.members?.find((m) => m.id !== user?.id)?.fullName || "Hội thoại"}
-              </div>
-              <div className={`text-[11px] truncate ${isActive ? "text-white/80" : "text-slate-500"}`}>
-                {item.type === "group" ? "Nhóm chat" : "Chat cá nhân"}
+              <div className="flex items-center gap-2">
+                <Avatar
+                  src={item.type === "group"
+                    ? (getAvatarUrl(item) || "https://cdn-icons-png.flaticon.com/512/681/681494.png")
+                    : getAvatarUrl(item.members?.find((m) => m.id !== user?.id))}
+                  name={item.type === "group" ? (item.name || "Nhóm") : (item.members?.find((m) => m.id !== user?.id)?.fullName || "Người dùng")}
+                  className="h-8 w-8 rounded-full border border-slate-200 object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold truncate">
+                    {item.type === "group"
+                      ? item.name || "Nhóm chat"
+                      : item.members?.find((m) => m.id !== user?.id)?.fullName || "Hội thoại"}
+                  </div>
+                  <div className={`text-[11px] truncate ${isActive ? "text-white/80" : "text-slate-500"}`}>
+                    {item.type === "group" ? "Nhóm chat" : "Chat cá nhân"}
+                  </div>
+                </div>
+                {(item.unreadCount || item.unread || 0) > 0 ? (
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                    {(item.unreadCount || item.unread || 0) > 99 ? "99+" : (item.unreadCount || item.unread || 0)}
+                  </span>
+                ) : null}
               </div>
             </button>
           );

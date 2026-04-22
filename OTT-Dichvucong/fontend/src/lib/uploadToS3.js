@@ -6,15 +6,36 @@ export async function uploadToS3(file) {
   const formData = new FormData();
   formData.append("file", file);
 
-  const { data } = await api.post("/chat/media/upload", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data"
-    }
-  });
+  let data;
+  try {
+    // Let browser set multipart boundary automatically.
+    const uploadRes = await api.post("/chat/media/upload", formData);
+    data = uploadRes.data;
+  } catch (err) {
+    // Fallback: presigned PUT flow when direct upload route fails.
+    const presignRes = await api.post("/chat/media/presign", {
+      fileName: file.name,
+      contentType: file.type
+    });
+    const uploadUrl = presignRes.data?.uploadUrl;
+    if (!uploadUrl) throw err;
+    await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type
+      },
+      body: file
+    });
+    data = {
+      key: presignRes.data?.key || "",
+      url: presignRes.data?.publicUrl || "",
+      contentType: file.type
+    };
+  }
 
   return {
     key: data?.key || "",
-    url: data?.url || "",
+    url: data?.publicUrl || data?.url || "",
     contentType: data?.contentType || file.type
   };
 }

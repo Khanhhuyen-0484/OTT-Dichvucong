@@ -7,7 +7,8 @@ import {
   MicOff,
   Video,
   VideoOff,
-  PhoneOff
+  PhoneOff,
+  X
 } from "lucide-react";
 import ContactList from "../components/ContactList.jsx";
 import ChatMultiPurpose from "../components/ChatMultiPurpose.jsx";
@@ -15,6 +16,8 @@ import GroupCreator from "../components/GroupCreator.jsx";
 import AddFriendModal from "../components/AddFriendModal.jsx";
 import FriendHubModal from "../components/FriendHubModal.jsx";
 import GovHeader from "../components/GovHeader.jsx";
+import VideoCall from "../components/VideoCall.jsx";
+import IncomingCallModal from "../components/IncomingCallModal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
@@ -134,6 +137,7 @@ export default function ChatPage() {
   const [friendLoading, setFriendLoading] = useState(false);
   const [friendSearchNotice, setFriendSearchNotice] = useState("");
   const [toast, setToast] = useState(null);
+  const [mobileRoomOpen, setMobileRoomOpen] = useState(false);
 
   // Staff chat states
   const [staffMessages, setStaffMessages] = useState([]);
@@ -142,18 +146,8 @@ export default function ChatPage() {
   const [staffErr, setStaffErr] = useState(null);
   const [staffUnread, setStaffUnread] = useState(0);
 
-  const [staffMessages, setStaffMessages]             = useState([]);
-  const [staffInput, setStaffInput]                   = useState("");
-  const [staffLoading, setStaffLoading]               = useState(false);
-  const [staffUnread, setStaffUnread]                 = useState(0);
-
-  const [videoCallState, setVideoCallState]           = useState(null);
-  const [incomingCall, setIncomingCall]               = useState(null);
-
-  const [showGroupModal, setShowGroupModal]           = useState(false);
-  const [groupName, setGroupName]                     = useState("");
-  const [groupAvatar, setGroupAvatar]                 = useState("");
-  const [groupMemberIds, setGroupMemberIds]           = useState([]);
+  const [videoCallState, setVideoCallState] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
 
   // ─── Refs: cho phép socket handler đọc giá trị mới nhất
   //           mà không cần re-register listener ────────────────────────────────
@@ -285,6 +279,10 @@ export default function ChatPage() {
     }
   }, [scrollToBottom]);
 
+  useEffect(() => { loadRoomsRef.current = loadRooms; }, [loadRooms]);
+  useEffect(() => { loadStaffRef.current = loadStaff; }, [loadStaff]);
+  useEffect(() => { scrollBotRef.current = scrollToBottom; }, [scrollToBottom]);
+
   // Load data based on tab
   useEffect(() => {
     if (!ready || !user) return;
@@ -374,6 +372,8 @@ export default function ChatPage() {
     return rooms.find((r) => r.id === activeRoomId) || null;
   }, [rooms, activeRoomId]);
 
+  const activeMessagesLength = activeRoom?.messages?.length || 0;
+
   const myGroupRole = useMemo(() => {
     if (!activeRoom || activeRoom.type !== "group") return null;
     return activeRoom.members?.find((m) => m.id === user?.id)?.role || null;
@@ -388,8 +388,15 @@ export default function ChatPage() {
       loadRooms();
       loadContacts();
       if (tabState === "staff") loadStaff();
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
     }
   }, [loadRooms]);
+
+  const openStaffChat = useCallback(() => {
+    setTabState("staff");
+    setStaffUnread(0);
+  }, []);
 
   const openAddFriendModal = useCallback(() => {
     setShowAddFriendModal(true);
@@ -549,6 +556,11 @@ export default function ChatPage() {
     if (activeRoomId) setTimeout(scrollToBottom, 150);
   }, [activeRoomId, scrollToBottom]);
 
+  useEffect(() => {
+    if (!activeRoomId) return;
+    setTimeout(scrollToBottom, 120);
+  }, [activeRoomId, activeMessagesLength, scrollToBottom]);
+
   // ─── Call Handlers ────────────────────────────────────────────────────────────
 
   const startVideoCall = useCallback(() => {
@@ -591,18 +603,36 @@ export default function ChatPage() {
 
   const sendRoom = async (e) => {
     e?.preventDefault();
-    if (!activeRoomId || roomLoading || (!roomInput.trim() && !roomMedia)) return;
+    const text = roomInput.trim();
+    const hasText = Boolean(text);
+    const hasMedia = Boolean(roomMedia);
+    if (!activeRoomId || roomLoading || (!hasText && !hasMedia)) return;
     setRoomLoading(true);
     try {
       let mediaPayload = null;
       if (roomMedia) {
         const uploaded = await uploadToS3(roomMedia);
-        mediaPayload = { type: roomMedia.type.startsWith("video") ? "video" : "image", url: uploaded.publicUrl || uploaded.url };
+        const mediaUrl = uploaded.publicUrl || uploaded.url;
+        const isFile = /\.(pdf|doc|docx)$/i.test(roomMedia.name || "");
+        mediaPayload = {
+          type: isFile ? "file" : (roomMedia.type.startsWith("video") ? "video" : "image"),
+          url: mediaUrl,
+          name: roomMedia.name,
+          fileUrl: isFile ? mediaUrl : undefined,
+          fileType: isFile ? (roomMedia.name.split(".").pop() || "").toLowerCase() : undefined
+        };
       }
       await postRoomMessage(activeRoomId, {
-        text: roomInput.trim(),
+        text,
         media: mediaPayload,
-        replyToMessageId: replyToMessage?.id || ""
+        replyToMessageId: replyToMessage?.id || "",
+        senderAvatar: user?.avatarUrl || user?.photoURL || user?.avatar || ""
+      });
+      connectSocket().emit("room-message:client", {
+        roomId: activeRoomId,
+        senderAvatar: user?.avatarUrl || user?.photoURL || user?.avatar || "",
+        fileUrl: mediaPayload?.fileUrl || "",
+        fileType: mediaPayload?.fileType || "",
       });
       setRoomInput("");
       setRoomMedia(null);
@@ -616,8 +646,159 @@ export default function ChatPage() {
     }
   };
 
-  const activeRoom  = useMemo(() => rooms.find((r) => r.id === activeRoomId), [rooms, activeRoomId]);
-  const myGroupRole = useMemo(() => activeRoom?.members?.find((m) => m.id === user?.id)?.role, [activeRoom, user]);
+  // ─── Group and Message Actions ────────────────────────────────────────────────
+
+  const performGroupAction = useCallback(async (action, memberId) => {
+    if (!activeRoomId) return;
+    setFriendLoading(true);
+    try {
+      switch (action) {
+        case "add":
+          if (!memberId) return;
+          await addGroupMember(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã thêm thành viên vào nhóm" });
+          break;
+        case "remove":
+          if (!memberId) return;
+          await removeGroupMember(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã xóa thành viên khỏi nhóm" });
+          break;
+        case "promote":
+          if (!memberId) return;
+          await assignGroupDeputy(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã phong phó nhóm" });
+          break;
+        case "demote":
+          if (!memberId) return;
+          await removeGroupDeputy(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã hạ chức phó nhóm" });
+          break;
+        case "dissolve":
+          await dissolveGroup(activeRoomId);
+          setToast({ type: "success", message: "Đã giải tán nhóm" });
+          break;
+        default:
+          return;
+      }
+      await loadRooms();
+      setNewMemberId("");
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [activeRoomId, loadRooms]);
+
+  const doMessageAction = useCallback(async (action, messageId) => {
+    if (!activeRoomId || !messageId) return;
+    setRoomLoading(true);
+    try {
+      switch (action) {
+        case "unsend":
+          await unsendRoomMessage(activeRoomId, messageId);
+          setToast({ type: "success", message: "Đã thu hồi tin nhắn" });
+          break;
+        case "delete":
+          await deleteRoomMessageForMe(activeRoomId, messageId);
+          setToast({ type: "success", message: "Đã xóa tin nhắn" });
+          break;
+        default:
+          return;
+      }
+      await loadRooms();
+      setMessageMenuId(null);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [activeRoomId, loadRooms]);
+
+  const createGroup = useCallback(async () => {
+    if (!groupName.trim() || groupMemberIds.length === 0) {
+      setRoomErr("Vui lòng nhập tên nhóm và chọn thành viên");
+      return;
+    }
+    setRoomLoading(true);
+    try {
+      await createGroupRoom({
+        name: groupName,
+        avatar: groupAvatar,
+        memberIds: groupMemberIds
+      });
+      setToast({ type: "success", message: "Đã tạo nhóm thành công" });
+      setGroupName("");
+      setGroupAvatar("");
+      setGroupMemberIds([]);
+      setShowGroupModal(false);
+      await loadRooms();
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [groupName, groupAvatar, groupMemberIds, loadRooms]);
+
+  const onPickMedia = useCallback((file) => {
+    if (file) {
+      setRoomMedia(file);
+    }
+  }, []);
+
+  const onUpdateGroupMeta = useCallback(async ({ name, avatarFile }) => {
+    if (!activeRoomId) return;
+    let nextAvatar = null;
+    if (avatarFile) {
+      try {
+        const uploaded = await uploadToS3(avatarFile);
+        nextAvatar = uploaded?.publicUrl || uploaded?.url || null;
+      } catch (err) {
+        setRoomErr(getApiErrorMessage(err));
+        return;
+      }
+    }
+    setRooms((prev) => prev.map((room) => {
+      if (room.id !== activeRoomId) return room;
+      return {
+        ...room,
+        name: typeof name === "string" && name.trim() ? name.trim() : room.name,
+        avatar: nextAvatar || room.avatar
+      };
+    }));
+    if (name || nextAvatar) {
+      setToast({ type: "success", message: "Đã cập nhật thông tin nhóm" });
+    }
+  }, [activeRoomId]);
+
+  const doForward = useCallback(async (targetRoomId) => {
+    if (!forwardingMessageId || !activeRoomId) return;
+    setRoomLoading(true);
+    try {
+      await forwardRoomMessage(activeRoomId, forwardingMessageId, targetRoomId);
+      setToast({ type: "success", message: "Đã chuyển tiếp tin nhắn" });
+      await loadRooms();
+      setForwardingMessageId(null);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [activeRoomId, forwardingMessageId, loadRooms]);
+
+  const sendStaff = useCallback(async () => {
+    if (!staffInput.trim()) return;
+    setStaffLoading(true);
+    try {
+      await postStaffChat(staffInput);
+      setStaffInput("");
+      await loadStaff();
+      setTimeout(scrollToBottom, 100);
+    } catch (err) {
+      setStaffErr(getApiErrorMessage(err));
+    } finally {
+      setStaffLoading(false);
+    }
+  }, [staffInput, loadStaff, scrollToBottom]);
 
   if (!ready) return <LoadingScreen />;
   if (!user)  return null;
@@ -663,7 +844,7 @@ export default function ChatPage() {
           {tabState === "multi" ? (
             <>
               {/* Sidebar */}
-              <div className="lg:col-span-4">
+              <div className={`${mobileRoomOpen ? "hidden" : "block"} lg:col-span-4 lg:block`}>
                 <ContactList
                   chatModeTab={chatModeTab}
                   setChatModeTab={setChatModeTab}
@@ -680,11 +861,21 @@ export default function ChatPage() {
                   onOpenFriendHub={openFriendHubModal}
                   pendingHubCount={friendIncomingRequests.length + groupInvites.length}
                   user={user}
+                  onSelectRoom={() => setMobileRoomOpen(true)}
                 />
               </div>
 
               {/* Main Chat */}
-              <div className="lg:col-span-8">
+              <div className={`${mobileRoomOpen ? "block" : "hidden"} lg:col-span-8 lg:block`}>
+                <div className="mb-2 flex md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setMobileRoomOpen(false)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+                  >
+                    Quay lại danh sách
+                  </button>
+                </div>
                 <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
                   <ChatMultiPurpose
                     roomErr={roomErr}
@@ -713,10 +904,13 @@ export default function ChatPage() {
                     onStartVideoCall={startVideoCall}
                     replyToMessage={replyToMessage}
                     clearReply={() => setReplyToMessage(null)}
+                    chatEndRef={chatEndRef}
+                    onUpdateGroupMeta={onUpdateGroupMeta}
                 />
               </div>
             </div>
-          ) : (
+          </>
+        ) : (
             // Staff chat tab
             <div className="lg:col-span-12">
               <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col">
@@ -773,35 +967,8 @@ export default function ChatPage() {
                       <Send size={18} />
                     </button>
                   </div>
-                </div>
+                </form>
               </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
-                {staffMessages.map((m, i) => {
-                  const isMine = m.from === "user" || m.from === "citizen";
-                  return <Bubble key={i} from={isMine ? "user" : "staff"} text={m.content || m.text} isMine={isMine} label={isMine ? user.fullName : "Cán bộ trực"} />;
-                })}
-                <div ref={chatEndRef} />
-              </div>
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!staffInput.trim()) return;
-                  setStaffLoading(true);
-                  try { await postStaffChat(staffInput); setStaffInput(""); loadStaff(); }
-                  finally { setStaffLoading(false); }
-                }}
-                className="p-4 border-t border-slate-100 bg-white flex gap-3"
-              >
-                <input
-                  value={staffInput} onChange={(e) => setStaffInput(e.target.value)}
-                  placeholder="Nhập thắc mắc về thủ tục hành chính..."
-                  className="flex-1 rounded-2xl bg-slate-100 border-none px-5 py-3 text-sm focus:ring-2 focus:ring-[#003366] transition-all"
-                />
-                <button type="submit" disabled={staffLoading}
-                  className="rounded-2xl bg-[#003366] px-6 text-white font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2">
-                  {staffLoading ? <div className="h-4 w-4 animate-spin border-2 border-white border-t-transparent rounded-full" /> : <Send size={18} />}
-                </button>
-              </form>
             </div>
           )}
         </div>

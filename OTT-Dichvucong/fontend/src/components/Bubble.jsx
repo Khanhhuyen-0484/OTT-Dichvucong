@@ -2,12 +2,28 @@
 import React from "react";
 
 const IMAGE_URL_PATTERN = /(https?:\/\/[^\s]+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?[^\s]*)?)/i;
+const FILE_ICON_MAP = {
+  pdf: "📕",
+  doc: "📘",
+  docx: "📘",
+};
 
 function resolveImageFromText(text) {
   const input = String(text || "").trim();
   if (!input) return null;
   const m = input.match(IMAGE_URL_PATTERN);
   return m ? m[1] : null;
+}
+
+function normalizeMediaUrl(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("blob:") || raw.startsWith("data:")) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return raw;
+  // Avoid trying to load malformed host-like strings (causes ERR_NAME_NOT_RESOLVED).
+  if (!raw.includes("/") && !raw.includes(".")) return "";
+  return "";
 }
 
 function Bubble({
@@ -23,8 +39,17 @@ function Bubble({
     (media?.type === "image" && !String(text || "").trim()) ||
       (imageUrlFromText && String(text || "").trim() === imageUrlFromText)
   );
-  const imageSrc = media?.type === "image" && media?.url ? media.url : imageUrlFromText;
+  const imageSrcRaw = media?.type === "image" && media?.url ? media.url : imageUrlFromText;
+  const imageSrc = normalizeMediaUrl(imageSrcRaw);
   const hasReply = Boolean(replyTo && (replyTo.text || replyTo.media));
+  const fileMedia =
+    media?.type === "file" && media?.url
+      ? media
+      : null;
+  const fileUrl = normalizeMediaUrl(fileMedia?.url);
+  const fileName = fileMedia?.name || (fileMedia?.url ? fileMedia.url.split("/").pop() : "Tệp đính kèm");
+  const ext = (fileName.split(".").pop() || "").toLowerCase();
+  const fileIcon = FILE_ICON_MAP[ext] || "📄";
 
   return (
     <div className="relative inline-block">
@@ -73,6 +98,24 @@ function Bubble({
             className={`rounded-[12px] ${onlyImageMessage ? "" : "mb-2"}`}
             style={{ maxWidth: "280px", maxHeight: "320px" }}
           />
+        )}
+
+        {fileMedia && (
+          <div className={`rounded-xl border px-3 py-2 ${isMine ? "border-blue-300 bg-blue-50/60 text-slate-800" : "border-slate-200 bg-slate-50 text-slate-800"}`}>
+            <div className="text-xs font-semibold">{fileIcon} {fileName}</div>
+            {fileUrl ? (
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-block text-[11px] font-medium text-blue-600 hover:underline"
+              >
+                Tải xuống
+              </a>
+            ) : (
+              <div className="mt-1 text-[11px] text-amber-600">Chưa có liên kết tải</div>
+            )}
+          </div>
         )}
 
         {!onlyImageMessage && <div className="whitespace-pre-wrap break-words">{text}</div>}
