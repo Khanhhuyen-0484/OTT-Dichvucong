@@ -346,9 +346,10 @@ export default function ChatPage() {
     setShowFriendHubModal(true);
     loadFriendDirectory();
     loadFriendRequests();
+    loadFriendSuggestions();
     loadGroupInvites();
     loadBlockedFriends();
-  }, [loadFriendDirectory, loadFriendRequests, loadGroupInvites, loadBlockedFriends]);
+  }, [loadFriendDirectory, loadFriendRequests, loadFriendSuggestions, loadGroupInvites, loadBlockedFriends]);
 
   const handleSendFriendRequest = useCallback(async (targetUserId) => {
     setFriendLoading(true);
@@ -862,6 +863,7 @@ export default function ChatPage() {
         incomingGroupInvites={groupInvites}
         incomingRequests={friendIncomingRequests}
         outgoingRequests={friendOutgoingRequests}
+        suggestions={friendSuggestions}
         loading={friendLoading}
         onOpenChat={async (friendId) => {
           setShowFriendHubModal(false);
@@ -876,6 +878,7 @@ export default function ChatPage() {
         onAccept={(userId) => handleRespondFriendRequest(userId, "accept")}
         onDecline={(userId) => handleRespondFriendRequest(userId, "decline")}
         onRevokeRequest={handleRevokeFriendRequest}
+        onSendFriendRequest={handleSendFriendRequest}
         onRemoveFriend={handleRemoveFriend}
         onBlockFriend={handleBlockFriend}
         onInviteMembers={handleInviteMembersToGroup}

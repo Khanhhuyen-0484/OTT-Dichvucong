@@ -3,6 +3,7 @@ import {
   ArrowUpDown,
   BadgePlus,
   Ban,
+  ChevronDown,
   ContactRound,
   Eye,
   Filter,
@@ -85,6 +86,43 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
           Thu hồi lời mời
         </button>
       )}
+    </div>
+  );
+}
+
+function SuggestionCard({ item, loading, onAdd, onDismiss }) {
+  return (
+    <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-4">
+        <Avatar item={item} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-2xl font-black tracking-tight text-slate-900">{item.fullName}</div>
+          <div className="mt-1 truncate text-sm text-slate-500">
+            {item.phone || item.email || "Tài khoản đang hoạt động trên hệ thống"}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-700">
+        Gợi ý kết bạn dành cho bạn để bắt đầu trò chuyện nhanh hơn.
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => onDismiss(item.id)}
+          className="rounded-2xl bg-slate-100 px-4 py-3 text-lg font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+        >
+          Bỏ qua
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => onAdd(item.id)}
+          className="rounded-2xl bg-[#dceaff] px-4 py-3 text-lg font-bold text-[#0d5bd7] hover:bg-[#cfe1ff] disabled:opacity-60"
+        >
+          Kết bạn
+        </button>
+      </div>
     </div>
   );
 }
@@ -364,6 +402,7 @@ export default function FriendHubModal({
   groups,
   incomingRequests,
   outgoingRequests,
+  suggestions,
   incomingGroupInvites,
   loading,
   onOpenChat,
@@ -371,6 +410,7 @@ export default function FriendHubModal({
   onAccept,
   onDecline,
   onRevokeRequest,
+  onSendFriendRequest,
   onRemoveFriend,
   onBlockFriend,
   onInviteMembers,
@@ -386,6 +426,7 @@ export default function FriendHubModal({
   const [inviteRoom, setInviteRoom] = useState(null);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
+  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState([]);
 
   const normalizedSearch = String(search || "").trim().toLowerCase();
 
@@ -424,6 +465,16 @@ export default function FriendHubModal({
       return String(item.name || "").toLowerCase().includes(normalizedSearch);
     });
   }, [groups, normalizedSearch]);
+
+  const visibleSuggestions = useMemo(() => {
+    return (suggestions || []).filter((item) => !dismissedSuggestionIds.includes(item.id));
+  }, [suggestions, dismissedSuggestionIds]);
+
+  React.useEffect(() => {
+    if (open) {
+      setDismissedSuggestionIds([]);
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -717,6 +768,31 @@ export default function FriendHubModal({
                         <RequestCard key={`outgoing-${item.id}`} item={item} type="outgoing" loading={loading} onAccept={onAccept} onDecline={onDecline} onRevoke={onRevokeRequest} />
                       )) : (
                         <EmptyPanel title="Bạn chưa gửi lời mời nào" description="Hãy dùng nút thêm bạn để tìm bạn bè và mở rộng danh bạ của bạn." />
+                      )}
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-4 flex items-center gap-2 text-2xl font-black tracking-tight text-slate-900">
+                      <span>Gợi ý kết bạn ({visibleSuggestions.length})</span>
+                      <ChevronDown className="h-5 w-5 text-slate-500" />
+                    </div>
+                    <div className="grid gap-5 xl:grid-cols-2">
+                      {visibleSuggestions.length ? visibleSuggestions.map((item) => (
+                        <SuggestionCard
+                          key={`suggestion-${item.id}`}
+                          item={item}
+                          loading={loading}
+                          onAdd={onSendFriendRequest}
+                          onDismiss={(userId) =>
+                            setDismissedSuggestionIds((prev) => prev.filter((id) => id !== userId).concat(userId))
+                          }
+                        />
+                      )) : (
+                        <EmptyPanel
+                          title="Không còn gợi ý phù hợp"
+                          description="Khi hệ thống có thêm gợi ý kết bạn mới, danh sách sẽ hiển thị ở đây."
+                        />
                       )}
                     </div>
                   </section>
