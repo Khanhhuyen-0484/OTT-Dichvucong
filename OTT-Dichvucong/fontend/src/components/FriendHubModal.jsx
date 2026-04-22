@@ -91,6 +91,11 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
 }
 
 function SuggestionCard({ item, loading, onAdd, onDismiss }) {
+  const helperText = item.phone
+    ? "Có số điện thoại để bạn xác minh nhanh."
+    : item.email
+      ? "Có email để bạn dễ nhận diện tài khoản."
+      : "Tài khoản đang hoạt động trên hệ thống.";
   return (
     <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-4">
@@ -105,6 +110,7 @@ function SuggestionCard({ item, loading, onAdd, onDismiss }) {
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-700">
         Gợi ý kết bạn dành cho bạn để bắt đầu trò chuyện nhanh hơn.
       </div>
+      <div className="mt-3 text-sm text-slate-500">{helperText}</div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button
           type="button"
@@ -427,6 +433,8 @@ export default function FriendHubModal({
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
   const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [suggestionLimit, setSuggestionLimit] = useState(4);
 
   const normalizedSearch = String(search || "").trim().toLowerCase();
 
@@ -470,9 +478,15 @@ export default function FriendHubModal({
     return (suggestions || []).filter((item) => !dismissedSuggestionIds.includes(item.id));
   }, [suggestions, dismissedSuggestionIds]);
 
+  const displayedSuggestions = useMemo(() => {
+    return visibleSuggestions.slice(0, suggestionLimit);
+  }, [visibleSuggestions, suggestionLimit]);
+
   React.useEffect(() => {
     if (open) {
       setDismissedSuggestionIds([]);
+      setShowSuggestions(true);
+      setSuggestionLimit(4);
     }
   }, [open]);
 
@@ -773,28 +787,49 @@ export default function FriendHubModal({
                   </section>
 
                   <section>
-                    <div className="mb-4 flex items-center gap-2 text-2xl font-black tracking-tight text-slate-900">
-                      <span>Gợi ý kết bạn ({visibleSuggestions.length})</span>
-                      <ChevronDown className="h-5 w-5 text-slate-500" />
-                    </div>
-                    <div className="grid gap-5 xl:grid-cols-2">
-                      {visibleSuggestions.length ? visibleSuggestions.map((item) => (
-                        <SuggestionCard
-                          key={`suggestion-${item.id}`}
-                          item={item}
-                          loading={loading}
-                          onAdd={onSendFriendRequest}
-                          onDismiss={(userId) =>
-                            setDismissedSuggestionIds((prev) => prev.filter((id) => id !== userId).concat(userId))
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowSuggestions((prev) => !prev)}
+                        className="flex items-center gap-2 text-2xl font-black tracking-tight text-slate-900"
+                      >
+                        <span>Gợi ý kết bạn ({visibleSuggestions.length})</span>
+                        <ChevronDown className={`h-5 w-5 text-slate-500 transition ${showSuggestions ? "" : "-rotate-90"}`} />
+                      </button>
+                      {showSuggestions && visibleSuggestions.length > 4 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSuggestionLimit((prev) =>
+                              prev >= visibleSuggestions.length ? 4 : Math.min(prev + 4, visibleSuggestions.length)
+                            )
                           }
-                        />
-                      )) : (
-                        <EmptyPanel
-                          title="Không còn gợi ý phù hợp"
-                          description="Khi hệ thống có thêm gợi ý kết bạn mới, danh sách sẽ hiển thị ở đây."
-                        />
-                      )}
+                          className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#0d5bd7] ring-1 ring-slate-200 transition hover:bg-[#eef4ff]"
+                        >
+                          {suggestionLimit >= visibleSuggestions.length ? "Thu gọn" : "Xem thêm"}
+                        </button>
+                      ) : null}
                     </div>
+                    {showSuggestions ? (
+                      <div className="grid gap-5 xl:grid-cols-2">
+                        {displayedSuggestions.length ? displayedSuggestions.map((item) => (
+                          <SuggestionCard
+                            key={`suggestion-${item.id}`}
+                            item={item}
+                            loading={loading}
+                            onAdd={onSendFriendRequest}
+                            onDismiss={(userId) =>
+                              setDismissedSuggestionIds((prev) => prev.filter((id) => id !== userId).concat(userId))
+                            }
+                          />
+                        )) : (
+                          <EmptyPanel
+                            title="Không còn gợi ý phù hợp"
+                            description="Khi hệ thống có thêm gợi ý kết bạn mới, danh sách sẽ hiển thị ở đây."
+                          />
+                        )}
+                      </div>
+                    ) : null}
                   </section>
                 </div>
               </div>
