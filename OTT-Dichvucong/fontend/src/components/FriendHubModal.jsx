@@ -43,27 +43,43 @@ function EmptyPanel({ title, description }) {
 }
 
 function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
+  const isIncoming = type === "incoming";
+  const badgeLabel = isIncoming ? "Lời mời mới" : "Đã gửi";
+  const helperText = isIncoming
+    ? "Họ đang chờ phản hồi để bắt đầu trò chuyện với bạn."
+    : "Bạn có thể thu hồi lời mời nếu chưa muốn kết nối lúc này.";
+
   return (
     <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-4">
         <Avatar item={item} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-2xl font-black tracking-tight text-slate-900">{item.fullName}</div>
+          <div className="flex items-center gap-3">
+            <div className="truncate text-2xl font-black tracking-tight text-slate-900">{item.fullName}</div>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                isIncoming ? "bg-[#eef4ff] text-[#0d5bd7]" : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {badgeLabel}
+            </span>
+          </div>
           <div className="mt-1 truncate text-sm text-slate-500">{item.phone || item.email || "Người dùng hệ thống"}</div>
         </div>
       </div>
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-700">
-        {type === "incoming"
+        {isIncoming
           ? `Xin chào, ${item.fullName} muốn kết bạn và trao đổi cùng bạn.`
           : `Bạn đã gửi lời mời kết bạn tới ${item.fullName}.`}
       </div>
-      {type === "incoming" ? (
+      <div className="mt-3 text-sm text-slate-500">{helperText}</div>
+      {isIncoming ? (
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button
             type="button"
             disabled={loading}
             onClick={() => onDecline(item.id)}
-            className="rounded-2xl bg-slate-100 px-4 py-3 text-lg font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+            className="rounded-2xl bg-slate-100 px-4 py-3 text-base font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
           >
             Từ chối
           </button>
@@ -71,7 +87,7 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
             type="button"
             disabled={loading}
             onClick={() => onAccept(item.id)}
-            className="rounded-2xl bg-[#dceaff] px-4 py-3 text-lg font-bold text-[#0d5bd7] hover:bg-[#cfe1ff] disabled:opacity-60"
+            className="rounded-2xl bg-[#dceaff] px-4 py-3 text-base font-bold text-[#0d5bd7] hover:bg-[#cfe1ff] disabled:opacity-60"
           >
             Đồng ý
           </button>
@@ -81,7 +97,7 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
           type="button"
           disabled={loading}
           onClick={() => onRevoke(item.id)}
-          className="mt-4 w-full rounded-2xl bg-slate-100 px-4 py-3 text-center text-base font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+          className="mt-4 w-full rounded-2xl bg-slate-100 px-4 py-3 text-center text-base font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
         >
           Thu hồi lời mời
         </button>
