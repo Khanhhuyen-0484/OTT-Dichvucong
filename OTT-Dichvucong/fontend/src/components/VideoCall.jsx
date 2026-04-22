@@ -432,6 +432,19 @@ async function getMediaStream() {
   }
 }
 
+async function checkMediaPermissions() {
+  if (!navigator?.permissions?.query) return { camera: "prompt", microphone: "prompt" };
+  try {
+    const [camera, microphone] = await Promise.all([
+      navigator.permissions.query({ name: "camera" }),
+      navigator.permissions.query({ name: "microphone" }),
+    ]);
+    return { camera: camera.state, microphone: microphone.state };
+  } catch {
+    return { camera: "prompt", microphone: "prompt" };
+  }
+}
+
 // ─── RemoteVideo: 1 khung hình cho 1 peer ────────────────────────────────────
 function RemoteVideo({ stream, label }) {
   return (
@@ -485,6 +498,7 @@ export default function VideoCall({
   const pcsRef          = useRef({});
   const queuesRef       = useRef({});
   const activeRef       = useRef(true);
+  const callStartedAtRef = useRef(0);
 
   const onCloseRef      = useRef(onClose);
   const targetsRef      = useRef(targets);
@@ -566,6 +580,9 @@ export default function VideoCall({
       const state = pc.connectionState;
       console.log("[VideoCall] 🌐", userId, "→", state);
       if (state === "connected") { setStatus("connected"); setErrorMsg(null); }
+      if (state === "connected" && !callStartedAtRef.current) {
+        callStartedAtRef.current = Date.now();
+      }
       if (state === "failed" || state === "closed") {
         // FIX 1: chỉ xóa peer này, không đóng toàn bộ cuộc gọi
         setTimeout(() => { if (activeRef.current) destroyPeer(userId); }, 1500);
@@ -649,14 +666,33 @@ export default function VideoCall({
       }
     };
 
+    const handleCallUnavailable = ({ reason } = {}) => {
+      if (!activeRef.current) return;
+      if (reason === "offline") {
+        setErrorMsg("Người nhận hiện không trực tuyến.");
+      } else {
+        setErrorMsg("Không thể thực hiện cuộc gọi lúc này.");
+      }
+      setTimeout(() => { if (activeRef.current) cleanup(); }, 1800);
+    };
+
     socket.on("call-accepted",    handleAccepted);
     socket.on("ice-candidate",    handleIceCandidate);
     socket.on("call-ended",       handleCallEnded);
     socket.on("call-rejected",    handleCallRejected);
+    socket.on("call-unavailable", handleCallUnavailable);
     socket.on("group-call-offer", handleGroupOffer);
 
     const init = async () => {
       try {
+        if (!isCallee) {
+          const permissions = await checkMediaPermissions();
+          if (permissions.camera === "denied" || permissions.microphone === "denied") {
+            setErrorMsg("Chưa có quyền Camera/Microphone. Vui lòng cấp quyền rồi thử lại.");
+            return;
+          }
+        }
+
         const stream = await getMediaStream();
         if (!activeRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
 
@@ -719,6 +755,7 @@ export default function VideoCall({
             socket.emit("call-user", {
               targetUserId: uid,
               roomId,
+              signalData: offer,
               offer,
               callerName:  currentUserName,
               isGroupCall: currentTargets.length > 1,
@@ -746,6 +783,7 @@ export default function VideoCall({
       socket.off("ice-candidate",    handleIceCandidate);
       socket.off("call-ended",       handleCallEnded);
       socket.off("call-rejected",    handleCallRejected);
+      socket.off("call-unavailable", handleCallUnavailable);
       socket.off("group-call-offer", handleGroupOffer);
       destroyAll();
     };
@@ -765,8 +803,17 @@ export default function VideoCall({
   };
 
   const handleEndCall = () => {
+    const durationSec = callStartedAtRef.current
+      ? Math.max(0, Math.round((Date.now() - callStartedAtRef.current) / 1000))
+      : 0;
     targetsRef.current.forEach((uid) => {
-      socketRef.current.emit("end-call", { toUserId: uid, roomId, fromUserId: socketRef.current.id });
+      socketRef.current.emit("end-call", {
+        toUserId: uid,
+        roomId,
+        durationSec,
+        fromUserId: socketRef.current.id,
+        callerName: currentUserName
+      });
     });
     cleanup();
   };

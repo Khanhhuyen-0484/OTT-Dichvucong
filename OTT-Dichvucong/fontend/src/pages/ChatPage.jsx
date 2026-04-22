@@ -148,6 +148,7 @@ export default function ChatPage() {
 
   const [videoCallState, setVideoCallState] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [isCalling, setIsCalling] = useState(false);
 
   // ─── Refs: cho phép socket handler đọc giá trị mới nhất
   //           mà không cần re-register listener ────────────────────────────────
@@ -328,6 +329,7 @@ export default function ChatPage() {
 
     const handleIncomingCall = (data) => {
       console.log("[ChatPage] 📞 incoming-call:", data);
+      // Không tự động reject: luôn hiển thị modal để người dùng quyết định.
       if (data.isGroupCall) {
         setIncomingCall((prev) => ({
           isGroupCall:  true,
@@ -564,6 +566,7 @@ export default function ChatPage() {
   // ─── Call Handlers ────────────────────────────────────────────────────────────
 
   const startVideoCall = useCallback(() => {
+    if (isCalling || videoCallState) return;
     const currentRoom = rooms.find((r) => r.id === activeRoomId);
     if (!currentRoom) return;
     const callRoomId = `call_${activeRoomId}_${Date.now()}`;
@@ -571,15 +574,18 @@ export default function ChatPage() {
     if (currentRoom.type === "group") {
       const otherMembers = (currentRoom.members || []).filter((m) => m.id !== user.id);
       if (!otherMembers.length) return;
+      setIsCalling(true);
       setVideoCallState({ roomId: callRoomId, targetUserIds: otherMembers.map((m) => m.id), isCallee: false, isGroupCall: true });
     } else {
       const other = currentRoom.members?.find((m) => m.id !== user.id);
       if (!other) return;
+      setIsCalling(true);
       setVideoCallState({ roomId: callRoomId, targetUserId: other.id, isCallee: false, isGroupCall: false });
     }
-  }, [activeRoomId, rooms, user]);
+  }, [activeRoomId, rooms, user, isCalling, videoCallState]);
 
   const acceptCall = useCallback((call) => {
+    setIsCalling(true);
     if (call.isGroupCall) {
       setVideoCallState({
         roomId:        call.roomId,
@@ -594,8 +600,16 @@ export default function ChatPage() {
     setIncomingCall(null);
   }, []);
 
-  const rejectCall = useCallback(() => {
-    if (incomingCall) connectSocket().emit("call-rejected", { toUserId: incomingCall.callerUserId });
+  const rejectCall = useCallback((callArg) => {
+    const activeCall = callArg || incomingCall;
+    if (activeCall) {
+      connectSocket().emit("call-rejected", {
+        toUserId: activeCall.callerUserId,
+        roomId: activeCall.roomId,
+        callerId: activeCall.callerUserId,
+        callerName: activeCall.callerName || activeCall.callerNames?.[0] || ""
+      });
+    }
     setIncomingCall(null);
   }, [incomingCall]);
 
@@ -613,9 +627,11 @@ export default function ChatPage() {
       if (roomMedia) {
         const uploaded = await uploadToS3(roomMedia);
         const mediaUrl = uploaded.publicUrl || uploaded.url;
-        const isFile = /\.(pdf|doc|docx)$/i.test(roomMedia.name || "");
+        const isFile =
+          /\.(pdf|doc|docx)$/i.test(roomMedia.name || "") ||
+          /application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)/i.test(roomMedia.type || "");
         mediaPayload = {
-          type: isFile ? "file" : (roomMedia.type.startsWith("video") ? "video" : "image"),
+          type: isFile ? "document" : (roomMedia.type.startsWith("video") ? "video" : "image"),
           url: mediaUrl,
           name: roomMedia.name,
           fileUrl: isFile ? mediaUrl : undefined,
@@ -1080,7 +1096,10 @@ export default function ChatPage() {
           callerOffers={videoCallState.callerOffers}
           currentUserName={user.fullName}
           activeRoom={activeRoom}
-          onClose={() => setVideoCallState(null)}
+          onClose={() => {
+            setVideoCallState(null);
+            setIsCalling(false);
+          }}
         />
       )}
 

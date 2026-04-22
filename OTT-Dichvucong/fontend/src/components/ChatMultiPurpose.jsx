@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   CheckSquare,
@@ -221,6 +221,24 @@ function ChatMultiPurpose({
   const groupAvatar = activeRoom?.avatar || GROUP_FALLBACK_AVATAR;
   const headerAvatar = activeRoom?.type === "group" ? groupAvatar : getAvatarUrl(partner);
   const hasSendPayload = Boolean(roomInput.trim() || roomMedia);
+  const lastMessage = messages[messages.length - 1];
+
+  const scrollToLatestMessage = useCallback(() => {
+    chatEndRef?.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatEndRef]);
+
+  useEffect(() => {
+    if (!lastMessage?.media) return;
+    const fileUrl = String(lastMessage.media.fileUrl || lastMessage.media.url || "").toLowerCase();
+    const isDocFile =
+      ["file", "document"].includes(lastMessage.media.type) ||
+      fileUrl.endsWith(".pdf") ||
+      fileUrl.endsWith(".doc") ||
+      fileUrl.endsWith(".docx");
+    if (!isDocFile) return;
+    const t = window.setTimeout(scrollToLatestMessage, 120);
+    return () => window.clearTimeout(t);
+  }, [lastMessage, scrollToLatestMessage]);
 
   const toggleReaction = (messageId, emoji) => {
     setReactionMap((prev) => {
@@ -307,10 +325,16 @@ function ChatMultiPurpose({
                 <Bubble
                   text={m.unsentForAll ? "Tin nhắn đã được thu hồi" : m.text}
                   isMine={isMine}
-                  media={m.unsentForAll ? null : m.media}
+                  media={m.unsentForAll ? null : (m.media || (m.fileUrl ? { type: "file", fileUrl: m.fileUrl, name: m.fileName || m.name } : null))}
+                  fileUrl={m.fileUrl}
+                  fileName={m.fileName || m.name}
+                  type={m.type}
+                  messageType={m.messageType}
+                  callLog={m.callLog}
                   reactions={reactions}
                   replyTo={m.replyTo}
                   createdAt={m.createdAt}
+                  onMediaRendered={scrollToLatestMessage}
                 />
                 {!m.unsentForAll && hoverMessageId === m.id && (
                   <div className={`absolute top-1 flex items-center gap-1 ${isMine ? "-left-10" : "-right-10"}`}>

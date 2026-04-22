@@ -76,7 +76,7 @@ function ContactList({
         >
           <div className="flex items-center gap-1.5">
             <ContactRound className="h-4 w-4" />
-            Danh bạ
+            Tìm kiếm bạn bè
           </div>
           {pendingHubCount > 0 ? (
             <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -98,7 +98,7 @@ function ContactList({
           onClick={() => setChatModeTab("contacts")}
           className={`flex-1 text-xs py-1.5 rounded-lg font-semibold transition ${chatModeTab === "contacts" ? "bg-white text-[#003366] shadow-sm" : "text-slate-600"}`}
         >
-          Danh bạ
+          Bạn bè
         </button>
       </div>
       <div className="mb-3 flex items-center gap-2">

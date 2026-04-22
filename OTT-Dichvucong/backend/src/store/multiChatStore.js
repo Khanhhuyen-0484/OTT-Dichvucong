@@ -45,13 +45,23 @@ function canManageGroup(room, userId) {
 
 function sanitizeMedia(media) {
   if (!media || typeof media !== "object") return null;
-  const type = media.type === "video" ? "video" : media.type === "image" ? "image" : null;
+  const type =
+    media.type === "video"
+      ? "video"
+      : media.type === "image"
+        ? "image"
+        : media.type === "file" || media.type === "document"
+          ? "document"
+          : null;
   const url = String(media.url || "").trim();
   if (!type || !url) return null;
   return {
     type,
     url: url.slice(0, 2000000),
-    name: String(media.name || "").slice(0, 120)
+    name: String(media.name || "").slice(0, 120),
+    fileUrl: String(media.fileUrl || media.url || "").slice(0, 2000000),
+    fileType: String(media.fileType || "").slice(0, 20),
+    fileSize: Number(media.fileSize || media.size || 0) || 0
   };
 }
 
@@ -62,8 +72,19 @@ function sanitizeMessage(message) {
   return {
     id: String(message?.id || makeId("msg")),
     senderId: String(message?.senderId || ""),
+    messageType: String(message?.messageType || "text"),
     text: String(message?.text || "").slice(0, 4000),
     media: sanitizeMedia(message?.media),
+    callLog: message?.callLog && typeof message.callLog === "object"
+      ? {
+          status: String(message.callLog.status || "").slice(0, 32),
+          durationSec: Number(message.callLog.durationSec || 0) || 0,
+          roomId: String(message.callLog.roomId || "").slice(0, 120),
+          callerId: String(message.callLog.callerId || "").slice(0, 120),
+          callerName: String(message.callLog.callerName || "").slice(0, 120),
+          endedBy: String(message.callLog.endedBy || "").slice(0, 120)
+        }
+      : null,
     replyToMessageId: String(message?.replyToMessageId || "").trim(),
     createdAt: message?.createdAt || nowIso(),
     unsentForAll: Boolean(message?.unsentForAll),
@@ -199,6 +220,7 @@ async function appendMessage({ roomId, senderId, text, media, replyToMessageId }
   const message = sanitizeMessage({
     id: makeId("msg"),
     senderId: sid,
+    messageType: "text",
     text,
     media,
     replyToMessageId: replyId,
@@ -206,6 +228,49 @@ async function appendMessage({ roomId, senderId, text, media, replyToMessageId }
     unsentForAll: false,
     deletedFor: []
   });
+  const next = {
+    ...room,
+    messages: [...room.messages, message],
+    lastMessage: message,
+    updatedAt: message.createdAt
+  };
+  return saveRoom(next);
+}
+
+async function appendCallLogMessage({
+  roomId,
+  actorUserId,
+  status,
+  durationSec = 0,
+  callRoomId = "",
+  callerId = "",
+  callerName = "",
+  endedBy = ""
+}) {
+  const room = await getRoomById(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng chat");
+  const sid = String(actorUserId || "").trim();
+  if (!sid || !isRoomMember(room, sid)) throw new Error("Bạn không phải thành viên của phòng chat");
+
+  const message = sanitizeMessage({
+    id: makeId("msg"),
+    senderId: sid,
+    messageType: "call_log",
+    text: "",
+    media: null,
+    callLog: {
+      status,
+      durationSec,
+      roomId: callRoomId,
+      callerId,
+      callerName,
+      endedBy
+    },
+    createdAt: nowIso(),
+    unsentForAll: false,
+    deletedFor: []
+  });
+
   const next = {
     ...room,
     messages: [...room.messages, message],
@@ -450,6 +515,7 @@ module.exports = {
   ensureDirectRoom,
   createGroupRoom,
   appendMessage,
+  appendCallLogMessage,
   unsendMessage,
   deleteMessageForUser,
   forwardMessage,
