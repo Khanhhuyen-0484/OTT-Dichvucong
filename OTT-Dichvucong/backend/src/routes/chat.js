@@ -7,10 +7,22 @@ const {
   staffSend,
   aiChat,
   chatContacts,
+  friendDiscovery,
+  friendSuggestions,
+  friendRequests,
+  sendFriendRequest,
+  respondFriendRequest,
+  removeFriend,
+  blockFriend,
+  blockedFriends,
+  unblockFriend,
   chatRooms,
   chatRoomDetail,
   ensureDirectChat,
   createGroupChat,
+  groupInvites,
+  inviteGroupMembers,
+  respondGroupInvite,
   presignChatMediaUpload,
   uploadChatMedia,
   sendRoomMessage,
@@ -28,10 +40,22 @@ router.get("/staff", authMiddleware, staffHistory);
 router.post("/staff", authMiddleware, staffSend);
 router.post("/ai", aiChat);
 router.get("/contacts", authMiddleware, chatContacts);
+router.get("/friends/discovery", authMiddleware, friendDiscovery);
+router.get("/friends/suggestions", authMiddleware, friendSuggestions);
+router.get("/friends/requests", authMiddleware, friendRequests);
+router.post("/friends/request", authMiddleware, sendFriendRequest);
+router.post("/friends/request/:userId/respond", authMiddleware, respondFriendRequest);
+router.get("/friends/blocked", authMiddleware, blockedFriends);
+router.delete("/friends/:userId", authMiddleware, removeFriend);
+router.post("/friends/:userId/block", authMiddleware, blockFriend);
+router.post("/friends/:userId/unblock", authMiddleware, unblockFriend);
 router.get("/rooms", authMiddleware, chatRooms);
 router.get("/rooms/:roomId", authMiddleware, chatRoomDetail);
 router.post("/direct/ensure", authMiddleware, ensureDirectChat);
 router.post("/groups", authMiddleware, createGroupChat);
+router.get("/groups/invites", authMiddleware, groupInvites);
+router.post("/groups/:roomId/invites", authMiddleware, inviteGroupMembers);
+router.post("/groups/:roomId/invites/respond", authMiddleware, respondGroupInvite);
 router.post("/media/presign", authMiddleware, presignChatMediaUpload);
 router.post("/rooms/:roomId/messages", authMiddleware, sendRoomMessage);
 router.post("/rooms/:roomId/messages/:messageId/unsend", authMiddleware, unsendRoomMessage);

@@ -12,20 +12,34 @@ import {
 import ContactList from "../components/ContactList.jsx";
 import ChatMultiPurpose from "../components/ChatMultiPurpose.jsx";
 import GroupCreator from "../components/GroupCreator.jsx";
+import AddFriendModal from "../components/AddFriendModal.jsx";
+import FriendHubModal from "../components/FriendHubModal.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
   assignGroupDeputy,
   createGroupRoom,
+  deleteFriend,
   deleteRoomMessageForMe,
   dissolveGroup,
   ensureDirectRoom,
   forwardRoomMessage,
   getApiErrorMessage,
+  getBlockedFriends,
   getChatContacts,
+  getFriendDiscovery,
+  getFriendRequests,
+  getFriendSuggestions,
+  getGroupInvites,
   getChatRooms,
   getStaffChat,
+  postBlockFriend,
+  postFriendRequest,
+  postFriendRequestResponse,
+  postGroupInviteResponse,
+  postGroupInvites,
+  postUnblockFriend,
   postRoomMessage,
   postStaffChat,
   removeGroupDeputy,
@@ -52,6 +66,8 @@ export default function ChatPage() {
   const [messageMenuId, setMessageMenuId] = useState(null);
   const [forwardingMessageId, setForwardingMessageId] = useState(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
+  const [showFriendHubModal, setShowFriendHubModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupAvatar, setGroupAvatar] = useState("");
   const [groupMemberIds, setGroupMemberIds] = useState([]);
@@ -60,6 +76,17 @@ export default function ChatPage() {
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
   const [camMuted, setCamMuted] = useState(false);
+  const [friendQuery, setFriendQuery] = useState("");
+  const [friendDiscovery, setFriendDiscovery] = useState([]);
+  const [friendIncomingRequests, setFriendIncomingRequests] = useState([]);
+  const [friendOutgoingRequests, setFriendOutgoingRequests] = useState([]);
+  const [friendDirectory, setFriendDirectory] = useState([]);
+  const [friendSuggestions, setFriendSuggestions] = useState([]);
+  const [groupInvites, setGroupInvites] = useState([]);
+  const [blockedFriends, setBlockedFriends] = useState([]);
+  const [friendLoading, setFriendLoading] = useState(false);
+  const [friendSearchNotice, setFriendSearchNotice] = useState("");
+  const [toast, setToast] = useState(null);
 
   // Staff chat states
   const [staffMessages, setStaffMessages] = useState([]);
@@ -74,6 +101,12 @@ export default function ChatPage() {
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   // Load staff chat
   const loadStaff = useCallback(async () => {
@@ -97,6 +130,81 @@ export default function ChatPage() {
     }
   }, [user, contactQuery]);
 
+  const loadFriendDiscovery = useCallback(async (query = "") => {
+    if (!user) return;
+    const raw = String(query || "").trim();
+    const normalizedDigits = raw.replace(/\D/g, "");
+    const isValidLookup = raw.includes("@") || normalizedDigits.length >= 8;
+    if (!raw) {
+      setFriendSearchNotice("Nhập email hoặc số điện thoại để tìm và kết bạn.");
+      setFriendDiscovery([]);
+      return;
+    }
+    if (!isValidLookup) {
+      setFriendSearchNotice("Chỉ hỗ trợ tìm bạn bằng email hoặc số điện thoại để tránh trùng tên.");
+      setFriendDiscovery([]);
+      return;
+    }
+    try {
+      const { data } = await getFriendDiscovery(query);
+      setFriendDiscovery(data.users || []);
+      setFriendSearchNotice("");
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadFriendRequests = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getFriendRequests();
+      setFriendIncomingRequests(data.incoming || data.requests || []);
+      setFriendOutgoingRequests(data.outgoing || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadFriendSuggestions = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getFriendSuggestions(5);
+      setFriendSuggestions(data.users || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadFriendDirectory = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getChatContacts("");
+      setFriendDirectory(data.contacts || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadGroupInvites = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getGroupInvites();
+      setGroupInvites(data.invites || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadBlockedFriends = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getBlockedFriends();
+      setBlockedFriends(data.users || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
   // Load rooms
   const loadRooms = useCallback(async () => {
     if (!user) return;
@@ -117,8 +225,12 @@ export default function ChatPage() {
     } else {
       loadContacts();
       loadRooms();
+      loadFriendRequests();
+      loadFriendDirectory();
+      loadGroupInvites();
+      loadBlockedFriends();
     }
-  }, [ready, user, tabState, loadContacts, loadRooms, loadStaff]);
+  }, [ready, user, tabState, loadContacts, loadRooms, loadStaff, loadFriendRequests, loadFriendDirectory, loadGroupInvites, loadBlockedFriends]);
 
   // Socket connection
   useEffect(() => {
@@ -219,6 +331,139 @@ export default function ChatPage() {
       setRoomErr(getApiErrorMessage(err));
     }
   }, [loadRooms]);
+
+  const openAddFriendModal = useCallback(() => {
+    setShowAddFriendModal(true);
+    setFriendQuery("");
+    setFriendSearchNotice("Nhập email hoặc số điện thoại để tìm và kết bạn.");
+    setFriendDiscovery([]);
+    loadFriendRequests();
+    loadFriendSuggestions();
+  }, [loadFriendRequests, loadFriendSuggestions]);
+
+  const openFriendHubModal = useCallback(() => {
+    setShowFriendHubModal(true);
+    loadFriendDirectory();
+    loadFriendRequests();
+    loadGroupInvites();
+    loadBlockedFriends();
+  }, [loadFriendDirectory, loadFriendRequests, loadGroupInvites, loadBlockedFriends]);
+
+  const handleSendFriendRequest = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await postFriendRequest(targetUserId);
+      setToast({ type: "success", message: "Đã gửi lời mời kết bạn" });
+      await Promise.all([
+        loadFriendDiscovery(friendQuery),
+        loadFriendRequests(),
+        loadFriendSuggestions(),
+        loadContacts(),
+        loadFriendDirectory()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadContacts, loadFriendDiscovery, loadFriendRequests, loadFriendSuggestions, loadFriendDirectory]);
+
+  const handleRespondFriendRequest = useCallback(async (targetUserId, action) => {
+    setFriendLoading(true);
+    try {
+      await postFriendRequestResponse(targetUserId, action);
+      setToast({
+        type: "success",
+        message: action === "accept" ? "Đã chấp nhận lời mời kết bạn" : "Đã từ chối lời mời kết bạn"
+      });
+      await Promise.all([
+        loadFriendDiscovery(friendQuery),
+        loadFriendRequests(),
+        loadContacts(),
+        loadFriendDirectory(),
+        loadRooms()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadContacts, loadFriendDiscovery, loadFriendDirectory, loadFriendRequests, loadRooms]);
+
+  const handleRemoveFriend = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await deleteFriend(targetUserId);
+      setToast({ type: "success", message: "Đã xóa bạn khỏi danh sách" });
+      await Promise.all([loadContacts(), loadFriendDirectory(), loadFriendRequests(), loadRooms()]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadContacts, loadFriendDirectory, loadFriendRequests, loadRooms]);
+
+  const handleBlockFriend = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await postBlockFriend(targetUserId);
+      setToast({ type: "success", message: "Đã chặn người dùng" });
+      await Promise.all([
+        loadContacts(),
+        loadFriendDirectory(),
+        loadFriendRequests(),
+        loadRooms(),
+        loadGroupInvites(),
+        loadBlockedFriends()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadContacts, loadFriendDirectory, loadFriendRequests, loadRooms, loadGroupInvites, loadBlockedFriends]);
+
+  const handleInviteMembersToGroup = useCallback(async (roomId, memberIds) => {
+    setFriendLoading(true);
+    try {
+      await postGroupInvites(roomId, memberIds);
+      setToast({ type: "success", message: "Đã gửi lời mời vào nhóm" });
+      await Promise.all([loadRooms(), loadGroupInvites()]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadRooms, loadGroupInvites]);
+
+  const handleRespondGroupInvite = useCallback(async (roomId, action) => {
+    setFriendLoading(true);
+    try {
+      await postGroupInviteResponse(roomId, action);
+      setToast({
+        type: "success",
+        message: action === "accept" ? "Đã tham gia nhóm" : "Đã từ chối lời mời nhóm"
+      });
+      await Promise.all([loadRooms(), loadGroupInvites()]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadRooms, loadGroupInvites]);
+
+  const handleUnblockFriend = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await postUnblockFriend(targetUserId);
+      setToast({ type: "success", message: "Đã bỏ chặn người dùng" });
+      await Promise.all([loadBlockedFriends(), loadFriendDiscovery(friendQuery)]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadBlockedFriends, loadFriendDiscovery]);
 
   const sendRoom = useCallback(async (e) => {
     e?.preventDefault();
@@ -449,6 +694,9 @@ export default function ChatPage() {
                   openDirectChat={openDirectChat}
                   openStaffChat={openStaffChat}
                   setShowGroupModal={setShowGroupModal}
+                  onOpenAddFriend={openAddFriendModal}
+                  onOpenFriendHub={openFriendHubModal}
+                  pendingHubCount={friendIncomingRequests.length + groupInvites.length}
                   user={user}
                 />
               </div>
@@ -563,6 +811,64 @@ export default function ChatPage() {
         contacts={contacts}
         createGroup={createGroup}
       />
+
+      <AddFriendModal
+        open={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
+        query={friendQuery}
+        setQuery={setFriendQuery}
+        users={friendDiscovery}
+        suggestions={friendSuggestions}
+        requests={friendIncomingRequests}
+        onSearch={() => loadFriendDiscovery(friendQuery)}
+        onAdd={handleSendFriendRequest}
+        onAccept={(userId) => handleRespondFriendRequest(userId, "accept")}
+        onDecline={(userId) => handleRespondFriendRequest(userId, "decline")}
+        loading={friendLoading}
+        searchNotice={friendSearchNotice}
+      />
+
+      <FriendHubModal
+        open={showFriendHubModal}
+        onClose={() => setShowFriendHubModal(false)}
+        currentUserId={user?.id}
+        onOpenAddFriend={() => {
+          setShowFriendHubModal(false);
+          openAddFriendModal();
+        }}
+        friends={friendDirectory}
+        blockedFriends={blockedFriends}
+        groups={rooms.filter((room) => room.type === "group")}
+        incomingGroupInvites={groupInvites}
+        incomingRequests={friendIncomingRequests}
+        outgoingRequests={friendOutgoingRequests}
+        loading={friendLoading}
+        onOpenChat={async (friendId) => {
+          setShowFriendHubModal(false);
+          await openDirectChat(friendId);
+        }}
+        onOpenGroup={(roomId) => {
+          setShowFriendHubModal(false);
+          setActiveRoomId(roomId);
+          setChatModeTab("rooms");
+          setTabState("multi");
+        }}
+        onAccept={(userId) => handleRespondFriendRequest(userId, "accept")}
+        onDecline={(userId) => handleRespondFriendRequest(userId, "decline")}
+        onRemoveFriend={handleRemoveFriend}
+        onBlockFriend={handleBlockFriend}
+        onInviteMembers={handleInviteMembersToGroup}
+        onRespondGroupInvite={handleRespondGroupInvite}
+        onUnblockFriend={handleUnblockFriend}
+      />
+
+      {toast ? (
+        <div className="fixed right-4 top-4 z-[110]">
+          <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(15,23,42,0.28)]">
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
 
       {forwardingMessageId && (
         <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">

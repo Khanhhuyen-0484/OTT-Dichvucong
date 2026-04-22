@@ -1,5 +1,29 @@
 import React, { useMemo } from "react";
-import { Search, Plus } from "lucide-react";
+import { ContactRound, Search } from "lucide-react";
+
+function AddFriendIcon({ className = "" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className}>
+      <path d="M7.5 18.25v-.75a4.25 4.25 0 0 1 4.25-4.25h.5a4.25 4.25 0 0 1 4.25 4.25v.75" strokeLinecap="round" />
+      <circle cx="12" cy="8.25" r="3.25" />
+      <path d="M19.25 7.25v5" strokeLinecap="round" />
+      <path d="M16.75 9.75h5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CreateGroupIcon({ className = "" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className}>
+      <circle cx="9" cy="8.25" r="3" />
+      <path d="M4.75 18.25v-.6A4.15 4.15 0 0 1 8.9 13.5h.2a4.15 4.15 0 0 1 4.15 4.15v.6" strokeLinecap="round" />
+      <path d="M15.1 13.9a3.35 3.35 0 0 1 2.9 3.3v1.05" strokeLinecap="round" />
+      <path d="M14.9 6.55a2.75 2.75 0 1 1 0 5.5" strokeLinecap="round" />
+      <path d="M18.75 4.75v5" strokeLinecap="round" />
+      <path d="M16.25 7.25h5" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function ContactList({
   chatModeTab,
@@ -13,6 +37,9 @@ function ContactList({
   openDirectChat,
   openStaffChat,
   setShowGroupModal,
+  onOpenAddFriend,
+  onOpenFriendHub,
+  pendingHubCount = 0,
   user
 }) {
   const listItems = useMemo(() => (chatModeTab === "contacts" ? contacts : rooms), [chatModeTab, contacts, rooms]);
@@ -23,11 +50,19 @@ function ContactList({
         <h2 className="text-sm font-bold text-slate-800">Danh sách chat</h2>
         <button
           type="button"
-          onClick={() => setShowGroupModal(true)}
-          className="rounded-lg p-1.5 bg-emerald-100 text-emerald-700"
-          title="Tạo nhóm"
+          onClick={onOpenFriendHub}
+          className="relative rounded-xl bg-[#eef4ff] px-3 py-2 text-xs font-bold text-[#0d5bd7] ring-1 ring-[#0d5bd7]/10 transition hover:bg-[#dfeafe]"
+          title="Trung tâm bạn bè"
         >
-          <Plus className="h-4 w-4" />
+          <div className="flex items-center gap-1.5">
+            <ContactRound className="h-4 w-4" />
+            Danh bạ
+          </div>
+          {pendingHubCount > 0 ? (
+            <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+              {pendingHubCount > 9 ? "9+" : pendingHubCount}
+            </span>
+          ) : null}
         </button>
       </div>
       <div className="flex gap-1 mb-3 rounded-xl bg-slate-100 p-1">
@@ -46,14 +81,32 @@ function ContactList({
           Danh bạ
         </button>
       </div>
-      <div className="relative mb-3">
-        <Search className="h-3.5 w-3.5 absolute left-3 top-2.5 text-slate-400" />
-        <input
-          value={contactQuery}
-          onChange={(e) => setContactQuery(e.target.value)}
-          placeholder="Tìm theo SĐT / Email / Tên"
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 text-xs pl-8 pr-2 py-2 focus:outline-none focus:border-[#003366]"
-        />
+      <div className="mb-3 flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <input
+            value={contactQuery}
+            onChange={(e) => setContactQuery(e.target.value)}
+            placeholder={chatModeTab === "contacts" ? "Tìm bạn bè" : "Tìm hội thoại"}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 text-xs pl-8 pr-2 py-2 focus:outline-none focus:border-[#003366]"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onOpenAddFriend}
+          className="rounded-[24px] bg-white p-3.5 text-[#113a72] transition hover:bg-slate-50"
+          title="Thêm bạn"
+        >
+          <AddFriendIcon className="h-4.5 w-4.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowGroupModal(true)}
+          className="rounded-[24px] bg-white p-3.5 text-[#113a72] transition hover:bg-slate-50"
+          title="Tạo nhóm"
+        >
+          <CreateGroupIcon className="h-4.5 w-4.5" />
+        </button>
       </div>
       <button
         type="button"

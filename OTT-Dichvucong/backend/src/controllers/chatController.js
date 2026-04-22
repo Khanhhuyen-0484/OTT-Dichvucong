@@ -689,6 +689,115 @@ exports.chatContacts = async (req, res) => {
   }
 };
 
+exports.friendDiscovery = async (req, res) => {
+  try {
+    const q = req.query?.q || "";
+    const users = await userStore.searchUsersForFriendAdd(req.user.id, q);
+    return res.json({ users });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi tìm người dùng" });
+  }
+};
+
+exports.friendSuggestions = async (req, res) => {
+  try {
+    const limit = Number(req.query?.limit || 5);
+    const users = await userStore.listSuggestedFriends(req.user.id, limit);
+    return res.json({ users });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi tải gợi ý kết bạn" });
+  }
+};
+
+exports.friendRequests = async (req, res) => {
+  try {
+    const [incoming, outgoing] = await Promise.all([
+      userStore.listIncomingFriendRequests(req.user.id),
+      userStore.listOutgoingFriendRequests(req.user.id)
+    ]);
+    return res.json({
+      requests: incoming,
+      incoming,
+      outgoing,
+      counts: {
+        incoming: incoming.length,
+        outgoing: outgoing.length
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi tải lời mời kết bạn" });
+  }
+};
+
+exports.sendFriendRequest = async (req, res) => {
+  try {
+    const targetUserId = String(req.body?.targetUserId || "").trim();
+    if (!targetUserId) {
+      return res.status(400).json({ message: "Thiếu người dùng cần kết bạn" });
+    }
+    const result = await userStore.sendFriendRequest(req.user.id, targetUserId);
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể gửi lời mời kết bạn" });
+  }
+};
+
+exports.respondFriendRequest = async (req, res) => {
+  try {
+    const requesterId = String(req.params.userId || "").trim();
+    const action = String(req.body?.action || "accept").trim().toLowerCase();
+    if (!["accept", "decline"].includes(action)) {
+      return res.status(400).json({ message: "Phản hồi không hợp lệ" });
+    }
+    const result = await userStore.respondToFriendRequest(req.user.id, requesterId, action);
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể phản hồi lời mời kết bạn" });
+  }
+};
+
+exports.removeFriend = async (req, res) => {
+  try {
+    const targetUserId = String(req.params.userId || "").trim();
+    if (!targetUserId) return res.status(400).json({ message: "Thiếu người dùng" });
+    const result = await userStore.removeFriend(req.user.id, targetUserId);
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể xóa bạn" });
+  }
+};
+
+exports.blockFriend = async (req, res) => {
+  try {
+    const targetUserId = String(req.params.userId || "").trim();
+    if (!targetUserId) return res.status(400).json({ message: "Thiếu người dùng" });
+    const result = await userStore.blockUser(req.user.id, targetUserId);
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể chặn người dùng" });
+  }
+};
+
+exports.blockedFriends = async (req, res) => {
+  try {
+    const users = await userStore.listBlockedUsers(req.user.id);
+    return res.json({ users });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Không thể tải danh sách đã chặn" });
+  }
+};
+
+exports.unblockFriend = async (req, res) => {
+  try {
+    const targetUserId = String(req.params.userId || "").trim();
+    if (!targetUserId) return res.status(400).json({ message: "Thiếu người dùng" });
+    const result = await userStore.unblockUser(req.user.id, targetUserId);
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể bỏ chặn người dùng" });
+  }
+};
+
 exports.chatRooms = async (req, res) => {
   try {
     const rooms = await multiChatStore.listRoomsForUser(req.user.id);
@@ -736,6 +845,49 @@ exports.createGroupChat = async (req, res) => {
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể tạo nhóm chat" });
+  }
+};
+
+exports.groupInvites = async (req, res) => {
+  try {
+    const rooms = await multiChatStore.listGroupInvitesForUser(req.user.id);
+    const invites = await Promise.all(rooms.map((room) => multiChatStore.hydrateRoomForUser(room, req.user.id)));
+    return res.json({ invites });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi tải lời mời nhóm" });
+  }
+};
+
+exports.inviteGroupMembers = async (req, res) => {
+  try {
+    const memberIds = Array.isArray(req.body?.memberIds) ? req.body.memberIds : [];
+    const room = await multiChatStore.inviteMembersToGroup({
+      roomId: req.params.roomId,
+      requesterId: req.user.id,
+      memberIds
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể mời bạn vào nhóm" });
+  }
+};
+
+exports.respondGroupInvite = async (req, res) => {
+  try {
+    const action = String(req.body?.action || "accept").trim().toLowerCase();
+    if (!["accept", "decline"].includes(action)) {
+      return res.status(400).json({ message: "Phản hồi không hợp lệ" });
+    }
+    const room = await multiChatStore.respondToGroupInvite({
+      roomId: req.params.roomId,
+      userId: req.user.id,
+      action
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể phản hồi lời mời nhóm" });
   }
 };
 
