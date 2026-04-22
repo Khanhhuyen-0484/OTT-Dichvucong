@@ -756,6 +756,19 @@ exports.respondFriendRequest = async (req, res) => {
   }
 };
 
+exports.revokeFriendRequest = async (req, res) => {
+  try {
+    const targetUserId = String(req.params.userId || "").trim();
+    if (!targetUserId) {
+      return res.status(400).json({ message: "Thiếu người dùng cần thu hồi lời mời" });
+    }
+    const result = await userStore.revokeFriendRequest(req.user.id, targetUserId);
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể thu hồi lời mời kết bạn" });
+  }
+};
+
 exports.removeFriend = async (req, res) => {
   try {
     const targetUserId = String(req.params.userId || "").trim();

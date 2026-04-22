@@ -41,7 +41,7 @@ function EmptyPanel({ title, description }) {
   );
 }
 
-function RequestCard({ item, type, loading, onAccept, onDecline }) {
+function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
   return (
     <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-4">
@@ -76,9 +76,14 @@ function RequestCard({ item, type, loading, onAccept, onDecline }) {
           </button>
         </div>
       ) : (
-        <div className="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-center text-base font-semibold text-slate-600">
-          Bạn đã gửi lời mời
-        </div>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => onRevoke(item.id)}
+          className="mt-4 w-full rounded-2xl bg-slate-100 px-4 py-3 text-center text-base font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+        >
+          Thu hồi lời mời
+        </button>
       )}
     </div>
   );
@@ -365,6 +370,7 @@ export default function FriendHubModal({
   onOpenGroup,
   onAccept,
   onDecline,
+  onRevokeRequest,
   onRemoveFriend,
   onBlockFriend,
   onInviteMembers,
@@ -695,7 +701,7 @@ export default function FriendHubModal({
                     </div>
                     <div className="grid gap-5 xl:grid-cols-2">
                       {incomingRequests.length ? incomingRequests.map((item) => (
-                        <RequestCard key={`incoming-${item.id}`} item={item} type="incoming" loading={loading} onAccept={onAccept} onDecline={onDecline} />
+                        <RequestCard key={`incoming-${item.id}`} item={item} type="incoming" loading={loading} onAccept={onAccept} onDecline={onDecline} onRevoke={onRevokeRequest} />
                       )) : (
                         <EmptyPanel title="Chưa có lời mời mới" description="Khi có người gửi lời mời kết bạn, bạn sẽ thấy ở đây để đồng ý hoặc từ chối." />
                       )}
@@ -708,7 +714,7 @@ export default function FriendHubModal({
                     </div>
                     <div className="grid gap-5 xl:grid-cols-2">
                       {outgoingRequests.length ? outgoingRequests.map((item) => (
-                        <RequestCard key={`outgoing-${item.id}`} item={item} type="outgoing" loading={loading} onAccept={onAccept} onDecline={onDecline} />
+                        <RequestCard key={`outgoing-${item.id}`} item={item} type="outgoing" loading={loading} onAccept={onAccept} onDecline={onDecline} onRevoke={onRevokeRequest} />
                       )) : (
                         <EmptyPanel title="Bạn chưa gửi lời mời nào" description="Hãy dùng nút thêm bạn để tìm bạn bè và mở rộng danh bạ của bạn." />
                       )}

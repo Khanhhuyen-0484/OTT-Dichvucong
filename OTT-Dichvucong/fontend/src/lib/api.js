@@ -169,6 +169,10 @@ export async function postFriendRequestResponse(userId, action) {
   return await api.post(`/chat/friends/request/${userId}/respond`, { action });
 }
 
+export async function deleteFriendRequest(userId) {
+  return await api.delete(`/chat/friends/request/${userId}`);
+}
+
 export async function deleteFriend(userId) {
   return await api.delete(`/chat/friends/${userId}`);
 }

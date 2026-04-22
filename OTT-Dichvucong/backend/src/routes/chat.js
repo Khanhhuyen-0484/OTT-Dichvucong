@@ -12,6 +12,7 @@ const {
   friendRequests,
   sendFriendRequest,
   respondFriendRequest,
+  revokeFriendRequest,
   removeFriend,
   blockFriend,
   blockedFriends,
@@ -45,6 +46,7 @@ router.get("/friends/suggestions", authMiddleware, friendSuggestions);
 router.get("/friends/requests", authMiddleware, friendRequests);
 router.post("/friends/request", authMiddleware, sendFriendRequest);
 router.post("/friends/request/:userId/respond", authMiddleware, respondFriendRequest);
+router.delete("/friends/request/:userId", authMiddleware, revokeFriendRequest);
 router.get("/friends/blocked", authMiddleware, blockedFriends);
 router.delete("/friends/:userId", authMiddleware, removeFriend);
 router.post("/friends/:userId/block", authMiddleware, blockFriend);

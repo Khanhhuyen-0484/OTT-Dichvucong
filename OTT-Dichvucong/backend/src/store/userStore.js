@@ -261,6 +261,18 @@ async function respondToFriendRequest(userId, requesterId, action = "accept") {
   return { status, user: { ...sanitizePublicUser(requester), status } };
 }
 
+async function revokeFriendRequest(senderId, targetUserId) {
+  const sender = withFriendFields(await findById(senderId));
+  const target = withFriendFields(await findById(targetUserId));
+  if (!sender || !target) throw new Error("Không tìm thấy người dùng");
+
+  sender.outgoingFriendRequestIds = sender.outgoingFriendRequestIds.filter((id) => id !== target.id);
+  target.incomingFriendRequestIds = target.incomingFriendRequestIds.filter((id) => id !== sender.id);
+
+  await Promise.all([saveUserRecord(sender), saveUserRecord(target)]);
+  return { ok: true, status: "none", user: { ...sanitizePublicUser(target), status: "none" } };
+}
+
 async function removeFriend(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
   const target = withFriendFields(await findById(targetUserId));
@@ -484,6 +496,7 @@ module.exports = {
   searchUsersForFriendAdd,
   sendFriendRequest,
   respondToFriendRequest,
+  revokeFriendRequest,
   removeFriend,
   blockUser,
   unblockUser,

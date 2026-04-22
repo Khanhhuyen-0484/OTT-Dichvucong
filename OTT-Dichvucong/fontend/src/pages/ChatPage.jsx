@@ -21,6 +21,7 @@ import {
   assignGroupDeputy,
   createGroupRoom,
   deleteFriend,
+  deleteFriendRequest,
   deleteRoomMessageForMe,
   dissolveGroup,
   ensureDirectRoom,
@@ -389,6 +390,25 @@ export default function ChatPage() {
       setFriendLoading(false);
     }
   }, [friendQuery, loadContacts, loadFriendDiscovery, loadFriendDirectory, loadFriendRequests, loadRooms]);
+
+  const handleRevokeFriendRequest = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await deleteFriendRequest(targetUserId);
+      setToast({ type: "success", message: "Đã thu hồi lời mời kết bạn" });
+      await Promise.all([
+        loadFriendDiscovery(friendQuery),
+        loadFriendRequests(),
+        loadFriendSuggestions(),
+        loadContacts(),
+        loadFriendDirectory()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadContacts, loadFriendDiscovery, loadFriendDirectory, loadFriendRequests, loadFriendSuggestions]);
 
   const handleRemoveFriend = useCallback(async (targetUserId) => {
     setFriendLoading(true);
@@ -855,6 +875,7 @@ export default function ChatPage() {
         }}
         onAccept={(userId) => handleRespondFriendRequest(userId, "accept")}
         onDecline={(userId) => handleRespondFriendRequest(userId, "decline")}
+        onRevokeRequest={handleRevokeFriendRequest}
         onRemoveFriend={handleRemoveFriend}
         onBlockFriend={handleBlockFriend}
         onInviteMembers={handleInviteMembersToGroup}
