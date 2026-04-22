@@ -1,20 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Send,
-  ArrowLeft,
-  Mic,
-  MicOff,
-  Video,
-  VideoOff,
-  PhoneOff
-} from "lucide-react";
-import UserAvatar from "../components/UserAvatar.jsx";
+import { ArrowLeft, Send, X } from "lucide-react";
+
+// Components
 import Bubble from "../components/Bubble.jsx";
 import ContactList from "../components/ContactList.jsx";
 import ChatMultiPurpose from "../components/ChatMultiPurpose.jsx";
 import GroupCreator from "../components/GroupCreator.jsx";
 import GovHeader from "../components/GovHeader.jsx";
+import VideoCall from "../components/VideoCall.jsx";
+import IncomingCallModal from "../components/IncomingCallModal.jsx";
+
+// Context & Libs
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
@@ -32,607 +29,481 @@ import {
   postStaffChat,
   removeGroupDeputy,
   removeGroupMember,
-  unsendRoomMessage
+  unsendRoomMessage,
 } from "../lib/api.js";
 import { connectSocket } from "../lib/socket.js";
 import { uploadToS3 } from "../lib/uploadToS3.js";
 
+// ─── SUB-COMPONENTS ──────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#003366] border-t-transparent" />
+        <span className="text-sm font-bold text-slate-600">Đang tải hệ thống...</span>
+      </div>
+    </div>
+  );
+}
+
+function ForwardModal({ rooms, activeRoomId, userId, doForward, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-slate-800">Chuyển tiếp</h3>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="max-h-72 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+          {rooms
+            .filter((r) => r.id !== activeRoomId)
+            .map((r) => (
+              <button
+                key={r.id}
+                onClick={() => doForward(r.id)}
+                className="w-full rounded-2xl px-4 py-4 text-left text-sm font-semibold hover:bg-blue-50 border border-slate-100 transition-all active:scale-[0.98]"
+              >
+                {r.type === "group"
+                  ? `👥 ${r.name || "Nhóm"}`
+                  : `👤 ${r.members?.find((m) => m.id !== userId)?.fullName || "Người dùng"}`}
+              </button>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
+
 export default function ChatPage() {
   const navigate = useNavigate();
   const { user, ready } = useAuth();
-
-  const [tabState, setTabState] = useState("multi"); // "multi" or "staff"
-  const [contacts, setContacts] = useState([]);
-  const [chatModeTab, setChatModeTab] = useState("rooms");
-  const [contactQuery, setContactQuery] = useState("");
-  const [rooms, setRooms] = useState([]);
-  const [activeRoomId, setActiveRoomId] = useState(null);
-  const [roomInput, setRoomInput] = useState("");
-  const [roomMedia, setRoomMedia] = useState(null);
-  const [roomLoading, setRoomLoading] = useState(false);
-  const [roomErr, setRoomErr] = useState(null);
-  const [messageMenuId, setMessageMenuId] = useState(null);
-  const [forwardingMessageId, setForwardingMessageId] = useState(null);
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [groupName, setGroupName] = useState("");
-  const [groupAvatar, setGroupAvatar] = useState("");
-  const [groupMemberIds, setGroupMemberIds] = useState([]);
-  const [newMemberId, setNewMemberId] = useState("");
-  const [replyToMessage, setReplyToMessage] = useState(null);
-  const [showVideoCall, setShowVideoCall] = useState(false);
-  const [micMuted, setMicMuted] = useState(false);
-  const [camMuted, setCamMuted] = useState(false);
-
-  // Staff chat states
-  const [staffMessages, setStaffMessages] = useState([]);
-  const [staffInput, setStaffInput] = useState("");
-  const [staffLoading, setStaffLoading] = useState(false);
-  const [staffErr, setStaffErr] = useState(null);
-  const [staffUnread, setStaffUnread] = useState(0);
-
   const chatEndRef = useRef(null);
-  const prevRoomRef = useRef(null);
+
+  const [tabState, setTabState]                       = useState("multi");
+  const [chatModeTab, setChatModeTab]                 = useState("rooms");
+  const [rooms, setRooms]                             = useState([]);
+  const [contacts, setContacts]                       = useState([]);
+  const [activeRoomId, setActiveRoomId]               = useState(null);
+  const [contactQuery, setContactQuery]               = useState("");
+
+  const [roomInput, setRoomInput]                     = useState("");
+  const [roomMedia, setRoomMedia]                     = useState(null);
+  const [roomLoading, setRoomLoading]                 = useState(false);
+  const [roomErr, setRoomErr]                         = useState(null);
+  const [messageMenuId, setMessageMenuId]             = useState(null);
+  const [forwardingMessageId, setForwardingMessageId] = useState(null);
+  const [replyToMessage, setReplyToMessage]           = useState(null);
+  const [newMemberId, setNewMemberId]                 = useState("");
+
+  const [staffMessages, setStaffMessages]             = useState([]);
+  const [staffInput, setStaffInput]                   = useState("");
+  const [staffLoading, setStaffLoading]               = useState(false);
+  const [staffUnread, setStaffUnread]                 = useState(0);
+
+  const [videoCallState, setVideoCallState]           = useState(null);
+  const [incomingCall, setIncomingCall]               = useState(null);
+
+  const [showGroupModal, setShowGroupModal]           = useState(false);
+  const [groupName, setGroupName]                     = useState("");
+  const [groupAvatar, setGroupAvatar]                 = useState("");
+  const [groupMemberIds, setGroupMemberIds]           = useState([]);
+
+  // ─── Refs: cho phép socket handler đọc giá trị mới nhất
+  //           mà không cần re-register listener ────────────────────────────────
+  const activeRoomIdRef = useRef(activeRoomId);
+  const tabStateRef     = useRef(tabState);
+  const loadRoomsRef    = useRef(null);
+  const loadStaffRef    = useRef(null);
+  const scrollBotRef    = useRef(null);
+
+  useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
+  useEffect(() => { tabStateRef.current     = tabState;     }, [tabState]);
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Load staff chat
-  const loadStaff = useCallback(async () => {
-    if (!user) return;
+  const loadRooms = useCallback(async () => {
     try {
-      const { data } = await getStaffChat();
-      setStaffMessages(data.messages || []);
+      const { data } = await getChatRooms();
+      setRooms(data.rooms || []);
+      return data.rooms || [];
     } catch (err) {
-      setStaffErr(getApiErrorMessage(err));
+      setRoomErr(getApiErrorMessage(err));
+      return [];
     }
-  }, [user]);
+  }, []);
 
-  // Load contacts
   const loadContacts = useCallback(async () => {
-    if (!user) return;
     try {
       const { data } = await getChatContacts(contactQuery);
       setContacts(data.contacts || []);
     } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
+      console.error(err);
     }
-  }, [user, contactQuery]);
+  }, [contactQuery]);
 
-  // Load rooms
-  const loadRooms = useCallback(async () => {
-    if (!user) return;
+  const loadStaff = useCallback(async () => {
     try {
-      const { data } = await getChatRooms();
-      setRooms(data.rooms || []);
+      const { data } = await getStaffChat();
+      setStaffMessages(data.messages || []);
+      setTimeout(scrollToBottom, 200);
     } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
+      console.error(err);
     }
-  }, [user]);
+  }, [scrollToBottom]);
 
-  // Load data based on tab
+  // Cập nhật refs mỗi khi callback thay đổi
+  useEffect(() => { loadRoomsRef.current = loadRooms;     }, [loadRooms]);
+  useEffect(() => { loadStaffRef.current = loadStaff;     }, [loadStaff]);
+  useEffect(() => { scrollBotRef.current = scrollToBottom; }, [scrollToBottom]);
+
+  // ─── Socket: đăng ký 1 lần duy nhất khi user ready ──────────────────────────
+  // Mọi giá trị động (activeRoomId, tabState, callback) đều đọc qua ref
+  // → listener không bao giờ bị off/on lại → không bỏ sót event nào.
+
   useEffect(() => {
     if (!ready || !user) return;
-    
-    if (tabState === "staff") {
-      loadStaff();
-    } else {
-      loadContacts();
-      loadRooms();
-    }
-  }, [ready, user, tabState, loadContacts, loadRooms, loadStaff]);
 
-  // Socket connection
-  useEffect(() => {
-    if (!ready || !user) return;
-    
     const socket = connectSocket();
 
-    if (tabState === "multi") {
-      const handleMultiChatMessage = (data) => {
-        if (!data || !data.roomId) return;
-        loadRooms();
-        if (data.roomId === activeRoomId) {
-          setTimeout(scrollToBottom, 100);
-        }
-      };
+    const handleNewMessage = async (msg) => {
+      console.log("[ChatPage] 📨 new-message:", msg);
 
-      const handleRoomUpdated = () => {
-        loadRooms();
-      };
+      // Reload rooms để lấy messages mới nhất của tất cả thành viên
+      await loadRoomsRef.current();
 
-      socket.on("multiChatMessage", handleMultiChatMessage);
-      socket.on("multiChatRoomUpdated", handleRoomUpdated);
+      // Scroll xuống nếu tin thuộc room đang mở
+      const incomingRoomId = msg?.roomId ?? null;
+      const currentRoomId  = activeRoomIdRef.current;
+      const isActiveRoom   = !incomingRoomId || incomingRoomId === currentRoomId;
+      if (isActiveRoom) {
+        setTimeout(() => scrollBotRef.current(), 100);
+      }
 
-      return () => {
-        socket.off("multiChatMessage", handleMultiChatMessage);
-        socket.off("multiChatRoomUpdated", handleRoomUpdated);
-      };
-    } else {
-      const handleSupportMessage = (payload) => {
-        if (!payload || payload.userId !== user.id) return;
-        const message = payload.message;
-        if (!message || !message.id) return;
-        setStaffMessages((prev) => {
-          if (prev.some((m) => m.id === message.id)) {
-            return prev;
-          }
-          return [...prev, message];
-        });
-        if (tabState !== "staff") {
-          setStaffUnread((prev) => prev + 1);
-        }
-      };
-
-      socket.on("supportConversationMessage", handleSupportMessage);
-
-      return () => {
-        socket.off("supportConversationMessage", handleSupportMessage);
-      };
-    }
-  }, [ready, user, tabState, activeRoomId, loadRooms, scrollToBottom]);
-
-  useEffect(() => {
-    if (!ready || !user) return;
-    const socket = connectSocket();
-    const roomName = tabState === "multi" && activeRoomId ? `chat_${activeRoomId}` : null;
-
-    if (prevRoomRef.current && prevRoomRef.current !== roomName) {
-      socket.emit("leaveRoom", { room: prevRoomRef.current });
-      prevRoomRef.current = null;
-    }
-
-    if (roomName) {
-      socket.emit("joinRoom", { room: roomName });
-      prevRoomRef.current = roomName;
-    }
-
-    return () => {
-      if (roomName) {
-        socket.emit("leaveRoom", { room: roomName });
+      // Xử lý tab staff
+      if (tabStateRef.current === "staff") {
+        loadStaffRef.current();
+      } else if (msg?.from === "staff") {
+        setStaffUnread((prev) => prev + 1);
       }
     };
-  }, [ready, user, tabState, activeRoomId]);
 
-  // Auto-select first room if none selected
+    const handleIncomingCall = (data) => {
+      console.log("[ChatPage] 📞 incoming-call:", data);
+      if (data.isGroupCall) {
+        setIncomingCall((prev) => ({
+          isGroupCall:  true,
+          groupName:    data.groupName || prev?.groupName || "Cuộc gọi nhóm",
+          roomId:       data.roomId,
+          callerOffers: { ...(prev?.callerOffers || {}), [data.fromUserId]: data.offer },
+          callerNames:  (prev?.callerNames || []).includes(data.callerName)
+            ? (prev?.callerNames || [])
+            : [...(prev?.callerNames || []), data.callerName],
+          callerUserId: prev?.callerUserId || data.fromUserId,
+        }));
+      } else {
+        setIncomingCall({
+          isGroupCall:  false,
+          callerName:   data.callerName,
+          callerUserId: data.fromUserId,
+          roomId:       data.roomId,
+          offer:        data.offer,
+        });
+      }
+    };
+
+    socket.on("new-message",   handleNewMessage);
+    socket.on("incoming-call", handleIncomingCall);
+
+    return () => {
+      socket.off("new-message",   handleNewMessage);
+      socket.off("incoming-call", handleIncomingCall);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, user]); // ← chỉ [ready, user], mọi thứ khác đọc qua ref
+
+  // ─── Data loading ─────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (rooms.length > 0 && !activeRoomId) {
-      setActiveRoomId(rooms[0].id);
-    }
-  }, [rooms, activeRoomId]);
-
-  const activeRoom = useMemo(() => {
-    return rooms.find((r) => r.id === activeRoomId) || null;
-  }, [rooms, activeRoomId]);
-
-  const roomTitle = useMemo(() => {
-    if (!activeRoom) return "Chat đa năng";
-    if (activeRoom.type === "group") return activeRoom.name || "Nhóm";
-    const otherMember = activeRoom.members?.find((m) => m.id !== user?.id);
-    return otherMember?.fullName || "Hội thoại";
-  }, [activeRoom, user]);
-
-  const roomAvatar = useMemo(() => {
-    if (!activeRoom) return null;
-    if (activeRoom.type === "group") return activeRoom.avatarUrl;
-    const otherMember = activeRoom.members?.find((m) => m.id !== user?.id);
-    return otherMember?.avatarUrl;
-  }, [activeRoom, user]);
-
-  const myGroupRole = useMemo(() => {
-    if (!activeRoom || activeRoom.type !== "group") return null;
-    return activeRoom.members?.find((m) => m.id === user?.id)?.role || null;
-  }, [activeRoom, user]);
-
-  const openDirectChat = useCallback(async (contactId) => {
-    try {
-      const { data } = await ensureDirectRoom(contactId);
-      setActiveRoomId(data.room.id);
-      setChatModeTab("rooms");
-      setTabState("multi");
+    if (ready && user) {
       loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
+      loadContacts();
+      if (tabState === "staff") loadStaff();
     }
-  }, [loadRooms]);
+  }, [ready, user, tabState, contactQuery, loadRooms, loadContacts, loadStaff]);
 
-  const sendRoom = useCallback(async (e) => {
+  // Scroll xuống khi chọn room mới
+  useEffect(() => {
+    if (activeRoomId) setTimeout(scrollToBottom, 150);
+  }, [activeRoomId, scrollToBottom]);
+
+  // ─── Call Handlers ────────────────────────────────────────────────────────────
+
+  const startVideoCall = useCallback(() => {
+    const currentRoom = rooms.find((r) => r.id === activeRoomId);
+    if (!currentRoom) return;
+    const callRoomId = `call_${activeRoomId}_${Date.now()}`;
+
+    if (currentRoom.type === "group") {
+      const otherMembers = (currentRoom.members || []).filter((m) => m.id !== user.id);
+      if (!otherMembers.length) return;
+      setVideoCallState({ roomId: callRoomId, targetUserIds: otherMembers.map((m) => m.id), isCallee: false, isGroupCall: true });
+    } else {
+      const other = currentRoom.members?.find((m) => m.id !== user.id);
+      if (!other) return;
+      setVideoCallState({ roomId: callRoomId, targetUserId: other.id, isCallee: false, isGroupCall: false });
+    }
+  }, [activeRoomId, rooms, user]);
+
+  const acceptCall = useCallback((call) => {
+    if (call.isGroupCall) {
+      setVideoCallState({
+        roomId:        call.roomId,
+        targetUserIds: Object.keys(call.callerOffers || { [call.callerUserId]: call.offer }),
+        isCallee:      true,
+        callerOffers:  call.callerOffers || { [call.callerUserId]: call.offer },
+        isGroupCall:   true,
+      });
+    } else {
+      setVideoCallState({ roomId: call.roomId, targetUserId: call.callerUserId, isCallee: true, callerOffer: call.offer, isGroupCall: false });
+    }
+    setIncomingCall(null);
+  }, []);
+
+  const rejectCall = useCallback(() => {
+    if (incomingCall) connectSocket().emit("call-rejected", { toUserId: incomingCall.callerUserId });
+    setIncomingCall(null);
+  }, [incomingCall]);
+
+  // ─── Send message ─────────────────────────────────────────────────────────────
+
+  const sendRoom = async (e) => {
     e?.preventDefault();
-    if (!activeRoomId || roomLoading || !user) return;
-    if (!roomInput.trim() && !roomMedia) return;
-
+    if (!activeRoomId || roomLoading || (!roomInput.trim() && !roomMedia)) return;
     setRoomLoading(true);
-    setRoomErr(null);
     try {
       let mediaPayload = null;
-      if (roomMedia instanceof File) {
+      if (roomMedia) {
         const uploaded = await uploadToS3(roomMedia);
-        mediaPayload = {
-          type: roomMedia.type.startsWith("video/") ? "video" : "image",
-          url: uploaded.url,
-          name: roomMedia.name
-        };
-      } else if (roomMedia && typeof roomMedia === "object") {
-        mediaPayload = roomMedia;
+        mediaPayload = { type: roomMedia.type.startsWith("video") ? "video" : "image", url: uploaded.publicUrl || uploaded.url };
       }
-      const nextText = replyToMessage
-        ? `↪ ${replyToMessage.sender?.fullName || "Tin nhắn"}: ${String(replyToMessage.text || "").slice(0, 120)}\n${roomInput.trim()}`
-        : roomInput.trim();
-      await postRoomMessage(activeRoomId, {
-        text: nextText,
-        media: mediaPayload
-      });
+      await postRoomMessage(activeRoomId, { text: roomInput, media: mediaPayload, replyToId: replyToMessage?.id });
       setRoomInput("");
       setRoomMedia(null);
       setReplyToMessage(null);
-      loadRooms();
+      await loadRooms();
       setTimeout(scrollToBottom, 100);
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
     } finally {
       setRoomLoading(false);
     }
-  }, [activeRoomId, roomInput, roomMedia, replyToMessage, roomLoading, user, loadRooms, scrollToBottom]);
+  };
 
-  const sendStaff = useCallback(async () => {
-    if (!staffInput.trim() || staffLoading || !user) return;
-    
-    setStaffLoading(true);
-    setStaffErr(null);
-    try {
-      const { data } = await postStaffChat(staffInput.trim());
-      setStaffMessages(data.messages || []);
-      setStaffInput("");
-    } catch (err) {
-      setStaffErr(getApiErrorMessage(err));
-    } finally {
-      setStaffLoading(false);
-    }
-  }, [staffInput, staffLoading, user]);
+  const activeRoom  = useMemo(() => rooms.find((r) => r.id === activeRoomId), [rooms, activeRoomId]);
+  const myGroupRole = useMemo(() => activeRoom?.members?.find((m) => m.id === user?.id)?.role, [activeRoom, user]);
 
-  const doMessageAction = useCallback(async (action, messageId) => {
-    if (!activeRoomId) return;
-    try {
-      switch (action) {
-        case "unsend":
-          await unsendRoomMessage(activeRoomId, messageId);
-          break;
-        case "delete":
-          await deleteRoomMessageForMe(activeRoomId, messageId);
-          break;
-        case "forward":
-          setForwardingMessageId(messageId);
-          return;
-      }
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-    setMessageMenuId(null);
-  }, [activeRoomId, loadRooms]);
-
-  const doForward = useCallback(async (targetRoomId) => {
-    if (!activeRoomId || !forwardingMessageId) return;
-    try {
-      await forwardRoomMessage(activeRoomId, forwardingMessageId, targetRoomId);
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-    setForwardingMessageId(null);
-  }, [activeRoomId, forwardingMessageId, loadRooms]);
-
-  const performGroupAction = useCallback(async (action, targetUserId) => {
-    if (!activeRoomId) return;
-    try {
-      switch (action) {
-        case "add":
-          if (newMemberId) {
-            await addGroupMember(activeRoomId, newMemberId);
-            setNewMemberId("");
-          }
-          break;
-        case "remove":
-          await removeGroupMember(activeRoomId, targetUserId);
-          break;
-        case "promote":
-          await assignGroupDeputy(activeRoomId, targetUserId);
-          break;
-        case "demote":
-          await removeGroupDeputy(activeRoomId, targetUserId);
-          break;
-        case "dissolve":
-          await dissolveGroup(activeRoomId);
-          setActiveRoomId(null);
-          break;
-      }
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-  }, [activeRoomId, newMemberId, loadRooms]);
-
-  const createGroup = useCallback(async () => {
-    if (!groupName.trim()) return;
-    try {
-      await createGroupRoom({
-        ownerId: user.id,
-        name: groupName.trim(),
-        avatarUrl: groupAvatar,
-        memberIds: groupMemberIds
-      });
-      setShowGroupModal(false);
-      setGroupName("");
-      setGroupAvatar("");
-      setGroupMemberIds([]);
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-  }, [groupName, groupAvatar, groupMemberIds, user, loadRooms]);
-
-  const onPickMedia = useCallback((file) => {
-    setRoomMedia(file);
-  }, []);
-
-  const openStaffChat = useCallback(() => {
-    setTabState("staff");
-    setStaffUnread(0);
-  }, []);
-
-  const startVideoCall = useCallback(() => {
-    setShowVideoCall(true);
-    setMicMuted(false);
-    setCamMuted(false);
-  }, []);
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600">
-        Đang tải...
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600">
-        Vui lòng đăng nhập để sử dụng tính năng chat.
-      </div>
-    );
-  }
+  if (!ready) return <LoadingScreen />;
+  if (!user)  return null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
       <GovHeader />
 
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-4 flex items-center gap-3">
-          <button
-            onClick={() => navigate("/")}
-            className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Quay lại
-          </button>
-          <h1 className="text-xl font-bold text-slate-900">Hỗ trợ trực tuyến</h1>
+      <main className="flex min-h-0 flex-1 flex-col px-4 py-4 mx-auto w-full max-w-7xl">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate("/")} className="p-2 hover:bg-white rounded-full transition-all shadow-sm border border-slate-200 active:scale-90">
+              <ArrowLeft size={20} className="text-slate-600" />
+            </button>
+            <h1 className="text-2xl font-black text-[#003366] tracking-tight">Trung tâm Phản hồi</h1>
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="mb-6 flex gap-1 rounded-xl bg-slate-100 p-1">
+        {/* Tab Switcher */}
+        <div className="mb-4 flex gap-2 rounded-2xl bg-slate-200/50 p-1.5 border border-slate-200">
           <button
             onClick={() => setTabState("multi")}
-            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-              tabState === "multi"
-                ? "bg-white text-[#003366] shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all
+              ${tabState === "multi" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/50"}`}
           >
-            💬 Chat đa năng
+            Phòng Chat & Nhóm
           </button>
           <button
-            onClick={() => {
-              setTabState("staff");
-              setStaffUnread(0);
-            }}
-            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-              tabState === "staff"
-                ? "bg-white text-[#003366] shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
+            onClick={() => { setTabState("staff"); setStaffUnread(0); }}
+            className={`flex-1 relative flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all
+              ${tabState === "staff" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/50"}`}
           >
-            👤 Cán bộ hỗ trợ
+            Hỗ trợ Cán bộ
             {staffUnread > 0 && (
-              <span className="ml-1 bg-red-500 text-white text-[10px] px-1 rounded-full">
-                {staffUnread > 99 ? "99+" : staffUnread}
-              </span>
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] text-white animate-bounce shadow-lg">!</span>
             )}
           </button>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-12">
+        <div className="min-h-0 flex-1 overflow-hidden">
           {tabState === "multi" ? (
-            <>
-              {/* Sidebar */}
-              <div className="lg:col-span-4">
+            <div className="grid h-full gap-4 lg:grid-cols-12">
+              <div className="lg:col-span-4 h-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <ContactList
-                  chatModeTab={chatModeTab}
-                  setChatModeTab={setChatModeTab}
-                  contactQuery={contactQuery}
-                  setContactQuery={setContactQuery}
-                  contacts={contacts}
-                  rooms={rooms}
-                  activeRoomId={activeRoomId}
+                  chatModeTab={chatModeTab} setChatModeTab={setChatModeTab}
+                  contactQuery={contactQuery} setContactQuery={setContactQuery}
+                  contacts={contacts} rooms={rooms} activeRoomId={activeRoomId}
                   setActiveRoomId={setActiveRoomId}
-                  openDirectChat={openDirectChat}
-                  openStaffChat={openStaffChat}
-                  setShowGroupModal={setShowGroupModal}
+                  openDirectChat={async (id) => {
+                    const { data } = await ensureDirectRoom(id);
+                    setActiveRoomId(data.room.id);
+                    loadRooms();
+                  }}
+                  setShowGroupModal={() => setShowGroupModal(true)}
                   user={user}
                 />
               </div>
-
-              {/* Main Chat */}
-              <div className="lg:col-span-8">
-                <div className="h-[calc(100vh-220px)] min-h-[420px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
-                  <ChatMultiPurpose
-                    roomErr={roomErr}
-                    activeRoom={activeRoom}
-                    user={user}
-                    messageMenuId={messageMenuId}
-                    setMessageMenuId={setMessageMenuId}
-                    doMessageAction={doMessageAction}
-                    roomMedia={roomMedia}
-                    setRoomMedia={setRoomMedia}
-                    myGroupRole={myGroupRole}
-                    newMemberId={newMemberId}
-                    setNewMemberId={setNewMemberId}
-                    contacts={contacts}
-                    performGroupAction={performGroupAction}
-                    roomInput={roomInput}
-                    setRoomInput={setRoomInput}
-                    sendRoom={sendRoom}
-                    roomLoading={roomLoading}
-                    onPickMedia={onPickMedia}
-                    forwardingMessageId={forwardingMessageId}
-                    setForwardingMessageId={setForwardingMessageId}
-                    doForward={doForward}
-                    rooms={rooms}
-                    onReplyMessage={setReplyToMessage}
-                    onStartVideoCall={startVideoCall}
-                    replyToMessage={replyToMessage}
-                    clearReply={() => setReplyToMessage(null)}
+              <div className="lg:col-span-8 h-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <ChatMultiPurpose
+                  activeRoom={activeRoom} user={user}
+                  roomInput={roomInput} setRoomInput={setRoomInput}
+                  sendRoom={sendRoom} onStartVideoCall={startVideoCall}
+                  chatEndRef={chatEndRef}
+                  messageMenuId={messageMenuId} setMessageMenuId={setMessageMenuId}
+                  doMessageAction={async (action, mid) => {
+                    if (action === "unsend")       await unsendRoomMessage(activeRoomId, mid);
+                    else if (action === "delete")  await deleteRoomMessageForMe(activeRoomId, mid);
+                    else if (action === "forward") setForwardingMessageId(mid);
+                    loadRooms();
+                    setMessageMenuId(null);
+                  }}
+                  roomMedia={roomMedia} setRoomMedia={setRoomMedia}
+                  myGroupRole={myGroupRole}
+                  newMemberId={newMemberId} setNewMemberId={setNewMemberId}
+                  contacts={contacts}
+                  performGroupAction={async (act, tid) => {
+                    try {
+                      if (act === "dissolve")      { await dissolveGroup(activeRoomId); setActiveRoomId(null); }
+                      else if (act === "add")      { if (!tid) return; await addGroupMember(activeRoomId, tid); setNewMemberId(""); }
+                      else if (act === "remove")   await removeGroupMember(activeRoomId, tid);
+                      else if (act === "promote")  await assignGroupDeputy(activeRoomId, tid);
+                      else if (act === "demote")   await removeGroupDeputy(activeRoomId, tid);
+                      loadRooms();
+                    } catch (err) { setRoomErr(getApiErrorMessage(err)); }
+                  }}
+                  roomLoading={roomLoading} onPickMedia={setRoomMedia}
+                  forwardingMessageId={forwardingMessageId}
+                  setForwardingMessageId={setForwardingMessageId}
+                  doForward={async (tid) => {
+                    await forwardRoomMessage(activeRoomId, forwardingMessageId, tid);
+                    setForwardingMessageId(null);
+                    loadRooms();
+                  }}
+                  rooms={rooms}
+                  onReplyMessage={setReplyToMessage} replyToMessage={replyToMessage}
+                  clearReply={() => setReplyToMessage(null)}
+                  roomErr={roomErr}
                 />
               </div>
             </div>
-            </>
           ) : (
-            // Staff chat tab
-            <div className="lg:col-span-12">
-              <div className="h-[calc(100vh-220px)] min-h-[420px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                {/* Header */}
-                <div className="border-b border-slate-200 bg-[#003366] text-white p-4">
-                  <h2 className="font-bold text-sm">👤 Cán bộ hỗ trợ</h2>
-                  <p className="text-xs text-emerald-400 mt-1">Hỗ trợ trực tuyến</p>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {staffErr && (
-                    <div className="text-xs text-red-500 bg-red-50 p-2 rounded-lg border border-red-100">
-                      {staffErr}
-                    </div>
-                  )}
-                  
-                  {staffMessages.length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 text-xs">
-                      Hãy để lại tin nhắn, cán bộ sẽ phản hồi bạn sớm nhất.
-                    </div>
-                  ) : (
-                    staffMessages.map((m, i) => {
-                      const isMine = m.from === "user" || m.from === "citizen";
-                      return (
-                        <Bubble
-                          key={i}
-                          from={isMine ? "user" : "staff"}
-                          text={m.content || m.text}
-                          isMine={isMine}
-                          label={isMine ? user.fullName : "Cán bộ"}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Input */}
-                <form onSubmit={(e) => { e.preventDefault(); sendStaff(); }} className="border-t border-slate-200 p-4">
-                  <div className="flex gap-2">
-                    <input
-                      value={staffInput}
-                      onChange={(e) => setStaffInput(e.target.value)}
-                      placeholder="Nhắn tin cho cán bộ..."
-                      disabled={staffLoading}
-                      className="flex-1 text-sm p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-[#003366]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={staffLoading || !staffInput.trim()}
-                      className="bg-[#003366] text-white p-2.5 rounded-xl disabled:opacity-50"
-                    >
-                      <Send size={18} />
-                    </button>
+            <div className="h-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col">
+              <div className="bg-[#003366] p-5 text-white flex justify-between items-center shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center font-bold">CB</div>
+                  <div>
+                    <h2 className="font-bold text-sm">Hệ thống Tiếp dân Trực tuyến</h2>
+                    <p className="text-[10px] text-blue-200 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 bg-green-400 rounded-full animate-pulse" /> Sẵn sàng hỗ trợ
+                    </p>
                   </div>
-                </form>
+                </div>
               </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+                {staffMessages.map((m, i) => {
+                  const isMine = m.from === "user" || m.from === "citizen";
+                  return <Bubble key={i} from={isMine ? "user" : "staff"} text={m.content || m.text} isMine={isMine} label={isMine ? user.fullName : "Cán bộ trực"} />;
+                })}
+                <div ref={chatEndRef} />
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!staffInput.trim()) return;
+                  setStaffLoading(true);
+                  try { await postStaffChat(staffInput); setStaffInput(""); loadStaff(); }
+                  finally { setStaffLoading(false); }
+                }}
+                className="p-4 border-t border-slate-100 bg-white flex gap-3"
+              >
+                <input
+                  value={staffInput} onChange={(e) => setStaffInput(e.target.value)}
+                  placeholder="Nhập thắc mắc về thủ tục hành chính..."
+                  className="flex-1 rounded-2xl bg-slate-100 border-none px-5 py-3 text-sm focus:ring-2 focus:ring-[#003366] transition-all"
+                />
+                <button type="submit" disabled={staffLoading}
+                  className="rounded-2xl bg-[#003366] px-6 text-white font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2">
+                  {staffLoading ? <div className="h-4 w-4 animate-spin border-2 border-white border-t-transparent rounded-full" /> : <Send size={18} />}
+                </button>
+              </form>
             </div>
           )}
         </div>
       </main>
 
+      {/* ── Overlays ── */}
       <GroupCreator
-        showGroupModal={showGroupModal}
-        setShowGroupModal={setShowGroupModal}
-        groupName={groupName}
-        setGroupName={setGroupName}
-        groupAvatar={groupAvatar}
-        setGroupAvatar={setGroupAvatar}
-        groupMemberIds={groupMemberIds}
-        setGroupMemberIds={setGroupMemberIds}
+        showGroupModal={showGroupModal} setShowGroupModal={setShowGroupModal}
+        groupName={groupName} setGroupName={setGroupName}
+        groupAvatar={groupAvatar} setGroupAvatar={setGroupAvatar}
+        groupMemberIds={groupMemberIds} setGroupMemberIds={setGroupMemberIds}
         contacts={contacts}
-        createGroup={createGroup}
+        createGroup={async () => {
+          if (!groupName.trim()) return;
+          await createGroupRoom({ ownerId: user.id, name: groupName, avatarUrl: groupAvatar, memberIds: groupMemberIds });
+          setShowGroupModal(false); setGroupName(""); setGroupMemberIds([]);
+          loadRooms();
+        }}
       />
 
       {forwardingMessageId && (
-        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-4">
-            <div className="text-sm font-bold mb-2">Chọn nơi chuyển tiếp</div>
-            <div className="space-y-1 max-h-52 overflow-y-auto">
-              {rooms
-                .filter((r) => r.id !== activeRoomId)
-                .map((r) => (
-                  <button key={r.id} type="button" onClick={() => doForward(r.id)} className="block w-full text-left rounded-lg px-2 py-1.5 hover:bg-slate-100 text-sm">
-                    {r.type === "group" ? r.name || "Nhóm" : r.members?.find((m) => m.id !== user?.id)?.fullName || "Hội thoại"}
-                  </button>
-                ))}
-            </div>
-            <button type="button" onClick={() => setForwardingMessageId(null)} className="mt-3 text-xs text-slate-500">Đóng</button>
-          </div>
-        </div>
+        <ForwardModal
+          rooms={rooms} activeRoomId={activeRoomId} userId={user.id}
+          onClose={() => setForwardingMessageId(null)}
+          doForward={async (tid) => {
+            await forwardRoomMessage(activeRoomId, forwardingMessageId, tid);
+            setForwardingMessageId(null); loadRooms();
+          }}
+        />
       )}
 
-      {showVideoCall && (
-        <div className="fixed inset-0 z-[70] bg-black/70 p-4 flex items-center justify-center">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
-            <div className="bg-[#003366] px-4 py-3 text-white">
-              <div className="text-sm font-bold">Video Call - Dịch vụ công</div>
-              <div className="text-xs text-white/80">Cuộc gọi mô phỏng</div>
-            </div>
-            <div className="h-56 bg-slate-900 flex items-center justify-center text-slate-300 text-sm">
-              {camMuted ? "Camera đang tắt" : "Đang kết nối video..."}
-            </div>
-            <div className="flex items-center justify-center gap-3 p-4">
-              <button
-                type="button"
-                onClick={() => setMicMuted((v) => !v)}
-                className="rounded-full bg-slate-100 p-3 hover:bg-slate-200"
-              >
-                {micMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCamMuted((v) => !v)}
-                className="rounded-full bg-slate-100 p-3 hover:bg-slate-200"
-              >
-                {camMuted ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowVideoCall(false)}
-                className="rounded-full bg-red-600 p-3 text-white hover:bg-red-700"
-              >
-                <PhoneOff className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
+      {incomingCall && (
+        <IncomingCallModal call={incomingCall} onAccept={() => acceptCall(incomingCall)} onReject={rejectCall} />
+      )}
+
+      {videoCallState && (
+        <VideoCall
+          roomId={videoCallState.roomId}
+          targetUserId={videoCallState.targetUserId}
+          targetUserIds={videoCallState.targetUserIds}
+          isCallee={videoCallState.isCallee}
+          callerOffer={videoCallState.callerOffer}
+          callerOffers={videoCallState.callerOffers}
+          currentUserName={user.fullName}
+          activeRoom={activeRoom}
+          onClose={() => setVideoCallState(null)}
+        />
+      )}
+
+      {roomErr && (
+        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] animate-in slide-in-from-right-10 flex items-center gap-3">
+          <div className="bg-white/20 p-1.5 rounded-full"><X size={16} /></div>
+          <span className="text-sm font-bold">{roomErr}</span>
+          <button onClick={() => setRoomErr(null)} className="ml-4 text-xs underline opacity-80">Đóng</button>
         </div>
       )}
     </div>
