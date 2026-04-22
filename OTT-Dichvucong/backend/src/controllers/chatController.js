@@ -115,6 +115,27 @@ function buildBulletList(items = []) {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
+// ─── FIX: emit "new-message" đến từng user_${memberId} ───────────────────────
+// Vấn đề cũ: emit vào `chat_${roomId}` nhưng frontend không join room đó.
+// Frontend chỉ join `user_${userId}` khi connect socket.
+// Fix: lấy members của room → emit đến `user_${memberId}` từng người.
+// Event name phải là "new-message" để khớp với ChatPage.jsx socket listener.
+async function emitToRoomMembers(room, payload) {
+  try {
+    const io = getIo();
+    const members = room?.members || [];
+    members.forEach((m) => {
+      const memberId = typeof m === "object" ? m.id : m;
+      if (!memberId) return;
+      io.to(`user_${memberId}`).emit("new-message", payload);
+      console.log(`[SOCKET] 📤 new-message → user_${memberId}`);
+    });
+  } catch (e) {
+    console.warn("[Socket] Không thể emit new-message:", e.message);
+  }
+}
+
+// ─── Staff chat ───────────────────────────────────────────────────────────────
 exports.staffHistory = async (req, res) => {
   try {
     const conversation = await getChatHistory(req.user.id);
@@ -128,12 +149,8 @@ exports.staffHistory = async (req, res) => {
 exports.staffSend = async (req, res) => {
   try {
     const text = String(req.body?.text || "").trim();
-    if (!text) {
-      return res.status(400).json({ message: "Nội dung không được trống" });
-    }
-    if (text.length > 2000) {
-      return res.status(400).json({ message: "Tối đa 2000 ký tự" });
-    }
+    if (!text) return res.status(400).json({ message: "Nội dung không được trống" });
+    if (text.length > 2000) return res.status(400).json({ message: "Tối đa 2000 ký tự" });
 
     const conversationId = req.user.id;
     const userData = await userStore.findById(req.user.id);
@@ -141,18 +158,9 @@ exports.staffSend = async (req, res) => {
     const avatarUrl =
       userData?.avatarUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&size=128`;
-    const sender = {
-      id: req.user.id,
-      fullName,
-      avatarUrl
-    };
+    const sender = { id: req.user.id, fullName, avatarUrl };
 
-    await sendMessage({
-      userId: conversationId,
-      from: "user",
-      text,
-      sender
-    });
+    await sendMessage({ userId: conversationId, from: "user", text, sender });
 
     const conversation = await getChatHistory(conversationId);
     const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
@@ -163,11 +171,11 @@ exports.staffSend = async (req, res) => {
       if (lastMessage) {
         io.to("admin").emit("supportConversationMessage", {
           userId: conversationId,
-          message: lastMessage
+          message: lastMessage,
         });
       }
     } catch (socketError) {
-      console.warn("[Socket] Không thể gửi sự kiện supportConversationMessage:", socketError.message);
+      console.warn("[Socket] supportConversationMessage:", socketError.message);
     }
 
     res.json({ ok: true, messages });
@@ -452,11 +460,9 @@ function fallbackAiReply(userText, messages = []) {
   }
   if (/tạm trú|đăng ký cư trú/.test(t)) {
     return "Về tạm trú: thường cần CMND/CCCD, giấy tờ chỗ ở, phiếu báo tạm vắng (nếu có). Bạn nên chọn đúng cấp tiếp nhận (xã/phường) trên cổng và điền form trực tuyến.";
-  }
-  if (/gplx|lái xe|giấy phép lái/.test(t)) {
+  if (/gplx|lái xe|giấy phép lái/.test(t))
     return "Đổi GPLX: chuẩn bị ảnh, giấy khám sức khỏe, GPLX cũ và làm theo hướng dẫn trên CSDL giao thông / cổng dịch vụ công — có thể nộp trực tuyến tùy địa phương.";
-  }
-  if (/hộ chiếu|passport/.test(t)) {
+  if (/hộ chiếu|passport/.test(t))
     return "Cấp/đổi hộ chiếu: kiểm tra ảnh, CMND/CCCD, lịch hẹn (nếu có). Nhiều bước đã được điện tử hóa — xem mục Hộ chiếu trên cổng.";
   }
   if (/thời gian|giờ làm|mấy giờ/.test(t)) {
@@ -548,19 +554,16 @@ async function openAiChat(messages, rulesText, userText) {
         role: "system",
         content: buildSystemPrompt(rulesText, conversationSummary, snippets)
       },
-      ...messages
+      ...messages,
     ],
     max_tokens: 900,
-    temperature: 0.4
+    temperature: 0.4,
   };
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`
-    },
-    body: JSON.stringify(body)
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify(body),
   });
 
   if (!r.ok) {
@@ -584,17 +587,13 @@ exports.aiChat = async (req, res) => {
       userText = raw.trim();
     } else if (Array.isArray(history) && history.length) {
       const last = history[history.length - 1];
-      if (last && last.role === "user" && typeof last.content === "string") {
+      if (last?.role === "user" && typeof last.content === "string") {
         userText = last.content.trim();
       }
     }
 
-    if (!userText) {
-      return res.status(400).json({ message: "Vui lòng nhập nội dung câu hỏi." });
-    }
-    if (userText.length > 4000) {
-      return res.status(400).json({ message: "Nội dung quá dài." });
-    }
+    if (!userText) return res.status(400).json({ message: "Vui lòng nhập nội dung câu hỏi." });
+    if (userText.length > 4000) return res.status(400).json({ message: "Nội dung quá dài." });
 
     const msgs = Array.isArray(history)
       ? history
@@ -667,22 +666,11 @@ exports.aiChat = async (req, res) => {
   }
 };
 
-async function emitRoomUpdate(roomId, eventName, payload) {
-  try {
-    const io = getIo();
-    io.to(`chat_${roomId}`).emit(eventName, payload);
-  } catch (e) {
-    console.warn(`[Socket] Không thể phát sự kiện ${eventName}:`, e.message);
-  }
-}
-
+// ─── Room/Contact queries ─────────────────────────────────────────────────────
 exports.chatContacts = async (req, res) => {
   try {
     const q = req.query?.q || "";
-    const contacts = await multiChatStore.searchContacts({
-      keyword: q,
-      currentUserId: req.user.id
-    });
+    const contacts = await multiChatStore.searchContacts({ keyword: q, currentUserId: req.user.id });
     return res.json({ contacts });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi tải danh bạ" });
@@ -852,7 +840,7 @@ exports.createGroupChat = async (req, res) => {
       ownerId: req.user.id,
       name: req.body?.name,
       avatarUrl: req.body?.avatarUrl,
-      memberIds: req.body?.memberIds
+      memberIds: req.body?.memberIds,
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
@@ -910,6 +898,7 @@ exports.sendRoomMessage = async (req, res) => {
     const media = req.body?.media || null;
     const replyToMessageId = String(req.body?.replyToMessageId || "").trim();
     if (!text && !media) return res.status(400).json({ message: "Tin nhắn không được để trống" });
+
     const room = await multiChatStore.appendMessage({
       roomId: req.params.roomId,
       senderId: req.user.id,
@@ -917,12 +906,13 @@ exports.sendRoomMessage = async (req, res) => {
       media,
       replyToMessageId
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     const lastMessage = hydrated.messages[hydrated.messages.length - 1];
-    await emitRoomUpdate(req.params.roomId, "multiChatMessage", {
-      roomId: req.params.roomId,
-      message: lastMessage
-    });
+
+    // ✅ Emit đúng event name + đúng room
+    await emitToRoomMembers(room, { roomId: req.params.roomId, message: lastMessage });
+
     return res.json({ room: hydrated, message: lastMessage });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể gửi tin nhắn" });
@@ -1051,12 +1041,10 @@ exports.unsendRoomMessage = async (req, res) => {
     const room = await multiChatStore.unsendMessage({
       roomId: req.params.roomId,
       messageId: req.params.messageId,
-      requesterId: req.user.id
+      requesterId: req.user.id,
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    await emitRoomUpdate(req.params.roomId, "multiChatRoomUpdated", {
-      roomId: req.params.roomId
-    });
+    await emitToRoomMembers(room, { roomId: req.params.roomId });
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể thu hồi tin nhắn" });
@@ -1068,7 +1056,7 @@ exports.deleteRoomMessageForMe = async (req, res) => {
     const room = await multiChatStore.deleteMessageForUser({
       roomId: req.params.roomId,
       messageId: req.params.messageId,
-      userId: req.user.id
+      userId: req.user.id,
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
@@ -1081,18 +1069,18 @@ exports.forwardRoomMessage = async (req, res) => {
   try {
     const targetRoomId = String(req.body?.targetRoomId || "").trim();
     if (!targetRoomId) return res.status(400).json({ message: "Thiếu phòng chuyển tiếp" });
+
     const room = await multiChatStore.forwardMessage({
       sourceRoomId: req.params.roomId,
       messageId: req.params.messageId,
       targetRoomId,
-      senderId: req.user.id
+      senderId: req.user.id,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     const lastMessage = hydrated.messages[hydrated.messages.length - 1];
-    await emitRoomUpdate(targetRoomId, "multiChatMessage", {
-      roomId: targetRoomId,
-      message: lastMessage
-    });
+    await emitToRoomMembers(room, { roomId: targetRoomId, message: lastMessage });
+
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể chuyển tiếp tin nhắn" });
@@ -1104,9 +1092,10 @@ exports.addGroupMember = async (req, res) => {
     const room = await multiChatStore.addGroupMember({
       roomId: req.params.roomId,
       requesterId: req.user.id,
-      memberId: req.body?.memberId
+      memberId: req.body?.memberId,
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    await emitToRoomMembers(room, { roomId: req.params.roomId });
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể thêm thành viên" });
@@ -1118,9 +1107,10 @@ exports.removeGroupMember = async (req, res) => {
     const room = await multiChatStore.removeGroupMember({
       roomId: req.params.roomId,
       requesterId: req.user.id,
-      memberId: req.params.memberId
+      memberId: req.params.memberId,
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    await emitToRoomMembers(room, { roomId: req.params.roomId });
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể xóa thành viên" });
@@ -1133,7 +1123,7 @@ exports.assignDeputy = async (req, res) => {
       roomId: req.params.roomId,
       requesterId: req.user.id,
       memberId: req.params.memberId,
-      enabled: true
+      enabled: true,
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
@@ -1148,7 +1138,7 @@ exports.removeDeputy = async (req, res) => {
       roomId: req.params.roomId,
       requesterId: req.user.id,
       memberId: req.params.memberId,
-      enabled: false
+      enabled: false,
     });
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
@@ -1161,7 +1151,7 @@ exports.dissolveGroup = async (req, res) => {
   try {
     await multiChatStore.dissolveGroup({
       roomId: req.params.roomId,
-      requesterId: req.user.id
+      requesterId: req.user.id,
     });
     return res.json({ ok: true });
   } catch (err) {

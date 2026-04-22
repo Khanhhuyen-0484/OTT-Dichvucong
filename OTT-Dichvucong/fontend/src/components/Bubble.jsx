@@ -1,3 +1,4 @@
+// frontend/src/components/Bubble.jsx
 import React from "react";
 
 const IMAGE_URL_PATTERN = /(https?:\/\/[^\s]+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?[^\s]*)?)/i;
