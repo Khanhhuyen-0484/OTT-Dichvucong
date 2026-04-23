@@ -4,7 +4,6 @@ import {
   ChevronRight,
   MessageCircle,
   Send,
-  Sparkles,
   UserRound,
   X
 } from "lucide-react";
@@ -15,13 +14,6 @@ import { getApiErrorMessage, getStaffChat, postAiChat, postStaffChat } from "../
 const AI_STORAGE_KEY = "gov-ai-chat-history-v2";
 const AI_SESSION_KEY = "gov-ai-chat-session-v2";
 const UI_STORAGE_KEY = "gov-chat-panel-open-v2";
-const AI_SUGGESTIONS = [
-  "Tôi cần chuẩn bị giấy tờ gì để đăng ký tạm trú?",
-  "Đổi giấy phép lái xe online cần những bước nào?",
-  "Thủ tục cấp lại hộ chiếu cần lưu ý gì?",
-  "Đăng ký khai sinh online cần giấy tờ nào?"
-];
-
 function formatTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -349,21 +341,6 @@ export default function HomeChatSection() {
 
             {tabState === "ai" ? (
               <>
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {AI_SUGGESTIONS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => sendAi(item)}
-                      disabled={aiLoading}
-                      className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:text-[#003366] hover:ring-[#003366]/25"
-                    >
-                      <Sparkles className="h-3.5 w-3.5" />
-                      <span>{item}</span>
-                    </button>
-                  ))}
-                </div>
-
                 <div className="space-y-3">
                   {aiMessages.map((message) => {
                     const showSuggestions = message.role === "assistant" && !typing;
