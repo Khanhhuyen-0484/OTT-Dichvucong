@@ -10,6 +10,7 @@ import {
   getMe,
   patchProfile
 } from "../lib/api.js";
+import { connectSocket, disconnectSocket } from "../lib/socket.js";
 
 const AuthContext = createContext(null);
 
@@ -93,6 +94,7 @@ export function AuthProvider({ children }) {
     if (!token) {
       setUser(null);
       setAvatarUrl(null);
+      disconnectSocket();
       setReady(true);
       return;
     }
@@ -146,20 +148,26 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Không tự đăng nhập lại bằng token cũ khi vừa chạy ứng dụng.
-    localStorage.removeItem("token");
-    refreshProfile();
+    // Tự động đăng nhập lại bằng token cũ nếu có
+    (async () => {
+      await refreshProfile();
+      if (localStorage.getItem("token")) {
+        connectSocket();
+      }
+    })();
   }, [refreshProfile]);
 
   const loginWithToken = useCallback(
     async (token) => {
       localStorage.setItem("token", token);
       await refreshProfile();
+      connectSocket();
     },
     [refreshProfile]
   );
 
   const logout = useCallback(() => {
+    disconnectSocket();
     localStorage.removeItem("token");
     setUser(null);
     setAvatarUrl(null);
@@ -194,7 +202,7 @@ export function AuthProvider({ children }) {
         formData.append("file", file);
 
         // Send to backend which will upload to S3
-        const { data } = await fetch("/api/me/avatar/upload", {
+        await fetch("/api/me/avatar/upload", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`

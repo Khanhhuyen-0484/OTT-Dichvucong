@@ -1,16 +1,27 @@
-# TODO: Fix Profile Page - User Feedback Round 2
+# Responsive Chat Page Plan - Approved
 
-**Feedback**: Profile chỉ show email (empty data). "xóa form cập nhật, bấm mới hiện"
+Status: ✅ **Plan approved by user. Proceeding with edits.**
 
-## [ ] 1. Fix UI: Toggle edit form (Profile.jsx)
-- Add `showEditForm` state = false
-- "Cập nhật thông tin" button → toggle form visibility
-- Hide form initially
+## Breakdown of Steps (to be updated as completed):
 
-## [ ] 2. Fix empty data demo
-- Update users.json sample user with fullName/phone/address
-- Test register full flow
+### 1. [IN PROGRESS] Create TODO.md
+   - ✅ Create this file with plan steps.
 
-## [ ] 3. Test & Complete
+### 2. Edit ChatPage.jsx
+   - Update grid: `grid-cols-1 lg:grid-cols-12`
+   - Height: `h-screen max-h-[80vh] sm:h-[calc(100vh-220px)] min-h-[500px]`
+   - Padding/touch improvements.
 
-**Current Status**: Backend perfect, frontend needs UI toggle per request
+### 3. Edit ChatMultiPurpose.jsx  
+   - Message widths: `max-w-[90vw] sm:max-w-[75%] lg:max-w-[450px]`
+   - Larger buttons: `p-2.5 sm:p-3 h-11 w-11`
+   - Responsive toolbar/input.
+
+### 4. Test responsiveness
+   - `cd fontend && npm run dev`
+   - Check mobile/tablet/desktop in dev tools.
+
+### 5. [PENDING] attempt_completion
+   - Confirm no issues, showcase with dev server command.
+
+**Next:** Edit files in parallel, update TODO.md after each.

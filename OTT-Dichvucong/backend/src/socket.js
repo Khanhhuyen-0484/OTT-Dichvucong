@@ -8,14 +8,12 @@ function initSocket(server) {
 
   io = new Server(server, {
     cors: {
-      origin: [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:4173",
-        "http://127.0.0.1:4173"
-      ],
-      methods: ["GET", "POST"]
-    }
+      origin: true,
+      methods: ["GET", "POST"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      credentials: true
+    },
+    allowEIO3: true
   });
 
   io.use((socket, next) => {
@@ -35,6 +33,8 @@ function initSocket(server) {
 
   io.on("connection", (socket) => {
     const { user } = socket.data;
+    console.log("[socket] connected", socket.id, user?.id || "anonymous");
+
     if (user?.id) {
       socket.join(`user_${user.id}`);
     }
@@ -44,14 +44,108 @@ function initSocket(server) {
 
     socket.on("joinRoom", ({ room }) => {
       if (typeof room === "string" && room.trim()) {
-        socket.join(room.trim());
+        const joined = room.trim();
+        socket.join(joined);
+        console.log("[socket] joinRoom", socket.id, joined);
       }
     });
 
     socket.on("leaveRoom", ({ room }) => {
       if (typeof room === "string" && room.trim()) {
-        socket.leave(room.trim());
+        const left = room.trim();
+        socket.leave(left);
+        console.log("[socket] leaveRoom", socket.id, left);
       }
+    });
+
+    socket.on("call:invite", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      if (!roomId) return;
+      const eventPayload = {
+        roomId,
+        fromUserId: user?.id,
+        callType: payload.callType === "group" ? "group" : "direct",
+        createdAt: new Date().toISOString()
+      };
+      io.to(`chat_${roomId}`).emit("call:invite", eventPayload);
+      console.log("[socket] call:invite", roomId, eventPayload.callType, user?.id);
+    });
+
+    socket.on("call:ringing", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      if (!roomId) return;
+      io.to(`chat_${roomId}`).emit("call:ringing", {
+        roomId,
+        userId: user?.id,
+        createdAt: new Date().toISOString()
+      });
+    });
+
+    socket.on("call:accept", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      if (!roomId) return;
+      io.to(`chat_${roomId}`).emit("call:accept", {
+        roomId,
+        userId: user?.id,
+        createdAt: new Date().toISOString()
+      });
+      console.log("[socket] call:accept", roomId, user?.id);
+    });
+
+    socket.on("call:reject", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      if (!roomId) return;
+      io.to(`chat_${roomId}`).emit("call:reject", {
+        roomId,
+        userId: user?.id,
+        reason: String(payload.reason || "rejected"),
+        createdAt: new Date().toISOString()
+      });
+      console.log("[socket] call:reject", roomId, user?.id);
+    });
+
+    socket.on("call:end", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      if (!roomId) return;
+      io.to(`chat_${roomId}`).emit("call:end", {
+        roomId,
+        userId: user?.id,
+        createdAt: new Date().toISOString()
+      });
+      console.log("[socket] call:end", roomId, user?.id);
+    });
+
+    socket.on("webrtc:offer", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      const toUserId = String(payload.toUserId || "").trim();
+      if (!roomId || !toUserId || !payload.sdp) return;
+      io.to(`user_${toUserId}`).emit("webrtc:offer", {
+        roomId,
+        fromUserId: user?.id,
+        sdp: payload.sdp
+      });
+    });
+
+    socket.on("webrtc:answer", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      const toUserId = String(payload.toUserId || "").trim();
+      if (!roomId || !toUserId || !payload.sdp) return;
+      io.to(`user_${toUserId}`).emit("webrtc:answer", {
+        roomId,
+        fromUserId: user?.id,
+        sdp: payload.sdp
+      });
+    });
+
+    socket.on("webrtc:ice-candidate", (payload = {}) => {
+      const roomId = String(payload.roomId || "").trim();
+      const toUserId = String(payload.toUserId || "").trim();
+      if (!roomId || !toUserId || !payload.candidate) return;
+      io.to(`user_${toUserId}`).emit("webrtc:ice-candidate", {
+        roomId,
+        fromUserId: user?.id,
+        candidate: payload.candidate
+      });
     });
   });
 
