@@ -13,6 +13,13 @@ function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+<<<<<<< HEAD
+=======
+function uniqueIds(values = []) {
+  return Array.from(new Set((Array.isArray(values) ? values : []).map(String).filter(Boolean)));
+}
+
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
 function normalizeRole(role) {
   if (role === "owner" || role === "deputy") return role;
   return "member";
@@ -41,13 +48,31 @@ function canManageGroup(room, userId) {
 
 function sanitizeMedia(media) {
   if (!media || typeof media !== "object") return null;
+<<<<<<< HEAD
   const type = media.type === "video" ? "video" : media.type === "image" ? "image" : null;
+=======
+  const type =
+    media.type === "video"
+      ? "video"
+      : media.type === "image"
+        ? "image"
+        : media.type === "file" || media.type === "document"
+          ? "document"
+          : null;
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
   const url = String(media.url || "").trim();
   if (!type || !url) return null;
   return {
     type,
     url: url.slice(0, 2000000),
+<<<<<<< HEAD
     name: String(media.name || "").slice(0, 120)
+=======
+    name: String(media.name || "").slice(0, 120),
+    fileUrl: String(media.fileUrl || media.url || "").slice(0, 2000000),
+    fileType: String(media.fileType || "").slice(0, 20),
+    fileSize: Number(media.fileSize || media.size || 0) || 0
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
   };
 }
 
@@ -58,8 +83,24 @@ function sanitizeMessage(message) {
   return {
     id: String(message?.id || makeId("msg")),
     senderId: String(message?.senderId || ""),
+<<<<<<< HEAD
     text: String(message?.text || "").slice(0, 4000),
     media: sanitizeMedia(message?.media),
+=======
+    messageType: String(message?.messageType || "text"),
+    text: String(message?.text || "").slice(0, 4000),
+    media: sanitizeMedia(message?.media),
+    callLog: message?.callLog && typeof message.callLog === "object"
+      ? {
+          status: String(message.callLog.status || "").slice(0, 32),
+          durationSec: Number(message.callLog.durationSec || 0) || 0,
+          roomId: String(message.callLog.roomId || "").slice(0, 120),
+          callerId: String(message.callLog.callerId || "").slice(0, 120),
+          callerName: String(message.callLog.callerName || "").slice(0, 120),
+          endedBy: String(message.callLog.endedBy || "").slice(0, 120)
+        }
+      : null,
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
     replyToMessageId: String(message?.replyToMessageId || "").trim(),
     createdAt: message?.createdAt || nowIso(),
     unsentForAll: Boolean(message?.unsentForAll),
@@ -72,6 +113,18 @@ function sanitizeRoom(room) {
     ? room.members.map(normalizeMember).filter(Boolean)
     : [];
   const messages = Array.isArray(room?.messages) ? room.messages.map(sanitizeMessage) : [];
+<<<<<<< HEAD
+=======
+  const pendingInvites = Array.isArray(room?.pendingInvites)
+    ? room.pendingInvites
+        .map((invite) => ({
+          userId: String(invite?.userId || "").trim(),
+          invitedBy: String(invite?.invitedBy || "").trim(),
+          createdAt: invite?.createdAt || nowIso()
+        }))
+        .filter((invite) => invite.userId && invite.invitedBy)
+    : [];
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
   return {
     id: String(room?.id || makeId("room")),
     type: room?.type === "group" ? "group" : "direct",
@@ -79,6 +132,10 @@ function sanitizeRoom(room) {
     avatarUrl: String(room?.avatarUrl || ""),
     createdBy: String(room?.createdBy || ""),
     members,
+<<<<<<< HEAD
+=======
+    pendingInvites,
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
     messages,
     lastMessage: messages[messages.length - 1] || null,
     updatedAt: room?.updatedAt || nowIso(),
@@ -185,6 +242,10 @@ async function appendMessage({ roomId, senderId, text, media, replyToMessageId }
   const message = sanitizeMessage({
     id: makeId("msg"),
     senderId: sid,
+<<<<<<< HEAD
+=======
+    messageType: "text",
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
     text,
     media,
     replyToMessageId: replyId,
@@ -201,6 +262,105 @@ async function appendMessage({ roomId, senderId, text, media, replyToMessageId }
   return saveRoom(next);
 }
 
+<<<<<<< HEAD
+=======
+async function appendCallLogMessage({
+  roomId,
+  actorUserId,
+  status,
+  durationSec = 0,
+  callRoomId = "",
+  callerId = "",
+  callerName = "",
+  endedBy = ""
+}) {
+  const room = await getRoomById(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng chat");
+  const sid = String(actorUserId || "").trim();
+  if (!sid || !isRoomMember(room, sid)) throw new Error("Bạn không phải thành viên của phòng chat");
+
+  const message = sanitizeMessage({
+    id: makeId("msg"),
+    senderId: sid,
+    messageType: "call_log",
+    text: "",
+    media: null,
+    callLog: {
+      status,
+      durationSec,
+      roomId: callRoomId,
+      callerId,
+      callerName,
+      endedBy
+    },
+    createdAt: nowIso(),
+    unsentForAll: false,
+    deletedFor: []
+  });
+
+  const next = {
+    ...room,
+    messages: [...room.messages, message],
+    lastMessage: message,
+    updatedAt: message.createdAt
+  };
+  return saveRoom(next);
+}
+
+async function inviteMembersToGroup({ roomId, requesterId, memberIds }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền mời vào nhóm");
+  const ids = uniqueIds(memberIds);
+  if (!ids.length) throw new Error("Chưa chọn bạn bè để mời");
+
+  const existingMemberIds = room.members.map((member) => member.id);
+  const pendingMap = new Map((room.pendingInvites || []).map((invite) => [invite.userId, invite]));
+  ids.forEach((userId) => {
+    if (existingMemberIds.includes(userId)) return;
+    pendingMap.set(userId, {
+      userId,
+      invitedBy: requesterId,
+      createdAt: nowIso()
+    });
+  });
+
+  const next = {
+    ...room,
+    pendingInvites: Array.from(pendingMap.values()),
+    updatedAt: nowIso()
+  };
+  return saveRoom(next);
+}
+
+async function listGroupInvitesForUser(userId) {
+  const rooms = await listRoomsForUser(userId);
+  const allRooms = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
+  const visibleGroupIds = new Set(rooms.map((room) => room.id));
+  return (allRooms.Items || [])
+    .map(sanitizeRoom)
+    .filter((room) => room.type === "group" && !visibleGroupIds.has(room.id))
+    .filter((room) => (room.pendingInvites || []).some((invite) => invite.userId === userId));
+}
+
+async function respondToGroupInvite({ roomId, userId, action }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  const invite = (room.pendingInvites || []).find((item) => item.userId === userId);
+  if (!invite) throw new Error("Không tìm thấy lời mời vào nhóm");
+
+  const next = {
+    ...room,
+    pendingInvites: (room.pendingInvites || []).filter((item) => item.userId !== userId),
+    updatedAt: nowIso()
+  };
+  if (action === "accept" && !next.members.some((member) => member.id === userId)) {
+    next.members = [...next.members, { id: userId, role: "member" }];
+  }
+  return saveRoom(next);
+}
+
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
 async function unsendMessage({ roomId, messageId, requesterId }) {
   const room = await getRoomById(roomId);
   if (!room) throw new Error("Không tìm thấy phòng chat");
@@ -324,6 +484,7 @@ async function dissolveGroup({ roomId, requesterId }) {
 }
 
 async function searchContacts({ keyword, currentUserId }) {
+<<<<<<< HEAD
   const q = String(keyword || "").trim().toLowerCase();
   const rs = await dynamo.send(new ScanCommand({ TableName: process.env.USERS_TABLE || process.env.DYNAMODB_USERS_TABLE || "Users" }));
   const users = (rs.Items || []).filter((u) => u.id !== currentUserId);
@@ -344,6 +505,9 @@ async function searchContacts({ keyword, currentUserId }) {
       u.avatarUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || "Nguoi dung")}&size=128`
   }));
+=======
+  return await userStore.listFriends(currentUserId, keyword);
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
 }
 
 async function hydrateRoomForUser(room, currentUserId) {
@@ -402,6 +566,10 @@ module.exports = {
   ensureDirectRoom,
   createGroupRoom,
   appendMessage,
+<<<<<<< HEAD
+=======
+  appendCallLogMessage,
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
   unsendMessage,
   deleteMessageForUser,
   forwardMessage,
@@ -409,6 +577,12 @@ module.exports = {
   removeGroupMember,
   assignDeputy,
   dissolveGroup,
+<<<<<<< HEAD
+=======
+  inviteMembersToGroup,
+  listGroupInvitesForUser,
+  respondToGroupInvite,
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
   searchContacts,
   hydrateRoomForUser
 };

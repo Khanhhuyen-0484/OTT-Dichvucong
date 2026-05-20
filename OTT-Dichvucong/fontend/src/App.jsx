@@ -14,7 +14,11 @@ export default function App() {
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600">
+<<<<<<< HEAD
         Đang tải...
+=======
+        Đang tải hệ thống...
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
       </div>
     );
   }
@@ -25,6 +29,7 @@ export default function App() {
       <Route path="/auth" element={<Auth />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/chat" element={<ChatPage />} />
+<<<<<<< HEAD
       <Route
         path="/admin"
         element={<Navigate to="/admin/dashboard" replace />}
@@ -50,3 +55,14 @@ export default function App() {
   );
 }
 
+=======
+      <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="/admin/chat" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+      <Route path="/admin/dashboard" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+      <Route path="/admin/documents" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+      <Route path="/admin/ai" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d

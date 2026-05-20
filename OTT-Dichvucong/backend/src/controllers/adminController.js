@@ -71,6 +71,10 @@ exports.dossierDecision = async (req, res) => {
 exports.openDossierChat = async (req, res) => {
   try {
     const conversation = await getOrCreateConversationByDossier(req.params.id);
+<<<<<<< HEAD
+=======
+    const normalizedMessages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
     return res.json({
       conversation: {
         ...conversation,
@@ -118,7 +122,16 @@ exports.supportConversationDetail = async (req, res) => {
           };
         })
       : [];
+<<<<<<< HEAD
     return res.json({ conversation });
+=======
+    return res.json({
+      conversation: {
+        ...conversation,
+        messages: normalizedMessages
+      }
+    });
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi lấy chi tiết hội thoại" });
   }

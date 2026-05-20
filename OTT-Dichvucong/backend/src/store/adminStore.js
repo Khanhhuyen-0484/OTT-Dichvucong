@@ -14,6 +14,16 @@ const SUPPORT_CONVERSATIONS_TABLE =
   process.env.DYNAMODB_SUPPORT_CONVERSATIONS_TABLE ||
   "SupportConversations";
 const ADMIN_AI_TABLE = process.env.DYNAMODB_ADMIN_AI_TABLE || "AdminAi";
+<<<<<<< HEAD
+=======
+const DEFAULT_AI_RULES = `1. Chỉ tư vấn trong phạm vi Cổng Dịch vụ công và thủ tục hành chính phổ biến.
+2. Trả lời bằng tiếng Việt rõ ràng, lịch sự, ngắn gọn, dễ làm theo.
+3. Nếu thiếu thông tin như địa phương, loại hồ sơ, đối tượng nộp thì phải hỏi lại ngắn gọn.
+4. Không khẳng định chắc chắn các yêu cầu pháp lý nếu chưa đủ dữ kiện; luôn nhắc người dân đối chiếu quy định và cơ quan có thẩm quyền.
+5. Ưu tiên đưa ra: giấy tờ cần chuẩn bị, các bước thực hiện, nơi tiếp nhận, lưu ý quan trọng.
+6. Không bịa thông tin, không suy đoán mức phí/thời hạn nếu không có căn cứ rõ ràng.
+7. Nếu câu hỏi vượt phạm vi, hướng người dùng sang cán bộ hỗ trợ hoặc cơ quan tiếp nhận hồ sơ.`;
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
 
 function nowIso() {
   return new Date().toISOString();
@@ -298,7 +308,11 @@ async function getAiRules() {
       Key: { id: "default" }
     })
   );
+<<<<<<< HEAD
   return String(result.Item?.rulesText || "");
+=======
+  return String(result.Item?.rulesText || DEFAULT_AI_RULES);
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
 }
 
 async function updateAiRules(rulesText, adminEmail) {
@@ -326,6 +340,45 @@ async function updateAiRules(rulesText, adminEmail) {
   return result.Attributes?.rulesText || "";
 }
 
+<<<<<<< HEAD
+=======
+async function appendAiHistory(entry) {
+  const now = nowIso();
+  const historyItem = {
+    id: entry?.id || `ai-${Date.now()}`,
+    sessionId: String(entry?.sessionId || ""),
+    question: String(entry?.question || "").slice(0, 4000),
+    answer: String(entry?.answer || "").slice(0, 6000),
+    source: String(entry?.source || "home_chat"),
+    mode: String(entry?.mode || "fallback"),
+    userId: String(entry?.userId || ""),
+    userName: String(entry?.userName || ""),
+    turnIndex: Number.isFinite(entry?.turnIndex) ? entry.turnIndex : 0,
+    feedbackStatus: String(entry?.feedbackStatus || "pending"),
+    confidenceLabel: String(entry?.confidenceLabel || "review"),
+    note: String(entry?.note || "").slice(0, 1000),
+    at: entry?.at || now,
+    meta: entry?.meta && typeof entry.meta === "object" ? entry.meta : {}
+  };
+
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: ADMIN_AI_TABLE,
+      Key: { id: "default" },
+      UpdateExpression:
+        "SET history = list_append(:new_history, if_not_exists(history, :empty_list)), updatedAt = :updated_at",
+      ExpressionAttributeValues: {
+        ":new_history": [historyItem],
+        ":empty_list": [],
+        ":updated_at": now
+      }
+    })
+  );
+
+  return historyItem;
+}
+
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
 module.exports = {
   getDashboardStats,
   listDossiers,
@@ -339,5 +392,11 @@ module.exports = {
   resolveConversation,
   getAiHistory,
   getAiRules,
+<<<<<<< HEAD
   updateAiRules
 };
+=======
+  updateAiRules,
+  appendAiHistory
+};
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d

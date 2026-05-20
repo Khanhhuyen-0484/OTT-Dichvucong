@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "dichvucong-frontend",
   "private": true,
@@ -24,3 +25,31 @@
   }
 }
 
+=======
+{
+  "name": "dichvucong-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "lucide-react": "^0.542.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1",
+    "socket.io-client": "^4.7.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.3",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.12",
+    "vite": "^7.1.7"
+  }
+}
+>>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d
