@@ -903,67 +903,45 @@ export default function ChatPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
       <GovHeader />
 
-      <main className="mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-6">
-        <div className="mb-4 flex items-center gap-3">
+      <main className="mx-auto flex w-full max-w-[96rem] min-h-0 flex-1 flex-col overflow-hidden px-3 pt-3 sm:px-4">
+        <div className="mb-2 flex w-full shrink-0 items-center gap-2">
           <button
+            type="button"
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-3.5 w-3.5" />
             Quay lại
           </button>
-          <h1 className="text-xl font-bold text-slate-900">Hỗ trợ trực tuyến</h1>
+
+          <div className="flex min-w-0 flex-1 gap-1 rounded-lg bg-slate-100 p-0.5">
+            <button
+              type="button"
+              onClick={() => setTabState("multi")}
+              className={`flex h-7 flex-1 items-center justify-center rounded-md px-2 text-xs font-bold transition-all sm:text-sm
+                ${tabState === "multi" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/70"}`}
+            >
+              Chat & Nhóm
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTabState("staff"); setStaffUnread(0); }}
+              className={`relative flex h-7 flex-1 items-center justify-center rounded-md px-2 text-xs font-bold transition-all sm:text-sm
+                ${tabState === "staff" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/70"}`}
+            >
+              Cán bộ
+              {staffUnread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white">!</span>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="mb-4 sm:mb-6 flex gap-1 rounded-xl bg-slate-100 p-1">
-          <button
-            onClick={() => setTabState("multi")}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all
-              ${tabState === "multi" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/50"}`}
-          >
-            Phòng Chat & Nhóm
-          </button>
-          <button
-            onClick={() => { setTabState("staff"); setStaffUnread(0); }}
-            className={`flex-1 relative flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all
-              ${tabState === "staff" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/50"}`}
-          >
-            Hỗ trợ Cán bộ
-            {staffUnread > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] text-white animate-bounce shadow-lg">!</span>
-            )}
-          </button>
-        </div>
-
-        <div className="grid gap-4 lg:gap-6 lg:grid-cols-12">
+        <div className="flex min-h-0 w-full flex-1 flex-col pb-[5px]">
           {tabState === "multi" ? (
             <>
-              {/* Sidebar */}
-              <div className={`${mobileRoomOpen ? "hidden" : "block"} lg:col-span-4 lg:block h-[calc(100dvh-168px)] min-h-[540px]`}>
-                <ContactList
-                  chatModeTab={chatModeTab}
-                  setChatModeTab={setChatModeTab}
-                  contactQuery={contactQuery}
-                  setContactQuery={setContactQuery}
-                  contacts={contacts}
-                  rooms={rooms}
-                  activeRoomId={activeRoomId}
-                  setActiveRoomId={setActiveRoomId}
-                  openDirectChat={openDirectChat}
-                  openStaffChat={openStaffChat}
-                  setShowGroupModal={setShowGroupModal}
-                  onOpenAddFriend={openAddFriendModal}
-                  onOpenFriendHub={openFriendHubModal}
-                  pendingHubCount={friendIncomingRequests.length + groupInvites.length}
-                  user={user}
-                  onSelectRoom={() => setMobileRoomOpen(true)}
-                />
-              </div>
-
-              {/* Main Chat */}
-              <div className={`${mobileRoomOpen ? "block" : "hidden"} lg:col-span-8 lg:block`}>
-                <div className="mb-2 flex md:hidden">
+              <div className="mb-2 flex shrink-0 lg:hidden">
+                {mobileRoomOpen ? (
                   <button
                     type="button"
                     onClick={() => setMobileRoomOpen(false)}
@@ -971,8 +949,49 @@ export default function ChatPage() {
                   >
                     Quay lại danh sách
                   </button>
+                ) : null}
+              </div>
+
+              {/* Container ngoài: danh sách trái + khung chat phải */}
+              <div
+                id="chat-room-shell"
+                className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
+              >
+                {/* Sidebar danh sách — rộng hơn cho dễ đọc */}
+                <div
+                  className={`${
+                    mobileRoomOpen ? "hidden" : "flex"
+                  } w-full shrink-0 flex-col border-r border-slate-200 bg-slate-50/40 lg:flex lg:w-[340px] lg:max-w-[340px]`}
+                >
+                  <ContactList
+                    embedded
+                    chatModeTab={chatModeTab}
+                    setChatModeTab={setChatModeTab}
+                    contactQuery={contactQuery}
+                    setContactQuery={setContactQuery}
+                    contacts={contacts}
+                    rooms={rooms}
+                    activeRoomId={activeRoomId}
+                    setActiveRoomId={setActiveRoomId}
+                    openDirectChat={openDirectChat}
+                    openStaffChat={openStaffChat}
+                    setShowGroupModal={setShowGroupModal}
+                    onOpenAddFriend={openAddFriendModal}
+                    onOpenFriendHub={openFriendHubModal}
+                    pendingHubCount={friendIncomingRequests.length + groupInvites.length}
+                    user={user}
+                    onSelectRoom={() => setMobileRoomOpen(true)}
+                    roomCount={rooms.length}
+                    contactCount={contacts.length}
+                  />
                 </div>
-                <div className="h-[calc(100dvh-168px)] min-h-[540px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
+
+                {/* Chat — chiếm phần còn lại */}
+                <div
+                  className={`${
+                    mobileRoomOpen ? "flex" : "hidden"
+                  } min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex`}
+                >
                   <ChatMultiPurpose
                     roomErr={roomErr}
                     activeRoom={activeRoom}
@@ -1004,22 +1023,24 @@ export default function ChatPage() {
                     chatEndRef={chatEndRef}
                     onUpdateGroupMeta={onUpdateGroupMeta}
                     groupActionBusy={friendLoading}
-                />
+                  />
+                </div>
               </div>
-            </div>
-          </>
-        ) : (
-            // Staff chat tab
-            <div className="lg:col-span-12">
-              <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            </>
+          ) : (
+            <div className="flex min-h-0 w-full flex-1 flex-col">
+              <div
+                id="chat-room-shell"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
+              >
                 {/* Header */}
-                <div className="border-b border-slate-200 bg-[#003366] text-white p-4">
+                <div className="shrink-0 border-b border-slate-200 bg-[#003366] p-4 text-white">
                   <h2 className="font-bold text-sm">👤 Cán bộ hỗ trợ</h2>
                   <p className="text-xs text-emerald-400 mt-1">Hỗ trợ trực tuyến</p>
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
                   {staffErr && (
                     <div className="text-xs text-red-500 bg-red-50 p-2 rounded-lg border border-red-100">
                       {staffErr}
@@ -1048,7 +1069,13 @@ export default function ChatPage() {
                 </div>
 
                 {/* Input */}
-                <form onSubmit={(e) => { e.preventDefault(); sendStaff(); }} className="border-t border-slate-200 p-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendStaff();
+                  }}
+                  className="shrink-0 border-t border-slate-200 bg-white p-4 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]"
+                >
                   <div className="flex gap-2">
                     <input
                       value={staffInput}

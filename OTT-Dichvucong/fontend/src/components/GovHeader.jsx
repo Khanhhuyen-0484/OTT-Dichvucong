@@ -4,7 +4,7 @@ import { FileSearch, LogIn, Send } from "lucide-react";
 import UserAvatar from "./UserAvatar.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function GovHeader() {
+export default function GovHeader({ sticky = true }) {
   const { user, avatarUrl, ready } = useAuth();
   const displayAvatarSrc = user?.avatarUrl || avatarUrl;
 
@@ -16,7 +16,11 @@ export default function GovHeader() {
     }`;
 
   return (
-    <header className="sticky top-0 z-40 bg-[#003366] text-white shadow-sm">
+    <header
+      className={`z-40 shrink-0 bg-[#003366] text-white shadow-sm ${
+        sticky ? "sticky top-0" : "relative"
+      }`}
+    >
       <div className="mx-auto max-w-7xl px-4">
         <div className="flex items-center justify-between gap-3 py-3">
           <Link to="/" className="flex items-center gap-3 min-w-0">

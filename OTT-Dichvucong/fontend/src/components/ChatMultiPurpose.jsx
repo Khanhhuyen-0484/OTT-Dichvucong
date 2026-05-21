@@ -199,12 +199,16 @@ function ChatMultiPurpose({
   };
 
   if (!activeRoom) {
-    return <div className="flex h-full items-center justify-center text-sm text-slate-400">Chọn hội thoại để bắt đầu chat</div>;
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center text-sm text-slate-400">
+        Chọn hội thoại để bắt đầu chat
+      </div>
+    );
   }
 
   return (
-    <div className="relative flex h-full flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 shadow-sm md:px-4">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2 shadow-sm md:px-4">
         <div className="flex flex-row items-center">
           <Avatar src={headerAvatar} name={activeRoom.type === "group" ? activeRoom.name : partner?.fullName} className="mr-3 h-10 w-10 rounded-full border border-slate-200 object-cover" />
           <div>
@@ -249,7 +253,7 @@ function ChatMultiPurpose({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-[#F5F7FA] px-4 pb-4 pt-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#F5F7FA] px-4 pb-4 pt-2">
         {pinnedCount > 0 && (
           <div className="relative sticky top-0 z-30 -mx-4 mb-2 border-b border-slate-200 bg-white px-3 py-1">
             <div className="flex items-center gap-2">
@@ -373,7 +377,7 @@ function ChatMultiPurpose({
               }}
             >
               {!isMine && <Avatar src={senderAvatar} name={senderName} className="mt-1 h-7 w-7 rounded-full border border-slate-200 object-cover" />}
-              <div className={`relative flex max-w-[80%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+              <div className={`relative flex max-w-[88%] flex-col sm:max-w-[82%] ${isMine ? "items-end" : "items-start"}`}>
                 <Bubble
                   text={m.unsentForAll ? "Tin nhắn đã được thu hồi" : m.text}
                   isMine={isMine}
@@ -438,6 +442,7 @@ function ChatMultiPurpose({
         <div ref={chatEndRef} />
       </div>
 
+      <div className="shrink-0">
       {replyToMessage && (
         <div className="flex items-center justify-between border-t border-blue-100 bg-blue-50 px-4 py-2">
           <div className="truncate text-xs text-blue-700">Đang trả lời: {replyToMessage.text}</div>
@@ -452,7 +457,7 @@ function ChatMultiPurpose({
         </div>
       )}
 
-      <form onSubmit={sendRoom} className="border-t border-slate-100 bg-white p-3">
+      <form onSubmit={sendRoom} className="shrink-0 border-t border-slate-100 bg-white p-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]">
         <div className="mb-2 flex items-center gap-3 border-b border-slate-100 pb-2 text-slate-500">
           <button type="button" className="hover:text-slate-700" onClick={() => imageInputRef.current?.click()}><FileImage className="h-5 w-5" /></button>
           <button type="button" className="hover:text-slate-700" onClick={() => fileInputRef.current?.click()}><Paperclip className="h-5 w-5" /></button>
@@ -481,6 +486,7 @@ function ChatMultiPurpose({
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleMediaPick(e.target.files?.[0], "image")} />
         <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => handleMediaPick(e.target.files?.[0], "file")} />
       </form>
+      </div>
 
       <GroupInfoDrawer
         open={showGroupInfo}

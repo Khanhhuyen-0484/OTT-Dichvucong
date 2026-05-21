@@ -5,6 +5,7 @@ import {
   MessageCircle,
   Send,
   Sparkles,
+  Trash2,
   UserRound,
   X
 } from "lucide-react";
@@ -95,24 +96,24 @@ function ChatBubble({ type, title, text, time, mine }) {
         </div>
       ) : null}
 
-      <div className={`flex max-w-[85%] flex-col ${mine ? "items-end" : "items-start"}`}>
+      <div className={`flex w-full max-w-[94%] flex-col ${mine ? "items-end" : "items-start"}`}>
         <div
-          className={`rounded-[22px] px-4 py-3 text-sm leading-relaxed shadow-sm ${
+          className={`rounded-[20px] px-3.5 py-3 shadow-sm ${
             mine
-              ? "rounded-br-md bg-[#003366] text-white"
+              ? "rounded-br-md bg-[#003366] text-white text-sm leading-relaxed"
               : type === "ai"
-                ? "rounded-bl-md bg-white text-slate-800 ring-1 ring-emerald-100"
-                : "rounded-bl-md bg-white text-slate-900 ring-1 ring-slate-200"
+                ? "rounded-bl-md bg-white text-[15px] leading-[1.65] text-slate-800 ring-1 ring-emerald-100"
+                : "rounded-bl-md bg-white text-sm leading-relaxed text-slate-900 ring-1 ring-slate-200"
           }`}
         >
           <div
-            className={`mb-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+            className={`mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] ${
               mine ? "text-white/70" : "text-slate-400"
             }`}
           >
             {title}
           </div>
-          <div className="whitespace-pre-wrap">{text}</div>
+          <div className="whitespace-pre-wrap break-words">{text}</div>
         </div>
         <div className={`mt-1 px-1 text-[11px] ${mine ? "text-right text-slate-400" : "text-slate-400"}`}>
           {time}
@@ -272,9 +273,22 @@ export default function HomeChatSection() {
     const nextSession = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setAiSessionId(nextSession);
     setAiMessages([createAiGreeting()]);
+    setAiInput("");
+    setAiErr(null);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(AI_SESSION_KEY, nextSession);
+      window.localStorage.setItem(AI_STORAGE_KEY, JSON.stringify([createAiGreeting()]));
     }
+  };
+
+  const clearConversation = () => {
+    if (tabState === "ai") {
+      resetAiConversation();
+      return;
+    }
+    setStaffMessages([]);
+    setStaffInput("");
+    setStaffErr(null);
   };
 
   return (
@@ -288,15 +302,15 @@ export default function HomeChatSection() {
       </button>
 
       {unifiedOpen ? (
-        <div className="fixed bottom-24 right-4 z-50 flex max-h-[78vh] w-[calc(100vw-2rem)] max-w-[420px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-[#f4f7fb] shadow-[0_28px_70px_rgba(15,23,42,0.28)]">
-          <div className="relative overflow-hidden bg-gradient-to-r from-[#003366] via-[#0a4a86] to-[#0e5f97] px-4 pb-4 pt-4 text-white">
+        <div className="fixed bottom-24 right-4 z-50 flex h-[min(640px,85vh)] max-h-[85vh] w-[calc(100vw-2rem)] max-w-[420px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-[#f4f7fb] shadow-[0_28px_70px_rgba(15,23,42,0.28)]">
+          <div className="relative shrink-0 overflow-hidden bg-gradient-to-r from-[#003366] via-[#0a4a86] to-[#0e5f97] px-4 pb-4 pt-3.5 text-white">
             <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <UserAvatar user={supportAgent} size={42} className="ring-2 ring-white/20" />
-                <div>
-                  <div className="text-sm font-black">Trung tâm hỗ trợ dịch vụ công</div>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-white/80">
+            <div className="relative flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <UserAvatar user={supportAgent} size={42} className="shrink-0 ring-2 ring-white/20" />
+                <div className="min-w-0">
+                  <div className="text-sm font-black leading-snug">Trung tâm hỗ trợ dịch vụ công</div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-white/80">
                     <span className="flex items-center gap-1">
                       <span className="h-2 w-2 rounded-full bg-emerald-400" />
                       {tabState === "ai" ? "AI 24/7" : "Cán bộ tiếp nhận"}
@@ -307,22 +321,34 @@ export default function HomeChatSection() {
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setUnifiedOpen(false)}
-                className="rounded-full bg-white/10 p-2 text-white/90 transition hover:bg-white/20"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={clearConversation}
+                  title="Xóa hội thoại và bắt đầu mới"
+                  className="rounded-full bg-white/10 p-2 text-white/90 transition hover:bg-white/20"
+                  aria-label="Xóa hội thoại"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUnifiedOpen(false)}
+                  className="rounded-full bg-white/10 p-2 text-white/90 transition hover:bg-white/20"
+                  aria-label="Đóng"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="border-b border-slate-200 bg-white px-3 py-2">
-            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+          <div className="shrink-0 border-b border-slate-200 bg-white px-3 pb-2 pt-2">
+            <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-100 p-1">
               <button
                 type="button"
                 onClick={() => setTabState("ai")}
-                className={`rounded-2xl px-3 py-2 text-sm font-bold transition ${
+                className={`rounded-lg px-2 py-1.5 text-xs font-bold transition sm:text-sm ${
                   tabState === "ai" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500"
                 }`}
               >
@@ -331,7 +357,7 @@ export default function HomeChatSection() {
               <button
                 type="button"
                 onClick={() => setTabState("staff")}
-                className={`rounded-2xl px-3 py-2 text-sm font-bold transition ${
+                className={`rounded-lg px-2 py-1.5 text-xs font-bold transition sm:text-sm ${
                   tabState === "staff" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500"
                 }`}
               >
@@ -340,7 +366,7 @@ export default function HomeChatSection() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,95,151,0.08),_transparent_38%),linear-gradient(180deg,#f8fbff_0%,#f3f6fb_100%)] px-3 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,95,151,0.08),_transparent_38%),linear-gradient(180deg,#f8fbff_0%,#f3f6fb_100%)] px-3 py-3">
             {currentError ? (
               <div className="mb-3 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
                 {currentError}
@@ -349,21 +375,6 @@ export default function HomeChatSection() {
 
             {tabState === "ai" ? (
               <>
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {AI_SUGGESTIONS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => sendAi(item)}
-                      disabled={aiLoading}
-                      className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:text-[#003366] hover:ring-[#003366]/25"
-                    >
-                      <Sparkles className="h-3.5 w-3.5" />
-                      <span>{item}</span>
-                    </button>
-                  ))}
-                </div>
-
                 <div className="space-y-3">
                   {aiMessages.map((message) => {
                     const showSuggestions = message.role === "assistant" && !typing;
@@ -429,20 +440,30 @@ export default function HomeChatSection() {
             <div ref={chatEndRef} />
           </div>
 
-          <div className="border-t border-slate-200 bg-white px-3 py-3">
+          <div className="shrink-0 border-t border-slate-200 bg-white px-2.5 py-2">
             {tabState === "ai" ? (
               <>
-                <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
-                  <span>Hỏi thủ tục, hồ sơ, giấy tờ hoặc quy trình nộp online</span>
-                  <button
-                    type="button"
-                    onClick={resetAiConversation}
-                    className="font-semibold text-[#003366]"
-                  >
-                    Làm mới
-                  </button>
+                <div
+                  className="ai-suggestion-scroll mb-1.5 overflow-x-auto overflow-y-hidden pb-1.5 scroll-smooth"
+                  role="region"
+                  aria-label="Câu hỏi gợi ý — cuộn ngang để xem thêm"
+                >
+                  <div className="flex w-max gap-2 pr-1">
+                    {AI_SUGGESTIONS.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => sendAi(item)}
+                        disabled={aiLoading}
+                        className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-50 hover:text-[#003366] hover:ring-[#003366]/25 disabled:opacity-50"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        <span>{item}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-end gap-2 rounded-[24px] border border-slate-200 bg-slate-50 p-2">
+                <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-1">
                   <textarea
                     rows={1}
                     value={aiInput}
@@ -454,16 +475,16 @@ export default function HomeChatSection() {
                       }
                     }}
                     disabled={currentLoading}
-                    placeholder="Nhập câu hỏi cho trợ lý AI..."
-                    className="max-h-28 min-h-[42px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                    placeholder="Nhập câu hỏi..."
+                    className="max-h-20 min-h-[32px] flex-1 resize-none bg-transparent px-1 py-1.5 text-sm leading-snug text-slate-800 outline-none placeholder:text-slate-400"
                   />
                   <button
                     type="button"
                     disabled={currentLoading || !aiInput.trim()}
                     onClick={() => sendAi()}
-                    className="flex size-11 items-center justify-center rounded-full bg-[#003366] text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#003366] text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
-                    <Send className="h-4 w-4" />
+                    <Send className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </>
@@ -476,7 +497,7 @@ export default function HomeChatSection() {
                   <ChevronRight className="h-3 w-3" />
                   <span>Phản hồi trong giờ hành chính</span>
                 </div>
-                <div className="flex items-end gap-2 rounded-[24px] border border-slate-200 bg-slate-50 p-2">
+                <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-1">
                   <textarea
                     rows={1}
                     value={staffInput}
@@ -488,16 +509,16 @@ export default function HomeChatSection() {
                       }
                     }}
                     disabled={currentLoading || !user}
-                    placeholder={user ? "Nhập nội dung cần cán bộ hỗ trợ..." : "Đăng nhập để chat với cán bộ"}
-                    className="max-h-28 min-h-[42px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                    placeholder={user ? "Nhập tin nhắn..." : "Đăng nhập để chat"}
+                    className="max-h-20 min-h-[32px] flex-1 resize-none bg-transparent px-1 py-1.5 text-sm leading-snug text-slate-800 outline-none placeholder:text-slate-400"
                   />
                   <button
                     type="button"
                     disabled={currentLoading || !staffInput.trim() || !user}
                     onClick={sendStaff}
-                    className="flex size-11 items-center justify-center rounded-full bg-[#003366] text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#003366] text-white transition disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
-                    <Send className="h-4 w-4" />
+                    <Send className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </>
