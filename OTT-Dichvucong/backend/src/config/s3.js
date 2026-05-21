@@ -59,4 +59,55 @@ async function createPresignedPut(opts) {
   return { uploadUrl, publicUrl, key: opts.key };
 }
 
-module.exports = { getConfig, isS3Configured, createPresignedPut };
+function buildPublicObjectUrl(key) {
+  const cfg = getConfig();
+  if (!cfg || !key) return "";
+  const encodedKey = String(key)
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  return `https://${cfg.bucket}.s3.${cfg.region}.amazonaws.com/${encodedKey}`;
+}
+
+/**
+ * Upload từ server — tránh CORS khi browser PUT thẳng lên S3.
+ */
+async function uploadBuffer({ key, buffer, contentType }) {
+  const cfg = getConfig();
+  if (!cfg) {
+    const err = new Error("S3_NOT_CONFIGURED");
+    err.code = "S3_NOT_CONFIGURED";
+    throw err;
+  }
+
+  const client = new S3Client({
+    region: cfg.region,
+    credentials:
+      process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+          }
+        : undefined
+  });
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: cfg.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType || "application/octet-stream"
+    })
+  );
+
+  const publicUrl = buildPublicObjectUrl(key);
+  return { key, publicUrl, url: publicUrl, contentType: contentType || "application/octet-stream" };
+}
+
+module.exports = {
+  getConfig,
+  isS3Configured,
+  createPresignedPut,
+  buildPublicObjectUrl,
+  uploadBuffer
+};

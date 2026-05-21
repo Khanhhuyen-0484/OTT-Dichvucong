@@ -13,10 +13,32 @@ const fallbackServices = {
   "doanh-nghiep-thanh-lap": { serviceId: "doanh-nghiep-thanh-lap", id: "doanh-nghiep-thanh-lap", name: "Đăng ký thành lập doanh nghiệp", description: "Nộp hồ sơ đăng ký doanh nghiệp và theo dõi tiến trình xử lý.", categoryName: "Doanh nghiệp", processingTime: "3-5 ngày làm việc", fee: 100000, documents: [{ key: "charter", label: "Điều lệ công ty", required: true }, { key: "memberList", label: "Danh sách thành viên/cổ đông", required: true }, { key: "idCard", label: "CCCD/CMND người đại diện", required: true }], timeline: ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"], faq: [] }
 };
 
+/** ID demo trên trang chủ → ID dịch vụ trong catalog backend */
+const SERVICE_ALIASES = {
+  "demo-ho-tich": "ho-tich-khai-sinh",
+  "demo-dat-dai": "dat-dai-bien-dong",
+  "demo-xay-dung": "xay-dung-cap-phep",
+  "demo-gplx": "gplx-doi",
+  "demo-ho-chieu": "ho-chieu-pho-thong",
+  "demo-doanh-nghiep": "doanh-nghiep-thanh-lap",
+};
+
 function generateApplicationCode() { const now = new Date(); return `HS-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`; }
 function validateForm(formData) { const errors = {}; if (!formData?.fullName?.trim()) errors.fullName = "Họ tên là bắt buộc"; if (!/^[0-9]{12}$/.test(formData?.citizenId || "")) errors.citizenId = "CCCD phải đủ 12 số"; if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData?.email || "")) errors.email = "Email không đúng định dạng"; if (!/^[0-9]{10,11}$/.test(formData?.phone || "")) errors.phone = "Số điện thoại không hợp lệ"; if (!formData?.address?.trim()) errors.address = "Địa chỉ là bắt buộc"; return errors; }
 function userId(req) { return req.user?.id || req.user?._id || req.user?.sub || req.user?.email || null; }
-function resolveService(serviceId) { const local = fallbackServices[serviceId]; if (local) return Promise.resolve(local); return getService(serviceId).then((svc) => svc || null); }
+
+function withRequestedServiceId(service, requestedId) {
+  if (!service || !requestedId || requestedId === service.serviceId) return service;
+  return { ...service, serviceId: requestedId, id: requestedId };
+}
+
+function resolveService(serviceId) {
+  const requestedId = String(serviceId || "").trim();
+  const canonicalId = SERVICE_ALIASES[requestedId] || requestedId;
+  const local = fallbackServices[canonicalId];
+  if (local) return Promise.resolve(withRequestedServiceId(local, requestedId));
+  return getService(canonicalId).then((svc) => withRequestedServiceId(svc || null, requestedId));
+}
 
 exports.getServices = async (req, res) => { const q = String(req.query.q || "").toLowerCase(); const category = String(req.query.category || "").toLowerCase(); const items = await listServices(); const filtered = items.filter((s) => { const text = `${s.name || ""} ${s.description || ""} ${s.categoryName || ""}`.toLowerCase(); return (!q || text.includes(q)) && (!category || String(s.categoryId || s.categoryName || "").toLowerCase() === category); }); res.json({ services: filtered }); };
 exports.getServiceById = async (req, res) => { const service = await resolveService(req.params.serviceId); if (!service) return res.status(404).json({ message: "Không tìm thấy dịch vụ" }); res.json(service); };

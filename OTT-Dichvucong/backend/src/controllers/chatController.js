@@ -473,9 +473,11 @@ function fallbackAiReply(userText, messages = []) {
   }
   if (/tạm trú|đăng ký cư trú/.test(t)) {
     return "Về tạm trú: thường cần CMND/CCCD, giấy tờ chỗ ở, phiếu báo tạm vắng (nếu có). Bạn nên chọn đúng cấp tiếp nhận (xã/phường) trên cổng và điền form trực tuyến.";
-  if (/gplx|lái xe|giấy phép lái/.test(t))
+  }
+  if (/gplx|lái xe|giấy phép lái/.test(t)) {
     return "Đổi GPLX: chuẩn bị ảnh, giấy khám sức khỏe, GPLX cũ và làm theo hướng dẫn trên CSDL giao thông / cổng dịch vụ công — có thể nộp trực tuyến tùy địa phương.";
-  if (/hộ chiếu|passport/.test(t))
+  }
+  if (/hộ chiếu|passport/.test(t)) {
     return "Cấp/đổi hộ chiếu: kiểm tra ảnh, CMND/CCCD, lịch hẹn (nếu có). Nhiều bước đã được điện tử hóa — xem mục Hộ chiếu trên cổng.";
   }
   if (/thời gian|giờ làm|mấy giờ/.test(t)) {
@@ -682,20 +684,22 @@ exports.aiChat = async (req, res) => {
 // ─── Room/Contact queries ─────────────────────────────────────────────────────
 exports.chatContacts = async (req, res) => {
   try {
-    const q = req.query?.q || "";
+    const q = req.query?.q ?? req.query?.query ?? "";
     const contacts = await multiChatStore.searchContacts({ keyword: q, currentUserId: req.user.id });
     return res.json({ contacts });
   } catch (err) {
+    console.error("[chatContacts]", err);
     return res.status(500).json({ message: err.message || "Lỗi tải danh bạ" });
   }
 };
 
 exports.friendDiscovery = async (req, res) => {
   try {
-    const q = req.query?.q || "";
+    const q = req.query?.q ?? req.query?.query ?? "";
     const users = await userStore.searchUsersForFriendAdd(req.user.id, q);
     return res.json({ users });
   } catch (err) {
+    console.error("[friendDiscovery]", err);
     return res.status(500).json({ message: err.message || "Lỗi tìm người dùng" });
   }
 };
@@ -726,6 +730,7 @@ exports.friendRequests = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error("[friendRequests]", err);
     return res.status(500).json({ message: err.message || "Lỗi tải lời mời kết bạn" });
   }
 };
@@ -797,6 +802,7 @@ exports.blockedFriends = async (req, res) => {
     const users = await userStore.listBlockedUsers(req.user.id);
     return res.json({ users });
   } catch (err) {
+    console.error("[blockedFriends]", err);
     return res.status(500).json({ message: err.message || "Không thể tải danh sách đã chặn" });
   }
 };
@@ -818,6 +824,7 @@ exports.chatRooms = async (req, res) => {
     const hydrated = await Promise.all(rooms.map((r) => multiChatStore.hydrateRoomForUser(r, req.user.id)));
     return res.json({ rooms: hydrated });
   } catch (err) {
+    console.error("[chatRooms]", err);
     return res.status(500).json({ message: err.message || "Lỗi tải phòng chat" });
   }
 };
@@ -868,6 +875,7 @@ exports.groupInvites = async (req, res) => {
     const invites = await Promise.all(rooms.map((room) => multiChatStore.hydrateRoomForUser(room, req.user.id)));
     return res.json({ invites });
   } catch (err) {
+    console.error("[groupInvites]", err);
     return res.status(500).json({ message: err.message || "Lỗi tải lời mời nhóm" });
   }
 };
@@ -1034,39 +1042,18 @@ exports.uploadChatMedia = async (req, res) => {
     }
     const key = `chat-media/${req.user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName}`;
 
-    // Upload to S3
-    const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-    const cfg = require("../config/s3").getConfig();
-    const client = new S3Client({
-      region: cfg.region,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-      }
+    const { uploadBuffer } = require("../config/s3");
+    const uploaded = await uploadBuffer({
+      key,
+      buffer: file.buffer,
+      contentType
     });
-
-    const command = new PutObjectCommand({
-      Bucket: cfg.bucket,
-      Key: key,
-      Body: file.buffer,
-      ContentType: contentType
-    });
-
-    await client.send(command);
-
-    // Generate GET URL
-    const { GetObjectCommand } = require("@aws-sdk/client-s3");
-    const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-    const getCommand = new GetObjectCommand({
-      Bucket: cfg.bucket,
-      Key: key
-    });
-    const publicUrl = await getSignedUrl(client, getCommand, { expiresIn: 3600 * 24 * 7 });
 
     return res.json({
-      url: publicUrl,
-      key,
-      contentType
+      url: uploaded.publicUrl,
+      publicUrl: uploaded.publicUrl,
+      key: uploaded.key,
+      contentType: uploaded.contentType
     });
   } catch (err) {
     return res.status(500).json({
@@ -1204,6 +1191,30 @@ exports.removeDeputy = async (req, res) => {
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể gỡ quyền phó nhóm" });
+  }
+};
+
+exports.updateGroupChat = async (req, res) => {
+  try {
+    const name = req.body?.name;
+    const avatarUrl = req.body?.avatarUrl;
+    const hasName = typeof name === "string";
+    const hasAvatar = typeof avatarUrl === "string";
+    if (!hasName && !hasAvatar) {
+      return res.status(400).json({ message: "Không có thông tin cần cập nhật" });
+    }
+
+    const room = await multiChatStore.updateGroupRoom({
+      roomId: req.params.roomId,
+      requesterId: req.user.id,
+      name: hasName ? name : undefined,
+      avatarUrl: hasAvatar ? avatarUrl : undefined
+    });
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    await emitToRoomMembers(room, { roomId: req.params.roomId, action: "group-updated" });
+    return res.json({ room: hydrated });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể cập nhật nhóm" });
   }
 };
 

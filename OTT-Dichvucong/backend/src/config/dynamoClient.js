@@ -32,4 +32,9 @@ function getDynamoClient() {
   return docClient;
 }
 
-module.exports = { getDynamoClient };
+/** @deprecated Prefer getDynamoClient(); kept for stores that import `{ dynamo }`. */
+const dynamo = {
+  send: (...args) => getDynamoClient().send(...args),
+};
+
+module.exports = { dynamo, getDynamoClient };

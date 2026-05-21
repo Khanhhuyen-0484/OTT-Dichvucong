@@ -16,7 +16,7 @@ export function getApiErrorMessage(err) {
   return err?.response?.data?.message || err?.message || "Lỗi không xác định";
 }
 
-export async function postAiChat(payload) { return api.post("/ai/chat", payload); }
+export async function postAiChat(payload) { return api.post("/chat/ai", payload); }
 export async function getMe() { return api.get("/me"); }
 export async function patchProfile(payload) { return api.patch("/me", payload); }
 export async function login(payload) { return api.post("/auth/login", payload); }
@@ -41,26 +41,61 @@ export async function getStaffChat() { return api.get("/chat/staff"); }
 export async function postStaffChat(text) { return api.post("/chat/staff", { text }); }
 export async function getChatContacts(query = "") { return api.get("/chat/contacts", { params: { query } }); }
 export async function getChatRooms() { return api.get("/chat/rooms"); }
-export async function ensureDirectRoom(contactId) { return api.post("/chat/rooms/direct", { contactId }); }
-export async function createGroupRoom(payload) { return api.post("/chat/rooms/group", payload); }
+export async function ensureDirectRoom(contactId) {
+  return api.post("/chat/direct/ensure", { userId: contactId });
+}
+export async function createGroupRoom(payload) {
+  return api.post("/chat/groups", {
+    name: payload?.name,
+    avatarUrl: payload?.avatarUrl || payload?.avatar || "",
+    memberIds: payload?.memberIds || [],
+  });
+}
 export async function postRoomMessage(roomId, payload) { return api.post(`/chat/rooms/${roomId}/messages`, payload); }
-export async function deleteRoomMessageForMe(roomId, messageId) { return api.delete(`/chat/rooms/${roomId}/messages/${messageId}`); }
-export async function unsendRoomMessage(roomId, messageId) { return api.delete(`/chat/rooms/${roomId}/messages/${messageId}/unsend`); }
-export async function togglePinRoomMessage(roomId, messageId) { return api.patch(`/chat/rooms/${roomId}/messages/${messageId}/pin`); }
-export async function forwardRoomMessage(roomId, messageId, targetRoomId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/forward`, { targetRoomId }); }
-export async function addGroupMember(roomId, memberId) { return api.post(`/chat/rooms/${roomId}/members`, { memberId }); }
-export async function removeGroupMember(roomId, memberId) { return api.delete(`/chat/rooms/${roomId}/members/${memberId}`); }
-export async function assignGroupDeputy(roomId, memberId) { return api.post(`/chat/rooms/${roomId}/deputy`, { memberId }); }
-export async function removeGroupDeputy(roomId, memberId) { return api.delete(`/chat/rooms/${roomId}/deputy/${memberId}`); }
-export async function dissolveGroup(roomId) { return api.delete(`/chat/rooms/${roomId}`); }
+export async function deleteRoomMessageForMe(roomId, messageId) {
+  return api.post(`/chat/rooms/${roomId}/messages/${messageId}/delete`);
+}
+export async function unsendRoomMessage(roomId, messageId) {
+  return api.post(`/chat/rooms/${roomId}/messages/${messageId}/unsend`);
+}
+export async function togglePinRoomMessage(roomId, messageId) {
+  return api.post(`/chat/rooms/${roomId}/messages/${messageId}/pin`);
+}
+export async function forwardRoomMessage(roomId, messageId, targetRoomId) {
+  return api.post(`/chat/rooms/${roomId}/messages/${messageId}/forward`, { targetRoomId });
+}
+export async function addGroupMember(roomId, memberId) {
+  return api.post(`/chat/groups/${roomId}/members`, { memberId });
+}
+export async function removeGroupMember(roomId, memberId) {
+  return api.delete(`/chat/groups/${roomId}/members/${memberId}`);
+}
+export async function assignGroupDeputy(roomId, memberId) {
+  return api.post(`/chat/groups/${roomId}/deputies/${memberId}`);
+}
+export async function removeGroupDeputy(roomId, memberId) {
+  return api.delete(`/chat/groups/${roomId}/deputies/${memberId}`);
+}
+export async function updateGroupRoom(roomId, payload) {
+  return api.patch(`/chat/groups/${roomId}`, payload);
+}
+export async function dissolveGroup(roomId) {
+  return api.delete(`/chat/groups/${roomId}`);
+}
 export async function getFriendDiscovery(query) { return api.get("/chat/friends/discovery", { params: { query } }); }
 export async function getFriendRequests() { return api.get("/chat/friends/requests"); }
 export async function getFriendSuggestions(limit = 5) { return api.get("/chat/friends/suggestions", { params: { limit } }); }
 export async function getGroupInvites() { return api.get("/chat/groups/invites"); }
 export async function getBlockedFriends() { return api.get("/chat/friends/blocked"); }
-export async function postFriendRequest(userId) { return api.post("/chat/friends/requests", { userId }); }
-export async function postFriendRequestResponse(userId, action) { return api.post(`/chat/friends/requests/${userId}`, { action }); }
-export async function deleteFriendRequest(userId) { return api.delete(`/chat/friends/requests/${userId}`); }
+export async function postFriendRequest(userId) {
+  return api.post("/chat/friends/request", { targetUserId: userId });
+}
+export async function postFriendRequestResponse(userId, action) {
+  return api.post(`/chat/friends/request/${userId}/respond`, { action });
+}
+export async function deleteFriendRequest(userId) {
+  return api.delete(`/chat/friends/request/${userId}`);
+}
 export async function deleteFriend(userId) { return api.delete(`/chat/friends/${userId}`); }
 export async function postBlockFriend(userId) { return api.post(`/chat/friends/${userId}/block`); }
 export async function postUnblockFriend(userId) { return api.post(`/chat/friends/${userId}/unblock`); }

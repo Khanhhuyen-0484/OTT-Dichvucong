@@ -50,9 +50,12 @@ import {
   removeGroupMember,
   togglePinRoomMessage,
   unsendRoomMessage,
+  updateGroupRoom,
 } from "../lib/api.js";
 import { connectSocket } from "../lib/socket.js";
 import { uploadToS3 } from "../lib/uploadToS3.js";
+import { resolveMyGroupRole } from "../lib/groupRoles.js";
+import { MAX_PINNED_MESSAGES, canPinMore } from "../lib/chatPinned.js";
 
 // ─── SUB-COMPONENTS ──────────────────────────────────────────────────────────
 
@@ -175,16 +178,23 @@ export default function ChatPage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const normalizeRoom = useCallback((room) => {
+    if (!room) return room;
+    const avatar = room.avatar || room.avatarUrl || "";
+    return { ...room, avatar, avatarUrl: room.avatarUrl || avatar };
+  }, []);
+
   const loadRooms = useCallback(async () => {
     try {
       const { data } = await getChatRooms();
-      setRooms(data.rooms || []);
-      return data.rooms || [];
+      const list = (data.rooms || []).map(normalizeRoom);
+      setRooms(list);
+      return list;
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
       return [];
     }
-  }, []);
+  }, [normalizeRoom]);
 
   // Load contacts
   const loadContacts = useCallback(async () => {
@@ -379,9 +389,8 @@ export default function ChatPage() {
   const activeMessagesLength = activeRoom?.messages?.length || 0;
 
   const myGroupRole = useMemo(() => {
-    if (!activeRoom || activeRoom.type !== "group") return null;
-    return activeRoom.members?.find((m) => m.id === user?.id)?.role || null;
-  }, [activeRoom, user]);
+    return resolveMyGroupRole(activeRoom, user?.id);
+  }, [activeRoom, user?.id]);
 
   const openDirectChat = useCallback(async (contactId) => {
     try {
@@ -770,21 +779,33 @@ export default function ChatPage() {
           await deleteRoomMessageForMe(activeRoomId, messageId);
           setToast({ type: "success", message: "Đã xóa tin nhắn" });
           break;
-        case "pin":
+        case "pin": {
+          const room = rooms.find((r) => r.id === activeRoomId);
+          const target = room?.messages?.find((m) => m.id === messageId);
+          const wasPinned = Boolean(target?.isPinned ?? target?.pinned);
+          if (!wasPinned && !canPinMore(room?.messages || [], messageId)) {
+            setRoomErr(`Chỉ ghim tối đa ${MAX_PINNED_MESSAGES} tin nhắn`);
+            break;
+          }
           await togglePinRoomMessage(activeRoomId, messageId);
-          setToast({ type: "success", message: "Đã cập nhật ghim tin nhắn" });
+          await loadRooms();
+          setToast({
+            type: "success",
+            message: wasPinned ? "Đã bỏ ghim tin nhắn" : "Đã ghim tin nhắn",
+          });
           break;
+        }
         default:
           return;
       }
-      await loadRooms();
+      if (action !== "pin") await loadRooms();
       setMessageMenuId(null);
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
     } finally {
       setRoomLoading(false);
     }
-  }, [activeRoomId, loadRooms]);
+  }, [activeRoomId, loadRooms, rooms]);
 
   const createGroup = useCallback(async () => {
     if (!groupName.trim() || groupMemberIds.length === 0) {
@@ -819,28 +840,31 @@ export default function ChatPage() {
 
   const onUpdateGroupMeta = useCallback(async ({ name, avatarFile }) => {
     if (!activeRoomId) return;
-    let nextAvatar = null;
-    if (avatarFile) {
-      try {
+    setFriendLoading(true);
+    try {
+      const payload = {};
+      if (typeof name === "string" && name.trim()) payload.name = name.trim();
+
+      if (avatarFile) {
         const uploaded = await uploadToS3(avatarFile);
-        nextAvatar = uploaded?.publicUrl || uploaded?.url || null;
-      } catch (err) {
-        setRoomErr(getApiErrorMessage(err));
-        return;
+        const url = uploaded?.publicUrl || uploaded?.url || "";
+        if (!/^https?:\/\//i.test(url)) {
+          throw new Error("Ảnh nhóm phải được lưu trên server (cấu hình S3). Không dùng link tạm.");
+        }
+        payload.avatarUrl = url;
       }
+
+      if (!Object.keys(payload).length) return;
+
+      await updateGroupRoom(activeRoomId, payload);
+      await loadRooms();
+      setToast({ type: "success", message: "Đã lưu thông tin nhóm" });
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
     }
-    setRooms((prev) => prev.map((room) => {
-      if (room.id !== activeRoomId) return room;
-      return {
-        ...room,
-        name: typeof name === "string" && name.trim() ? name.trim() : room.name,
-        avatar: nextAvatar || room.avatar
-      };
-    }));
-    if (name || nextAvatar) {
-      setToast({ type: "success", message: "Đã cập nhật thông tin nhóm" });
-    }
-  }, [activeRoomId]);
+  }, [activeRoomId, loadRooms]);
 
   const doForward = useCallback(async (targetRoomId) => {
     if (!forwardingMessageId || !activeRoomId) return;
@@ -916,7 +940,7 @@ export default function ChatPage() {
           {tabState === "multi" ? (
             <>
               {/* Sidebar */}
-              <div className={`${mobileRoomOpen ? "hidden" : "block"} lg:col-span-4 lg:block`}>
+              <div className={`${mobileRoomOpen ? "hidden" : "block"} lg:col-span-4 lg:block h-[calc(100dvh-168px)] min-h-[540px]`}>
                 <ContactList
                   chatModeTab={chatModeTab}
                   setChatModeTab={setChatModeTab}
@@ -948,7 +972,7 @@ export default function ChatPage() {
                     Quay lại danh sách
                   </button>
                 </div>
-                <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
+                <div className="h-[calc(100dvh-168px)] min-h-[540px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
                   <ChatMultiPurpose
                     roomErr={roomErr}
                     activeRoom={activeRoom}
@@ -979,6 +1003,7 @@ export default function ChatPage() {
                     clearReply={() => setReplyToMessage(null)}
                     chatEndRef={chatEndRef}
                     onUpdateGroupMeta={onUpdateGroupMeta}
+                    groupActionBusy={friendLoading}
                 />
               </div>
             </div>

@@ -65,7 +65,7 @@ function ContactList({
   const listItems = useMemo(() => (chatModeTab === "contacts" ? contacts : rooms), [chatModeTab, contacts, rooms]);
 
   return (
-    <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-bold text-slate-800">Danh sách chat</h2>
         <button
@@ -141,7 +141,7 @@ function ContactList({
         </div>
         <div className="text-[10px] text-slate-500">Hỗ trợ trực tuyến một cửa</div>
       </button>
-      <div className="space-y-1.5 max-h-[58vh] overflow-y-auto pr-1">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
         {listItems.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500">
             {chatModeTab === "contacts" ? "Không tìm thấy người dùng phù hợp." : "Chưa có hội thoại nào."}
