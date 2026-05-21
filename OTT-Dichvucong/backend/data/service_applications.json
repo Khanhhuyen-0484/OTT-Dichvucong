@@ -419,5 +419,54 @@
     "paymentCompletedAt": "2026-04-15T18:16:06.977Z",
     "createdAt": "2026-04-15T17:14:25.654Z",
     "paymentDescription": "Thanh toán phí dịch vụ Đổi giấy phép lái xe"
+  },
+  {
+    "applicationCode": "HS-20260508-X8UAGH",
+    "applicationId": "HS-20260508-X8UAGH",
+    "userId": "u_1776268582525",
+    "serviceId": "dat-dai-bien-dong",
+    "serviceName": "Đăng ký biến động đất đai",
+    "formData": {
+      "fullName": "Trần Thị Khánh Huyền",
+      "citizenId": "038304010988",
+      "email": "tkhanhhuyen0484@gmail.com",
+      "phone": "0368965381",
+      "address": "Tiểu khu 9",
+      "requestContent": ""
+    },
+    "attachments": [
+      {
+        "key": "landCert",
+        "name": "17955 (1).png",
+        "previewUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/chat-media/dat-dai-bien-dong/landCert-1778257518350-17955__1_.png",
+        "type": "image/png"
+      },
+      {
+        "key": "mutationForm",
+        "name": "17955.png",
+        "previewUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/chat-media/dat-dai-bien-dong/mutationForm-1778257518720-17955.png",
+        "type": "image/png"
+      },
+      {
+        "key": "idCard",
+        "name": "17955 (1).png",
+        "previewUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/chat-media/dat-dai-bien-dong/idCard-1778257518834-17955__1_.png",
+        "type": "image/png"
+      }
+    ],
+    "paymentMethod": "MoMo",
+    "status": "PENDING",
+    "paymentStatus": "UNPAID",
+    "progress": 10,
+    "history": [
+      {
+        "at": "2026-05-08T16:25:18.967Z",
+        "status": "PENDING",
+        "note": "Hồ sơ đã được nộp"
+      }
+    ],
+    "createdAt": "2026-05-08T16:25:18.967Z",
+    "updatedAt": "2026-05-08T16:25:18.967Z",
+    "fee": 20000
   }
 ]

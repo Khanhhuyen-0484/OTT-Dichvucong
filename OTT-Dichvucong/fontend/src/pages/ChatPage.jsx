@@ -1,22 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-function RemoteVideoTile({ peerId, stream }) {
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (ref.current && stream) {
-      ref.current.srcObject = stream;
-      ref.current.play?.().catch(() => {});
-    }
-  }, [stream]);
-
-  return (
-    <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-950">
-      <video ref={ref} autoPlay playsInline className="h-full w-full object-cover" />
-      <div className="absolute left-2 top-2 rounded bg-black/40 px-2 py-1 text-[10px] text-white">{peerId}</div>
-    </div>
-  );
-}
 import { useNavigate } from "react-router-dom";
 import {
   Send,
@@ -25,40 +7,102 @@ import {
   MicOff,
   Video,
   VideoOff,
-  PhoneOff
+  PhoneOff,
+  X
 } from "lucide-react";
 import ContactList from "../components/ContactList.jsx";
 import ChatMultiPurpose from "../components/ChatMultiPurpose.jsx";
 import GroupCreator from "../components/GroupCreator.jsx";
+import AddFriendModal from "../components/AddFriendModal.jsx";
+import FriendHubModal from "../components/FriendHubModal.jsx";
 import GovHeader from "../components/GovHeader.jsx";
+import VideoCall from "../components/VideoCall.jsx";
+import IncomingCallModal from "../components/IncomingCallModal.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
   assignGroupDeputy,
   createGroupRoom,
+  deleteFriend,
+  deleteFriendRequest,
   deleteRoomMessageForMe,
   dissolveGroup,
   ensureDirectRoom,
   forwardRoomMessage,
   getApiErrorMessage,
+  getBlockedFriends,
   getChatContacts,
+  getFriendDiscovery,
+  getFriendRequests,
+  getFriendSuggestions,
+  getGroupInvites,
   getChatRooms,
   getStaffChat,
+  postBlockFriend,
+  postFriendRequest,
+  postFriendRequestResponse,
+  postGroupInviteResponse,
+  postGroupInvites,
+  postUnblockFriend,
   postRoomMessage,
   postStaffChat,
-  reactRoomMessage,
-  leaveGroup,
   removeGroupDeputy,
   removeGroupMember,
+  togglePinRoomMessage,
   unsendRoomMessage,
-  updateGroupInfo
 } from "../lib/api.js";
 import { connectSocket } from "../lib/socket.js";
 import { uploadToS3 } from "../lib/uploadToS3.js";
 
+// ─── SUB-COMPONENTS ──────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#003366] border-t-transparent" />
+        <span className="text-sm font-bold text-slate-600">Đang tải hệ thống...</span>
+      </div>
+    </div>
+  );
+}
+
+function ForwardModal({ rooms, activeRoomId, userId, doForward, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-slate-800">Chuyển tiếp</h3>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="max-h-72 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+          {rooms
+            .filter((r) => r.id !== activeRoomId)
+            .map((r) => (
+              <button
+                key={r.id}
+                onClick={() => doForward(r.id)}
+                className="w-full rounded-2xl px-4 py-4 text-left text-sm font-semibold hover:bg-blue-50 border border-slate-100 transition-all active:scale-[0.98]"
+              >
+                {r.type === "group"
+                  ? `👥 ${r.name || "Nhóm"}`
+                  : `👤 ${r.members?.find((m) => m.id !== userId)?.fullName || "Người dùng"}`}
+              </button>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
+
 export default function ChatPage() {
   const navigate = useNavigate();
   const { user, ready } = useAuth();
+  const chatEndRef = useRef(null);
 
   const [tabState, setTabState] = useState("multi"); // "multi" or "staff"
   const [contacts, setContacts] = useState([]);
@@ -72,23 +116,30 @@ export default function ChatPage() {
   const [roomErr, setRoomErr] = useState(null);
   const [messageMenuId, setMessageMenuId] = useState(null);
   const [forwardingMessageId, setForwardingMessageId] = useState(null);
+  const [locationSending, setLocationSending] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
+  const [showFriendHubModal, setShowFriendHubModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupAvatar, setGroupAvatar] = useState("");
   const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [newMemberId, setNewMemberId] = useState("");
   const [replyToMessage, setReplyToMessage] = useState(null);
-  const [roomUnreadMap, setRoomUnreadMap] = useState({});
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
   const [camMuted, setCamMuted] = useState(false);
-  const [callStatus, setCallStatus] = useState("idle");
-  const [remoteStreams, setRemoteStreams] = useState({});
-  const videoConstraints = { video: true, audio: true };
-  const localVideoRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const peerMapRef = useRef(new Map());
-  const peerRef = useRef(null);
+  const [friendQuery, setFriendQuery] = useState("");
+  const [friendDiscovery, setFriendDiscovery] = useState([]);
+  const [friendIncomingRequests, setFriendIncomingRequests] = useState([]);
+  const [friendOutgoingRequests, setFriendOutgoingRequests] = useState([]);
+  const [friendDirectory, setFriendDirectory] = useState([]);
+  const [friendSuggestions, setFriendSuggestions] = useState([]);
+  const [groupInvites, setGroupInvites] = useState([]);
+  const [blockedFriends, setBlockedFriends] = useState([]);
+  const [friendLoading, setFriendLoading] = useState(false);
+  const [friendSearchNotice, setFriendSearchNotice] = useState("");
+  const [toast, setToast] = useState(null);
+  const [mobileRoomOpen, setMobileRoomOpen] = useState(false);
 
   // Staff chat states
   const [staffMessages, setStaffMessages] = useState([]);
@@ -97,23 +148,43 @@ export default function ChatPage() {
   const [staffErr, setStaffErr] = useState(null);
   const [staffUnread, setStaffUnread] = useState(0);
 
-  const chatEndRef = useRef(null);
-  const prevRoomRef = useRef(null);
+  const [videoCallState, setVideoCallState] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [isCalling, setIsCalling] = useState(false);
+
+  // ─── Refs: cho phép socket handler đọc giá trị mới nhất
+  //           mà không cần re-register listener ────────────────────────────────
+  const activeRoomIdRef = useRef(activeRoomId);
+  const tabStateRef     = useRef(tabState);
+  const loadRoomsRef    = useRef(null);
+  const loadStaffRef    = useRef(null);
+  const scrollBotRef    = useRef(null);
+
+  useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
+  useEffect(() => { tabStateRef.current     = tabState;     }, [tabState]);
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Load staff chat
-  const loadStaff = useCallback(async () => {
-    if (!user) return;
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const loadRooms = useCallback(async () => {
     try {
-      const { data } = await getStaffChat();
-      setStaffMessages(data.messages || []);
+      const { data } = await getChatRooms();
+      setRooms(data.rooms || []);
+      return data.rooms || [];
     } catch (err) {
-      setStaffErr(getApiErrorMessage(err));
+      setRoomErr(getApiErrorMessage(err));
+      return [];
     }
-  }, [user]);
+  }, []);
 
   // Load contacts
   const loadContacts = useCallback(async () => {
@@ -122,20 +193,98 @@ export default function ChatPage() {
       const { data } = await getChatContacts(contactQuery);
       setContacts(data.contacts || []);
     } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
+      console.error(err);
     }
   }, [user, contactQuery]);
 
-  // Load rooms
-  const loadRooms = useCallback(async () => {
+  const loadFriendDiscovery = useCallback(async (query = "") => {
     if (!user) return;
+    const raw = String(query || "").trim();
+    const normalizedDigits = raw.replace(/\D/g, "");
+    const isValidLookup = raw.includes("@") || normalizedDigits.length >= 8;
+    if (!raw) {
+      setFriendSearchNotice("Nhập email hoặc số điện thoại để tìm và kết bạn.");
+      setFriendDiscovery([]);
+      return;
+    }
+    if (!isValidLookup) {
+      setFriendSearchNotice("Chỉ hỗ trợ tìm bạn bằng email hoặc số điện thoại để tránh trùng tên.");
+      setFriendDiscovery([]);
+      return;
+    }
     try {
-      const { data } = await getChatRooms();
-      setRooms(data.rooms || []);
+      const { data } = await getFriendDiscovery(query);
+      setFriendDiscovery(data.users || []);
+      setFriendSearchNotice("");
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
     }
   }, [user]);
+
+  const loadFriendRequests = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getFriendRequests();
+      setFriendIncomingRequests(data.incoming || data.requests || []);
+      setFriendOutgoingRequests(data.outgoing || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadFriendSuggestions = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getFriendSuggestions(5);
+      setFriendSuggestions(data.users || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadFriendDirectory = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getChatContacts("");
+      setFriendDirectory(data.contacts || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadGroupInvites = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getGroupInvites();
+      setGroupInvites(data.invites || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadBlockedFriends = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getBlockedFriends();
+      setBlockedFriends(data.users || []);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    }
+  }, [user]);
+
+  const loadStaff = useCallback(async () => {
+    try {
+      const { data } = await getStaffChat();
+      setStaffMessages(data.messages || []);
+      setTimeout(scrollToBottom, 200);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [scrollToBottom]);
+
+  useEffect(() => { loadRoomsRef.current = loadRooms; }, [loadRooms]);
+  useEffect(() => { loadStaffRef.current = loadStaff; }, [loadStaff]);
+  useEffect(() => { scrollBotRef.current = scrollToBottom; }, [scrollToBottom]);
 
   // Load data based on tab
   useEffect(() => {
@@ -146,120 +295,88 @@ export default function ChatPage() {
     } else {
       loadContacts();
       loadRooms();
+      loadFriendRequests();
+      loadFriendDirectory();
+      loadGroupInvites();
+      loadBlockedFriends();
     }
-  }, [ready, user, tabState, loadContacts, loadRooms, loadStaff]);
-
-  // Socket connection
-  useEffect(() => {
-    if (!ready || !user) return;
-    
-    const socket = connectSocket();
-
-    if (tabState === "multi") {
-      const handleMultiChatMessage = (data) => {
-        if (!data || !data.roomId) return;
-        if (data.roomId !== activeRoomId) {
-          setRoomUnreadMap((prev) => ({
-            ...prev,
-            [data.roomId]: (prev[data.roomId] || 0) + 1
-          }));
-        }
-        loadRooms();
-        if (data.roomId === activeRoomId) {
-          setTimeout(scrollToBottom, 100);
-        }
-      };
-
-      const handleRoomUpdated = (payload) => {
-        loadRooms();
-        if (payload?.dissolved || payload?.action === "dissolved") {
-          if (payload?.roomId === activeRoomId) {
-            setActiveRoomId(null);
-          }
-          return;
-        }
-        if (payload?.roomId === activeRoomId || payload?.action?.includes("member_") || payload?.action?.includes("deputy_")) {
-          getChatRooms()
-            .then(({ data }) => {
-              const nextRooms = data.rooms || [];
-              setRooms(nextRooms);
-              const refreshed = nextRooms.find((r) => r.id === activeRoomId);
-              if (!refreshed) {
-                setActiveRoomId(nextRooms[0]?.id || null);
-              }
-            })
-            .catch((err) => setRoomErr(getApiErrorMessage(err)));
-        }
-      };
-
-      socket.on("multiChatMessage", handleMultiChatMessage);
-      socket.on("multiChatRoomUpdated", handleRoomUpdated);
-
-      return () => {
-        socket.off("multiChatMessage", handleMultiChatMessage);
-        socket.off("multiChatRoomUpdated", handleRoomUpdated);
-      };
-    } else {
-      const handleSupportMessage = (payload) => {
-        if (!payload || payload.userId !== user.id) return;
-        const message = payload.message;
-        if (!message || !message.id) return;
-        setStaffMessages((prev) => {
-          if (prev.some((m) => m.id === message.id)) {
-            return prev;
-          }
-          return [...prev, message];
-        });
-        if (tabState !== "staff") {
-          setStaffUnread((prev) => prev + 1);
-        }
-      };
-
-      socket.on("supportConversationMessage", handleSupportMessage);
-
-      return () => {
-        socket.off("supportConversationMessage", handleSupportMessage);
-      };
-    }
-  }, [ready, user, tabState, activeRoomId, loadRooms, scrollToBottom]);
+  }, [ready, user, tabState, loadContacts, loadRooms, loadStaff, loadFriendRequests, loadFriendDirectory, loadGroupInvites, loadBlockedFriends]);
 
   useEffect(() => {
     if (!ready || !user) return;
+
     const socket = connectSocket();
-    const roomName = tabState === "multi" && activeRoomId ? `chat_${activeRoomId}` : null;
 
-    if (prevRoomRef.current && prevRoomRef.current !== roomName) {
-      socket.emit("leaveRoom", { room: prevRoomRef.current });
-      prevRoomRef.current = null;
-    }
+    const handleNewMessage = async (msg) => {
+      console.log("[ChatPage] 📨 new-message:", msg);
 
-    if (roomName) {
-      socket.emit("joinRoom", { room: roomName });
-      prevRoomRef.current = roomName;
-    }
+      // Reload rooms để lấy messages mới nhất của tất cả thành viên
+      await loadRoomsRef.current();
 
-    return () => {
-      if (roomName) {
-        socket.emit("leaveRoom", { room: roomName });
+      // Scroll xuống nếu tin thuộc room đang mở
+      const incomingRoomId = msg?.roomId ?? null;
+      const currentRoomId  = activeRoomIdRef.current;
+      const isActiveRoom   = !incomingRoomId || incomingRoomId === currentRoomId;
+      if (isActiveRoom) {
+        setTimeout(() => scrollBotRef.current(), 100);
+      }
+
+      // Xử lý tab staff
+      if (tabStateRef.current === "staff") {
+        loadStaffRef.current();
+      } else if (msg?.from === "staff") {
+        setStaffUnread((prev) => prev + 1);
       }
     };
-  }, [ready, user, tabState, activeRoomId]);
 
-  // Auto-select first room if none selected
+    const handleIncomingCall = (data) => {
+      console.log("[ChatPage] 📞 incoming-call:", data);
+      // Không tự động reject: luôn hiển thị modal để người dùng quyết định.
+      if (data.isGroupCall) {
+        setIncomingCall((prev) => ({
+          isGroupCall:  true,
+          groupName:    data.groupName || prev?.groupName || "Cuộc gọi nhóm",
+          roomId:       data.roomId,
+          callerOffers: { ...(prev?.callerOffers || {}), [data.fromUserId]: data.offer },
+          callerNames:  (prev?.callerNames || []).includes(data.callerName)
+            ? (prev?.callerNames || [])
+            : [...(prev?.callerNames || []), data.callerName],
+          callerUserId: prev?.callerUserId || data.fromUserId,
+        }));
+      } else {
+        setIncomingCall({
+          isGroupCall:  false,
+          callerName:   data.callerName,
+          callerUserId: data.fromUserId,
+          roomId:       data.roomId,
+          offer:        data.offer,
+        });
+      }
+    };
+
+    socket.on("new-message",   handleNewMessage);
+    socket.on("incoming-call", handleIncomingCall);
+
+    return () => {
+      socket.off("new-message",   handleNewMessage);
+      socket.off("incoming-call", handleIncomingCall);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, user]); // ← chỉ [ready, user], mọi thứ khác đọc qua ref
+
+  // ─── Data loading ─────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (rooms.length > 0 && !activeRoomId) {
       setActiveRoomId(rooms[0].id);
     }
   }, [rooms, activeRoomId]);
 
-  useEffect(() => {
-    if (!activeRoomId) return;
-    setRoomUnreadMap((prev) => ({ ...prev, [activeRoomId]: 0 }));
-  }, [activeRoomId]);
-
   const activeRoom = useMemo(() => {
     return rooms.find((r) => r.id === activeRoomId) || null;
   }, [rooms, activeRoomId]);
+
+  const activeMessagesLength = activeRoom?.messages?.length || 0;
 
   const myGroupRole = useMemo(() => {
     if (!activeRoom || activeRoom.type !== "group") return null;
@@ -273,422 +390,496 @@ export default function ChatPage() {
       setChatModeTab("rooms");
       setTabState("multi");
       loadRooms();
+      loadContacts();
+      if (tabState === "staff") loadStaff();
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
     }
   }, [loadRooms]);
-
-  const sendRoom = useCallback(async (e) => {
-    e?.preventDefault();
-    if (!activeRoomId || roomLoading || !user) return;
-    if (!roomInput.trim() && !roomMedia) return;
-
-    setRoomLoading(true);
-    setRoomErr(null);
-    try {
-      let mediaPayload = null;
-      if (roomMedia instanceof File) {
-        const uploaded = await uploadToS3(roomMedia);
-        // Determine media type based on MIME type and file extension
-        const fileName = roomMedia.name.toLowerCase();
-        const isDocFile =
-          roomMedia.type === "application/pdf" ||
-          roomMedia.type === "application/msword" ||
-          roomMedia.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-          fileName.endsWith(".pdf") ||
-          fileName.endsWith(".doc") ||
-          fileName.endsWith(".docx");
-        const isVideo = roomMedia.type.startsWith("video/");
-        const mediaType = isDocFile ? "file" : isVideo ? "video" : "image";
-        mediaPayload = {
-          type: mediaType,
-          url: uploaded.url,
-          name: roomMedia.name
-        };
-      } else if (roomMedia && typeof roomMedia === "object") {
-        mediaPayload = roomMedia;
-      }
-      await postRoomMessage(activeRoomId, {
-        text: roomInput.trim(),
-        media: mediaPayload,
-        replyToMessageId: replyToMessage?.id || ""
-      });
-      setRoomInput("");
-      setRoomMedia(null);
-      setReplyToMessage(null);
-      loadRooms();
-      setTimeout(scrollToBottom, 100);
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    } finally {
-      setRoomLoading(false);
-    }
-  }, [activeRoomId, roomInput, roomMedia, replyToMessage, roomLoading, user, loadRooms, scrollToBottom]);
-
-  const sendStaff = useCallback(async () => {
-    if (!staffInput.trim() || staffLoading || !user) return;
-    
-    setStaffLoading(true);
-    setStaffErr(null);
-    try {
-      const { data } = await postStaffChat(staffInput.trim());
-      setStaffMessages(data.messages || []);
-      setStaffInput("");
-    } catch (err) {
-      setStaffErr(getApiErrorMessage(err));
-    } finally {
-      setStaffLoading(false);
-    }
-  }, [staffInput, staffLoading, user]);
-
-  const doMessageAction = useCallback(async (action, messageId) => {
-    if (!activeRoomId) return;
-    try {
-      switch (action) {
-        case "unsend":
-          await unsendRoomMessage(activeRoomId, messageId);
-          break;
-        case "delete":
-          await deleteRoomMessageForMe(activeRoomId, messageId);
-          break;
-        case "forward":
-          setForwardingMessageId(messageId);
-          return;
-      }
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-    setMessageMenuId(null);
-  }, [activeRoomId, loadRooms]);
-
-  const doForward = useCallback(async (targetRoomId) => {
-    if (!activeRoomId || !forwardingMessageId) return;
-    try {
-      await forwardRoomMessage(activeRoomId, forwardingMessageId, targetRoomId);
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-    setForwardingMessageId(null);
-  }, [activeRoomId, forwardingMessageId, loadRooms]);
-
-  const performGroupAction = useCallback(async (action, targetUserId) => {
-    if (!activeRoomId) return;
-    try {
-      switch (action) {
-        case "add":
-          if (newMemberId) {
-            await addGroupMember(activeRoomId, newMemberId);
-            setNewMemberId("");
-          }
-          break;
-        case "remove":
-          await removeGroupMember(activeRoomId, targetUserId);
-          break;
-        case "promote":
-          await assignGroupDeputy(activeRoomId, targetUserId);
-          break;
-        case "demote":
-          await removeGroupDeputy(activeRoomId, targetUserId);
-          break;
-        case "leave":
-          await leaveGroup(activeRoomId);
-          break;
-        case "dissolve":
-          await dissolveGroup(activeRoomId);
-          setActiveRoomId(null);
-          break;
-      }
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-  }, [activeRoomId, newMemberId, loadRooms]);
-
-  const updateActiveGroupInfo = useCallback(
-    async ({ name, avatarFile }) => {
-      if (!activeRoomId) return;
-      try {
-        let avatarUrl = undefined;
-        if (avatarFile instanceof File) {
-          const uploaded = await uploadToS3(avatarFile);
-          avatarUrl = uploaded?.url || "";
-        }
-        await updateGroupInfo(activeRoomId, { name, avatarUrl });
-        loadRooms();
-      } catch (err) {
-        setRoomErr(getApiErrorMessage(err));
-      }
-    },
-    [activeRoomId, loadRooms]
-  );
-
-  const createGroup = useCallback(async () => {
-    if (!groupName.trim()) return;
-    try {
-      await createGroupRoom({
-        ownerId: user.id,
-        name: groupName.trim(),
-        avatarUrl: groupAvatar,
-        memberIds: groupMemberIds
-      });
-      setShowGroupModal(false);
-      setGroupName("");
-      setGroupAvatar("");
-      setGroupMemberIds([]);
-      loadRooms();
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    }
-  }, [groupName, groupAvatar, groupMemberIds, user, loadRooms]);
-
-  const onPickMedia = useCallback((file) => {
-    setRoomMedia(file);
-  }, []);
 
   const openStaffChat = useCallback(() => {
     setTabState("staff");
     setStaffUnread(0);
   }, []);
 
-  const attachLocalStreamToVideo = useCallback((stream) => {
-    if (!localVideoRef.current || !stream) return;
-    const video = localVideoRef.current;
-    video.srcObject = stream;
-    video.muted = true;
-    video.playsInline = true;
-    video.autoplay = true;
-    video.onloadedmetadata = () => {
-      video.play?.().catch((err) => console.warn("local video play error", err));
-    };
-    video.play?.().catch((err) => console.warn("local video play error", err));
-  }, []);
+  const openAddFriendModal = useCallback(() => {
+    setShowAddFriendModal(true);
+    setFriendQuery("");
+    setFriendSearchNotice("Nhập email hoặc số điện thoại để tìm và kết bạn.");
+    setFriendDiscovery([]);
+    loadFriendRequests();
+    loadFriendSuggestions();
+  }, [loadFriendRequests, loadFriendSuggestions]);
+
+  const openFriendHubModal = useCallback(() => {
+    setShowFriendHubModal(true);
+    loadFriendDirectory();
+    loadFriendRequests();
+    loadFriendSuggestions();
+    loadGroupInvites();
+    loadBlockedFriends();
+  }, [loadFriendDirectory, loadFriendRequests, loadFriendSuggestions, loadGroupInvites, loadBlockedFriends]);
+
+  const handleSendFriendRequest = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await postFriendRequest(targetUserId);
+      setToast({ type: "success", message: "Đã gửi lời mời kết bạn" });
+      await Promise.all([
+        loadFriendDiscovery(friendQuery),
+        loadFriendRequests(),
+        loadFriendSuggestions(),
+        loadContacts(),
+        loadFriendDirectory()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadContacts, loadFriendDiscovery, loadFriendRequests, loadFriendSuggestions, loadFriendDirectory]);
+
+  const handleRespondFriendRequest = useCallback(async (targetUserId, action) => {
+    setFriendLoading(true);
+    try {
+      await postFriendRequestResponse(targetUserId, action);
+      setToast({
+        type: "success",
+        message: action === "accept" ? "Đã chấp nhận lời mời kết bạn" : "Đã từ chối lời mời kết bạn"
+      });
+      await Promise.all([
+        loadFriendDiscovery(friendQuery),
+        loadFriendRequests(),
+        loadContacts(),
+        loadFriendDirectory(),
+        loadRooms()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadContacts, loadFriendDiscovery, loadFriendDirectory, loadFriendRequests, loadRooms]);
+
+  const handleRevokeFriendRequest = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await deleteFriendRequest(targetUserId);
+      setToast({ type: "success", message: "Đã thu hồi lời mời kết bạn" });
+      await Promise.all([
+        loadFriendDiscovery(friendQuery),
+        loadFriendRequests(),
+        loadFriendSuggestions(),
+        loadContacts(),
+        loadFriendDirectory()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadContacts, loadFriendDiscovery, loadFriendDirectory, loadFriendRequests, loadFriendSuggestions]);
+
+  const handleRemoveFriend = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await deleteFriend(targetUserId);
+      setToast({ type: "success", message: "Đã xóa bạn khỏi danh sách" });
+      await Promise.all([loadContacts(), loadFriendDirectory(), loadFriendRequests(), loadRooms()]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadContacts, loadFriendDirectory, loadFriendRequests, loadRooms]);
+
+  const handleBlockFriend = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await postBlockFriend(targetUserId);
+      setToast({ type: "success", message: "Đã chặn người dùng" });
+      await Promise.all([
+        loadContacts(),
+        loadFriendDirectory(),
+        loadFriendRequests(),
+        loadRooms(),
+        loadGroupInvites(),
+        loadBlockedFriends()
+      ]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadContacts, loadFriendDirectory, loadFriendRequests, loadRooms, loadGroupInvites, loadBlockedFriends]);
+
+  const handleInviteMembersToGroup = useCallback(async (roomId, memberIds) => {
+    setFriendLoading(true);
+    try {
+      await postGroupInvites(roomId, memberIds);
+      setToast({ type: "success", message: "Đã gửi lời mời vào nhóm" });
+      await Promise.all([loadRooms(), loadGroupInvites()]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadRooms, loadGroupInvites]);
+
+  const handleRespondGroupInvite = useCallback(async (roomId, action) => {
+    setFriendLoading(true);
+    try {
+      await postGroupInviteResponse(roomId, action);
+      setToast({
+        type: "success",
+        message: action === "accept" ? "Đã tham gia nhóm" : "Đã từ chối lời mời nhóm"
+      });
+      await Promise.all([loadRooms(), loadGroupInvites()]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [loadRooms, loadGroupInvites]);
+
+  const handleUnblockFriend = useCallback(async (targetUserId) => {
+    setFriendLoading(true);
+    try {
+      await postUnblockFriend(targetUserId);
+      setToast({ type: "success", message: "Đã bỏ chặn người dùng" });
+      await Promise.all([loadBlockedFriends(), loadFriendDiscovery(friendQuery)]);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [friendQuery, loadBlockedFriends, loadFriendDiscovery]);
+
+  // Scroll xuống khi chọn room mới
+  useEffect(() => {
+    if (activeRoomId) setTimeout(scrollToBottom, 150);
+  }, [activeRoomId, scrollToBottom]);
 
   useEffect(() => {
-    if (!showVideoCall || !localStreamRef.current) return;
-    attachLocalStreamToVideo(localStreamRef.current);
-  }, [showVideoCall, attachLocalStreamToVideo]);
+    if (!activeRoomId) return;
+    setTimeout(scrollToBottom, 120);
+  }, [activeRoomId, activeMessagesLength, scrollToBottom]);
 
-  const setupPeerConnection = useCallback((socket, roomId, targetUserId, isCaller, peerCount = 1) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-      bundlePolicy: "max-bundle",
-      rtcpMuxPolicy: "require",
-      iceCandidatePoolSize: 4
-    });
-    pc.onicecandidate = (e) => {
-      console.log("ICE:", e.candidate);
-      if (e.candidate) {
-        socket.emit("webrtc:ice-candidate", {
-          roomId,
-          toUserId: targetUserId,
-          candidate: e.candidate
-        });
-      }
-    };
-    pc.onconnectionstatechange = () => console.log("STATE:", pc.connectionState);
-    pc.oniceconnectionstatechange = () => console.log("ICE STATE:", pc.iceConnectionState);
-    peerMapRef.current.set(targetUserId, pc);
-    peerRef.current = pc;
+  // ─── Call Handlers ────────────────────────────────────────────────────────────
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current);
+  const startVideoCall = useCallback(() => {
+    if (isCalling || videoCallState) return;
+    const currentRoom = rooms.find((r) => r.id === activeRoomId);
+    if (!currentRoom) return;
+    const callRoomId = `call_${activeRoomId}_${Date.now()}`;
+
+    if (currentRoom.type === "group") {
+      const otherMembers = (currentRoom.members || []).filter((m) => m.id !== user.id);
+      if (!otherMembers.length) return;
+      setIsCalling(true);
+      setVideoCallState({ roomId: callRoomId, targetUserIds: otherMembers.map((m) => m.id), isCallee: false, isGroupCall: true });
+    } else {
+      const other = currentRoom.members?.find((m) => m.id !== user.id);
+      if (!other) return;
+      setIsCalling(true);
+      setVideoCallState({ roomId: callRoomId, targetUserId: other.id, isCallee: false, isGroupCall: false });
+    }
+  }, [activeRoomId, rooms, user, isCalling, videoCallState]);
+
+  const acceptCall = useCallback((call) => {
+    setIsCalling(true);
+    if (call.isGroupCall) {
+      setVideoCallState({
+        roomId:        call.roomId,
+        targetUserIds: Object.keys(call.callerOffers || { [call.callerUserId]: call.offer }),
+        isCallee:      true,
+        callerOffers:  call.callerOffers || { [call.callerUserId]: call.offer },
+        isGroupCall:   true,
       });
-      attachLocalStreamToVideo(localStreamRef.current);
+    } else {
+      setVideoCallState({ roomId: call.roomId, targetUserId: call.callerUserId, isCallee: true, callerOffer: call.offer, isGroupCall: false });
     }
-
-    pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      if (remoteStream) {
-        setRemoteStreams((prev) => ({
-          ...prev,
-          [targetUserId]: remoteStream
-        }));
-      }
-    };
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit("webrtc:ice-candidate", {
-          roomId,
-          toUserId: targetUserId,
-          candidate: event.candidate
-        });
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected") setCallStatus("in-call");
-      if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
-        setCallStatus("ended");
-      }
-    };
-
-    if (isCaller) {
-      pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
-        .then((offer) => pc.setLocalDescription(offer))
-        .then(() => {
-          socket.emit("webrtc:offer", {
-            roomId,
-            toUserId: targetUserId,
-            sdp: pc.localDescription,
-            peerCount
-          });
-        })
-        .catch((err) => setRoomErr(err.message || "Không thể tạo offer"));
-    }
-
-    return pc;
+    setIncomingCall(null);
   }, []);
 
-  const endCall = useCallback(() => {
-    if (peerMapRef.current.size) {
-      for (const pc of peerMapRef.current.values()) {
-        try {
-          pc.ontrack = null;
-          pc.onicecandidate = null;
-          pc.close();
-        } catch {}
-      }
-      peerMapRef.current.clear();
+  const rejectCall = useCallback((callArg) => {
+    const activeCall = callArg || incomingCall;
+    if (activeCall) {
+      connectSocket().emit("call-rejected", {
+        toUserId: activeCall.callerUserId,
+        roomId: activeCall.roomId,
+        callerId: activeCall.callerUserId,
+        callerName: activeCall.callerName || activeCall.callerNames?.[0] || ""
+      });
     }
-    peerRef.current = null;
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-    }
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    setRemoteStreams({});
-    setShowVideoCall(false);
-    setCallStatus("idle");
-  }, []);
+    setIncomingCall(null);
+  }, [incomingCall]);
 
-  const startVideoCall = useCallback(async () => {
-    if (!activeRoom || !user) return;
+  // ─── Send message ─────────────────────────────────────────────────────────────
+
+  const sendRoom = async (e) => {
+    e?.preventDefault();
+    const text = roomInput.trim();
+    const hasText = Boolean(text);
+    const hasMedia = Boolean(roomMedia);
+    if (!activeRoomId || roomLoading || (!hasText && !hasMedia)) return;
+    setRoomLoading(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      console.log("STREAM:", stream);
-      localStreamRef.current = stream;
-      setShowVideoCall(true);
-      setMicMuted(false);
-      setCamMuted(false);
-      setCallStatus("ringing");
-      attachLocalStreamToVideo(stream);
+      let mediaPayload = null;
+      if (roomMedia) {
+        const uploaded = await uploadToS3(roomMedia);
+        const mediaUrl = uploaded.publicUrl || uploaded.url;
+        const isFile =
+          /\.(pdf|doc|docx)$/i.test(roomMedia.name || "") ||
+          /application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)/i.test(roomMedia.type || "");
+        mediaPayload = {
+          type: isFile ? "document" : (roomMedia.type.startsWith("video") ? "video" : "image"),
+          url: mediaUrl,
+          name: roomMedia.name,
+          fileUrl: isFile ? mediaUrl : undefined,
+          fileType: isFile ? (roomMedia.name.split(".").pop() || "").toLowerCase() : undefined
+        };
+      }
+      await postRoomMessage(activeRoomId, {
+        text,
+        media: mediaPayload,
+        replyToMessageId: replyToMessage?.id || "",
+        senderAvatar: user?.avatarUrl || user?.photoURL || user?.avatar || ""
+      });
+      connectSocket().emit("room-message:client", {
+        roomId: activeRoomId,
+        senderAvatar: user?.avatarUrl || user?.photoURL || user?.avatar || "",
+        fileUrl: mediaPayload?.fileUrl || "",
+        fileType: mediaPayload?.fileType || "",
+      });
+      setRoomInput("");
+      setRoomMedia(null);
+      setReplyToMessage(null);
+      await loadRooms();
+      setTimeout(scrollToBottom, 100);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  };
 
-      const socket = connectSocket();
-      const peerUser = activeRoom.members?.find((m) => m.id !== user.id);
-      if (!peerUser) {
-        setRoomErr("Không tìm thấy người nhận cuộc gọi");
+  const sendLocationMessage = useCallback(async () => {
+    if (!navigator.geolocation) {
+      setRoomErr("Trình duyệt của bạn không hỗ trợ gửi vị trí.");
+      return;
+    }
+    if (!activeRoomId || roomLoading) return;
+    setRoomLoading(true);
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 0
+        });
+      });
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+      await postRoomMessage(activeRoomId, {
+        text: "Vị trí đã gửi",
+        location: {
+          latitude,
+          longitude,
+          mapsUrl,
+          label: "Vị trí hiện tại"
+        },
+        replyToMessageId: replyToMessage?.id || "",
+        senderAvatar: user?.avatarUrl || user?.photoURL || user?.avatar || ""
+      });
+      connectSocket().emit("room-message:client", {
+        roomId: activeRoomId,
+        location: { latitude, longitude, mapsUrl }
+      });
+      setReplyToMessage(null);
+      await loadRooms();
+      setTimeout(scrollToBottom, 100);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err) || "Không thể lấy vị trí hiện tại.");
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [activeRoomId, loadRooms, replyToMessage, roomLoading, scrollToBottom, user]);
+
+  // ─── Group and Message Actions ────────────────────────────────────────────────
+
+  const performGroupAction = useCallback(async (action, memberId) => {
+    if (!activeRoomId) return;
+    setFriendLoading(true);
+    try {
+      switch (action) {
+        case "add":
+          if (!memberId) return;
+          await addGroupMember(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã thêm thành viên vào nhóm" });
+          break;
+        case "remove":
+          if (!memberId) return;
+          await removeGroupMember(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã xóa thành viên khỏi nhóm" });
+          break;
+        case "leave":
+          if (!user?.id) return;
+          await removeGroupMember(activeRoomId, user.id);
+          setToast({ type: "success", message: "Bạn đã rời khỏi nhóm" });
+          setActiveRoomId(null);
+          break;
+        case "promote":
+          if (!memberId) return;
+          await assignGroupDeputy(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã phong phó nhóm" });
+          break;
+        case "demote":
+          if (!memberId) return;
+          await removeGroupDeputy(activeRoomId, memberId);
+          setToast({ type: "success", message: "Đã hạ chức phó nhóm" });
+          break;
+        case "dissolve":
+          await dissolveGroup(activeRoomId);
+          setToast({ type: "success", message: "Đã giải tán nhóm" });
+          setActiveRoomId(null);
+          break;
+        default:
+          return;
+      }
+      await loadRooms();
+      setNewMemberId("");
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setFriendLoading(false);
+    }
+  }, [activeRoomId, loadRooms, user?.id]);
+
+  const doMessageAction = useCallback(async (action, messageId) => {
+    if (!activeRoomId || !messageId) return;
+    setRoomLoading(true);
+    try {
+      switch (action) {
+        case "unsend":
+          await unsendRoomMessage(activeRoomId, messageId);
+          setToast({ type: "success", message: "Đã thu hồi tin nhắn" });
+          break;
+        case "delete":
+          await deleteRoomMessageForMe(activeRoomId, messageId);
+          setToast({ type: "success", message: "Đã xóa tin nhắn" });
+          break;
+        case "pin":
+          await togglePinRoomMessage(activeRoomId, messageId);
+          setToast({ type: "success", message: "Đã cập nhật ghim tin nhắn" });
+          break;
+        default:
+          return;
+      }
+      await loadRooms();
+      setMessageMenuId(null);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [activeRoomId, loadRooms]);
+
+  const createGroup = useCallback(async () => {
+    if (!groupName.trim() || groupMemberIds.length === 0) {
+      setRoomErr("Vui lòng nhập tên nhóm và chọn thành viên");
+      return;
+    }
+    setRoomLoading(true);
+    try {
+      await createGroupRoom({
+        name: groupName,
+        avatar: groupAvatar,
+        memberIds: groupMemberIds
+      });
+      setToast({ type: "success", message: "Đã tạo nhóm thành công" });
+      setGroupName("");
+      setGroupAvatar("");
+      setGroupMemberIds([]);
+      setShowGroupModal(false);
+      await loadRooms();
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [groupName, groupAvatar, groupMemberIds, loadRooms]);
+
+  const onPickMedia = useCallback((file) => {
+    if (file) {
+      setRoomMedia(file);
+    }
+  }, []);
+
+  const onUpdateGroupMeta = useCallback(async ({ name, avatarFile }) => {
+    if (!activeRoomId) return;
+    let nextAvatar = null;
+    if (avatarFile) {
+      try {
+        const uploaded = await uploadToS3(avatarFile);
+        nextAvatar = uploaded?.publicUrl || uploaded?.url || null;
+      } catch (err) {
+        setRoomErr(getApiErrorMessage(err));
         return;
       }
-
-      const peerCount = activeRoom.type === "group" ? Math.max((activeRoom.members || []).length - 1, 1) : 1;
-      socket.emit("call:invite", { roomId: activeRoom.id, callType: activeRoom.type === "group" ? "group" : "direct", peerCount });
-      if (activeRoom.type === "group") {
-        (activeRoom.members || [])
-          .filter((m) => m.id !== user.id)
-          .forEach((m) => {
-            setupPeerConnection(socket, activeRoom.id, m.id, true, peerCount);
-          });
-      } else {
-        setupPeerConnection(socket, activeRoom.id, peerUser.id, true, 1);
-      }
-    } catch (err) {
-      setRoomErr(err.message || "Không thể bắt đầu cuộc gọi video");
-      endCall();
     }
-  }, [activeRoom, user, setupPeerConnection, endCall]);
+    setRooms((prev) => prev.map((room) => {
+      if (room.id !== activeRoomId) return room;
+      return {
+        ...room,
+        name: typeof name === "string" && name.trim() ? name.trim() : room.name,
+        avatar: nextAvatar || room.avatar
+      };
+    }));
+    if (name || nextAvatar) {
+      setToast({ type: "success", message: "Đã cập nhật thông tin nhóm" });
+    }
+  }, [activeRoomId]);
 
-  useEffect(() => {
-    if (!ready || !user || tabState !== "multi") return;
-    const socket = connectSocket();
+  const doForward = useCallback(async (targetRoomId) => {
+    if (!forwardingMessageId || !activeRoomId) return;
+    setRoomLoading(true);
+    try {
+      await forwardRoomMessage(activeRoomId, forwardingMessageId, targetRoomId);
+      setToast({ type: "success", message: "Đã chuyển tiếp tin nhắn" });
+      await loadRooms();
+      setForwardingMessageId(null);
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [activeRoomId, forwardingMessageId, loadRooms]);
 
-    const handleOffer = async ({ roomId, fromUserId, sdp, peerCount }) => {
-      if (!roomId || roomId !== activeRoomId || !sdp) return;
-      try {
-        if (!localStreamRef.current) {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          console.log("STREAM:", stream);
-          localStreamRef.current = stream;
-          setShowVideoCall(true);
-          attachLocalStreamToVideo(stream);
-        }
-        setCallStatus("ringing");
-        const pc = setupPeerConnection(socket, roomId, fromUserId, false, peerCount || 1);
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit("webrtc:answer", { roomId, toUserId: fromUserId, sdp: pc.localDescription });
-        socket.emit("call:accept", { roomId });
-      } catch (err) {
-        setRoomErr(err.message || "Không thể xử lý offer cuộc gọi");
-      }
-    };
+  const sendStaff = useCallback(async () => {
+    if (!staffInput.trim()) return;
+    setStaffLoading(true);
+    try {
+      await postStaffChat(staffInput);
+      setStaffInput("");
+      await loadStaff();
+      setTimeout(scrollToBottom, 100);
+    } catch (err) {
+      setStaffErr(getApiErrorMessage(err));
+    } finally {
+      setStaffLoading(false);
+    }
+  }, [staffInput, loadStaff, scrollToBottom]);
 
-    const handleAnswer = async ({ roomId, fromUserId, sdp }) => {
-      if (!roomId || roomId !== activeRoomId || !sdp) return;
-      const pc = peerMapRef.current.get(fromUserId) || peerRef.current;
-      if (!pc) return;
-      try {
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        setCallStatus("in-call");
-      } catch (err) {
-        setRoomErr(err.message || "Không thể xử lý answer cuộc gọi");
-      }
-    };
-
-    const handleCandidate = async ({ roomId, fromUserId, candidate }) => {
-      if (!roomId || roomId !== activeRoomId || !candidate) return;
-      const pc = peerMapRef.current.get(fromUserId) || peerRef.current;
-      if (!pc) return;
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (err) {
-        console.error("ICE error", err);
-      }
-    };
-
-    const handleEnd = ({ roomId }) => {
-      if (!roomId || roomId !== activeRoomId) return;
-      endCall();
-    };
-
-    socket.on("webrtc:offer", handleOffer);
-    socket.on("webrtc:answer", handleAnswer);
-    socket.on("webrtc:ice-candidate", handleCandidate);
-    socket.on("call:end", handleEnd);
-
-    return () => {
-      socket.off("webrtc:offer", handleOffer);
-      socket.off("webrtc:answer", handleAnswer);
-      socket.off("webrtc:ice-candidate", handleCandidate);
-      socket.off("call:end", handleEnd);
-    };
-  }, [ready, user, tabState, activeRoomId, setupPeerConnection, endCall, videoConstraints]);
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600">
-        Đang tải...
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600">
-        Vui lòng đăng nhập để sử dụng tính năng chat.
-      </div>
-    );
-  }
+  if (!ready) return <LoadingScreen />;
+  if (!user)  return null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
       <GovHeader />
 
-        <main className="mx-auto max-w-7xl px-2 sm:px-4 py-4 md:py-6">
+      <main className="mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-6">
         <div className="mb-4 flex items-center gap-3">
           <button
             onClick={() => navigate("/")}
@@ -704,39 +895,28 @@ export default function ChatPage() {
         <div className="mb-4 sm:mb-6 flex gap-1 rounded-xl bg-slate-100 p-1">
           <button
             onClick={() => setTabState("multi")}
-            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-              tabState === "multi"
-                ? "bg-white text-[#003366] shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all
+              ${tabState === "multi" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/50"}`}
           >
-            💬 Chat đa năng
+            Phòng Chat & Nhóm
           </button>
           <button
-            onClick={() => {
-              setTabState("staff");
-              setStaffUnread(0);
-            }}
-            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-              tabState === "staff"
-                ? "bg-white text-[#003366] shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
+            onClick={() => { setTabState("staff"); setStaffUnread(0); }}
+            className={`flex-1 relative flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all
+              ${tabState === "staff" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/50"}`}
           >
-            👤 Cán bộ hỗ trợ
+            Hỗ trợ Cán bộ
             {staffUnread > 0 && (
-              <span className="ml-1 bg-red-500 text-white text-[10px] px-1 rounded-full">
-                {staffUnread > 99 ? "99+" : staffUnread}
-              </span>
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] text-white animate-bounce shadow-lg">!</span>
             )}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+        <div className="grid gap-4 lg:gap-6 lg:grid-cols-12">
           {tabState === "multi" ? (
             <>
               {/* Sidebar */}
-              <div className="lg:col-span-4">
+              <div className={`${mobileRoomOpen ? "hidden" : "block"} lg:col-span-4 lg:block`}>
                 <ContactList
                   chatModeTab={chatModeTab}
                   setChatModeTab={setChatModeTab}
@@ -749,14 +929,26 @@ export default function ChatPage() {
                   openDirectChat={openDirectChat}
                   openStaffChat={openStaffChat}
                   setShowGroupModal={setShowGroupModal}
+                  onOpenAddFriend={openAddFriendModal}
+                  onOpenFriendHub={openFriendHubModal}
+                  pendingHubCount={friendIncomingRequests.length + groupInvites.length}
                   user={user}
-                  unreadMap={roomUnreadMap}
+                  onSelectRoom={() => setMobileRoomOpen(true)}
                 />
               </div>
 
               {/* Main Chat */}
-              <div className="lg:col-span-8">
-                <div className="h-screen max-h-[80vh] sm:h-[calc(100vh-220px)] min-h-[500px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
+              <div className={`${mobileRoomOpen ? "block" : "hidden"} lg:col-span-8 lg:block`}>
+                <div className="mb-2 flex md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setMobileRoomOpen(false)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+                  >
+                    Quay lại danh sách
+                  </button>
+                </div>
+                <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
                   <ChatMultiPurpose
                     roomErr={roomErr}
                     activeRoom={activeRoom}
@@ -776,33 +968,7 @@ export default function ChatPage() {
                     sendRoom={sendRoom}
                     roomLoading={roomLoading}
                     onPickMedia={onPickMedia}
-                    onSendLocation={async () => {
-                      if (!activeRoomId) return;
-                      if (!navigator.geolocation) {
-                        setRoomErr("Trình duyệt không hỗ trợ định vị");
-                        return;
-                      }
-                      navigator.geolocation.getCurrentPosition(
-                        async (position) => {
-                          try {
-                            const lat = Number(position.coords.latitude);
-                            const lng = Number(position.coords.longitude);
-                            const mapUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`;
-                            await postRoomMessage(activeRoomId, {
-                              text: "",
-                              location: { lat, lng, mapUrl }
-                            });
-                            loadRooms();
-                          } catch (err) {
-                            setRoomErr(getApiErrorMessage(err));
-                          }
-                        },
-                        (error) => {
-                          setRoomErr(error?.message || "Không thể lấy vị trí hiện tại");
-                        },
-                        { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
-                      );
-                    }}
+                    onSendLocation={sendLocationMessage}
                     forwardingMessageId={forwardingMessageId}
                     setForwardingMessageId={setForwardingMessageId}
                     doForward={doForward}
@@ -811,21 +977,13 @@ export default function ChatPage() {
                     onStartVideoCall={startVideoCall}
                     replyToMessage={replyToMessage}
                     clearReply={() => setReplyToMessage(null)}
-                    onUpdateGroupInfo={updateActiveGroupInfo}
-                    onReactMessage={async (messageId, reaction) => {
-                      if (!activeRoomId) return;
-                      try {
-                        await reactRoomMessage(activeRoomId, messageId, reaction);
-                        loadRooms();
-                      } catch (err) {
-                        setRoomErr(getApiErrorMessage(err));
-                      }
-                    }}
+                    chatEndRef={chatEndRef}
+                    onUpdateGroupMeta={onUpdateGroupMeta}
                 />
               </div>
             </div>
-            </>
-          ) : (
+          </>
+        ) : (
             // Staff chat tab
             <div className="lg:col-span-12">
               <div className="h-[calc(100vh-190px)] min-h-[460px] rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col">
@@ -902,6 +1060,67 @@ export default function ChatPage() {
         createGroup={createGroup}
       />
 
+      <AddFriendModal
+        open={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
+        query={friendQuery}
+        setQuery={setFriendQuery}
+        users={friendDiscovery}
+        suggestions={friendSuggestions}
+        requests={friendIncomingRequests}
+        onSearch={() => loadFriendDiscovery(friendQuery)}
+        onAdd={handleSendFriendRequest}
+        onAccept={(userId) => handleRespondFriendRequest(userId, "accept")}
+        onDecline={(userId) => handleRespondFriendRequest(userId, "decline")}
+        loading={friendLoading}
+        searchNotice={friendSearchNotice}
+      />
+
+      <FriendHubModal
+        open={showFriendHubModal}
+        onClose={() => setShowFriendHubModal(false)}
+        currentUserId={user?.id}
+        onOpenAddFriend={() => {
+          setShowFriendHubModal(false);
+          openAddFriendModal();
+        }}
+        friends={friendDirectory}
+        blockedFriends={blockedFriends}
+        groups={rooms.filter((room) => room.type === "group")}
+        incomingGroupInvites={groupInvites}
+        incomingRequests={friendIncomingRequests}
+        outgoingRequests={friendOutgoingRequests}
+        suggestions={friendSuggestions}
+        loading={friendLoading}
+        onOpenChat={async (friendId) => {
+          setShowFriendHubModal(false);
+          await openDirectChat(friendId);
+        }}
+        onOpenGroup={(roomId) => {
+          setShowFriendHubModal(false);
+          setActiveRoomId(roomId);
+          setChatModeTab("rooms");
+          setTabState("multi");
+        }}
+        onAccept={(userId) => handleRespondFriendRequest(userId, "accept")}
+        onDecline={(userId) => handleRespondFriendRequest(userId, "decline")}
+        onRevokeRequest={handleRevokeFriendRequest}
+        onSendFriendRequest={handleSendFriendRequest}
+        onRemoveFriend={handleRemoveFriend}
+        onBlockFriend={handleBlockFriend}
+        onInviteMembers={handleInviteMembersToGroup}
+        onRespondGroupInvite={handleRespondGroupInvite}
+        onUnblockFriend={handleUnblockFriend}
+      />
+
+      {toast ? (
+        <div className="fixed right-4 top-4 z-[110]">
+          <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(15,23,42,0.28)]">
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
+
       {forwardingMessageId && (
         <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-4">
@@ -920,155 +1139,32 @@ export default function ChatPage() {
         </div>
       )}
 
-      {showVideoCall && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md">
-          <div className="relative flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#07111f] shadow-2xl shadow-black/40">
-            <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-sky-500/20 to-transparent pointer-events-none" />
-            <div className="relative flex items-center justify-between gap-3 border-b border-white/10 bg-white/5 px-4 py-3 text-white sm:px-6">
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 text-sm font-bold shadow-lg shadow-sky-500/30">
-                  VC
-                </div>
-                <div>
-                  <div className="text-sm font-semibold sm:text-base">Video Call - Dịch vụ công</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/75">
-                    <span className="rounded-full bg-white/10 px-2.5 py-1">Trạng thái: {callStatus}</span>
-                    <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-emerald-300">Đang bảo mật</span>
-                    <span className="rounded-full bg-white/10 px-2.5 py-1">{1 + Object.keys(remoteStreams).length} người</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={endCall}
-                className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
-              >
-                Đóng
-              </button>
-            </div>
+      {incomingCall && (
+        <IncomingCallModal call={incomingCall} onAccept={() => acceptCall(incomingCall)} onReject={rejectCall} />
+      )}
 
-            <div className="grid flex-1 grid-cols-1 gap-3 overflow-y-auto bg-[#08101d] p-3 sm:p-4 xl:grid-cols-12">
-              <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-slate-950 xl:col-span-7">
-                <div className="absolute left-4 top-4 z-10 rounded-full bg-black/45 px-3 py-1 text-[11px] font-medium text-white backdrop-blur">
-                  Bạn • {micMuted ? "Mic tắt" : "Mic bật"} • {camMuted ? "Cam tắt" : "Cam bật"}
-                </div>
-                <video ref={localVideoRef} autoPlay playsInline muted className="h-full min-h-[340px] w-full object-cover sm:min-h-[420px]" />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-4 pt-10">
-                  <div className="flex items-center justify-between text-white">
-                    <div>
-                      <div className="text-sm font-semibold">Camera của bạn</div>
-                      <div className="text-xs text-white/70">Hình ảnh sẽ hiển thị ngay khi mở cuộc gọi</div>
-                    </div>
-                    <div className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80">Local</div>
-                  </div>
-                </div>
-              </div>
+      {videoCallState && (
+        <VideoCall
+          roomId={videoCallState.roomId}
+          targetUserId={videoCallState.targetUserId}
+          targetUserIds={videoCallState.targetUserIds}
+          isCallee={videoCallState.isCallee}
+          callerOffer={videoCallState.callerOffer}
+          callerOffers={videoCallState.callerOffers}
+          currentUserName={user.fullName}
+          activeRoom={activeRoom}
+          onClose={() => {
+            setVideoCallState(null);
+            setIsCalling(false);
+          }}
+        />
+      )}
 
-              <div className="xl:col-span-5 flex flex-col gap-3">
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-white">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold">Người tham gia</div>
-                      <div className="text-xs text-white/60">Video từ các user khác</div>
-                    </div>
-                    <div className="rounded-full bg-sky-500/15 px-3 py-1 text-xs text-sky-200">
-                      {Object.keys(remoteStreams).length} remote
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-1">
-                    {Object.entries(remoteStreams).map(([peerId, stream]) => (
-                      <RemoteVideoTile key={peerId} peerId={peerId} stream={stream} />
-                    ))}
-                    {Object.keys(remoteStreams).length === 0 && (
-                      <div className="grid place-items-center rounded-2xl border border-dashed border-white/15 bg-white/5 p-8 text-center text-sm text-white/65">
-                        <div>
-                          <div className="font-medium text-white">Đang chờ người khác tham gia</div>
-                          <div className="mt-1 text-xs text-white/55">Khi có người vào, video sẽ hiện tại đây</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-white">
-                  <div className="mb-3 text-sm font-semibold">Điều khiển cuộc gọi</div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMicMuted((v) => {
-                          const next = !v;
-                          if (localStreamRef.current) {
-                            localStreamRef.current.getAudioTracks().forEach((track) => {
-                              track.enabled = !next;
-                            });
-                          }
-                          return next;
-                        });
-                      }}
-                      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${micMuted ? "bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30" : "bg-white/10 text-white hover:bg-white/15"}`}
-                      title={micMuted ? "Bật mic" : "Tắt mic"}
-                    >
-                      {micMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                      <span>{micMuted ? "Bật mic" : "Tắt mic"}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCamMuted((v) => {
-                          const next = !v;
-                          if (localStreamRef.current) {
-                            localStreamRef.current.getVideoTracks().forEach((track) => {
-                              track.enabled = !next;
-                            });
-                          }
-                          return next;
-                        });
-                      }}
-                      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${camMuted ? "bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30" : "bg-white/10 text-white hover:bg-white/15"}`}
-                      title={camMuted ? "Bật camera" : "Tắt camera"}
-                    >
-                      {camMuted ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
-                      <span>{camMuted ? "Bật cam" : "Tắt cam"}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          if (!localStreamRef.current) return;
-                          const [videoTrack] = localStreamRef.current.getVideoTracks();
-                          if (!videoTrack) return;
-                          const enabled = !videoTrack.enabled;
-                          videoTrack.enabled = enabled;
-                          setCamMuted(!enabled);
-                        } catch (err) {
-                          setRoomErr(err.message || "Không thể đổi camera");
-                        }
-                      }}
-                      className="flex items-center justify-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
-                      title="Bật/tắt video nhanh"
-                    >
-                      <Video className="h-5 w-5" />
-                      <span>Đảo cam</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const socket = connectSocket();
-                        socket.emit("call:end", { roomId: activeRoomId });
-                        endCall();
-                      }}
-                      className="flex items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
-                      title="Kết thúc cuộc gọi"
-                    >
-                      <PhoneOff className="h-5 w-5" />
-                      <span>End</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      {roomErr && (
+        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] animate-in slide-in-from-right-10 flex items-center gap-3">
+          <div className="bg-white/20 p-1.5 rounded-full"><X size={16} /></div>
+          <span className="text-sm font-bold">{roomErr}</span>
+          <button onClick={() => setRoomErr(null)} className="ml-4 text-xs underline opacity-80">Đóng</button>
         </div>
       )}
     </div>

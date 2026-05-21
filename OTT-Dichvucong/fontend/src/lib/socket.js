@@ -2,56 +2,56 @@ import { io } from "socket.io-client";
 
 let socket = null;
 
-export function connectSocket() {
+/**
+ * Trả về socket singleton — tạo mới chỉ khi chưa có instance nào.
+ * Không kiểm tra socket.connected để tránh tạo duplicate instance
+ * khi socket đang ở trạng thái "connecting".
+ */
+export const connectSocket = () => {
+  if (socket) return socket; // ← FIX: trả về instance cũ dù chưa connected
+
   const token = localStorage.getItem("token");
   if (!token) {
-    console.debug("[Socket] skip connect: no token");
-    return null;
+    console.warn("[SOCKET] ⚠️ Không tìm thấy token.");
   }
 
-  if (socket?.connected && socket.auth?.token === token) {
-    return socket;
-  }
+  const socketURL = import.meta.env.VITE_SOCKET_URL || "/";
+  console.log(`[SOCKET] 🔌 Khởi tạo kết nối tới: ${socketURL}`);
 
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
-
-  socket = io("http://localhost:3000", {
+  socket = io(socketURL, {
     auth: { token },
     transports: ["websocket", "polling"],
-    withCredentials: true,
     reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 10000
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
+    withCredentials: true,
   });
 
   socket.on("connect", () => {
-    console.info("[Socket] connected", socket.id);
+    console.log(`[SOCKET] ✅ Đã kết nối: ${socket.id}`);
   });
 
   socket.on("connect_error", (err) => {
-    console.log("SOCKET ERROR:", err.message);
-    console.warn("[Socket] connect_error", err.message, err);
+    console.error(`[SOCKET] ❌ Lỗi kết nối: ${err.message}`);
   });
 
-  socket.on("reconnect_attempt", (attempt) => {
-    console.info("[Socket] reconnect_attempt", attempt);
+  socket.on("disconnect", (reason) => {
+    console.warn(`[SOCKET] ⚠️ Ngắt kết nối: ${reason}`);
+    if (reason === "io server disconnect") {
+      socket.connect();
+    }
   });
 
   return socket;
-}
+};
 
-export function disconnectSocket() {
+/**
+ * Ngắt kết nối khi Logout
+ */
+export const disconnectSocket = () => {
   if (socket) {
     socket.disconnect();
     socket = null;
+    console.log("[SOCKET] ⏹️ Đã xóa instance socket.");
   }
-}
-
-export function getSocket() {
-  return socket;
-}
+};

@@ -1,16 +1,29 @@
-import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Info,
+  ShieldCheck,
+  Sparkles,
+  UploadCloud,
+  CircleCheck,
+  CircleDashed,
+  CreditCard,
+} from "lucide-react";
 import {
   getApiErrorMessage,
   getServiceById,
-  submitServiceApplication,
+  mockPaymentComplete,
   presignAttachmentUpload,
-  generatePaymentQr,
+  submitServiceApplication,
   verifyPaymentStatus,
-  mockPaymentComplete
 } from "../lib/api";
+import { uploadToS3 } from "../lib/uploadToS3.js";
 
-// Import QR code images
 import momo1 from "../assets/payment-qrs/momo_a1.jpg";
 import momo2 from "../assets/payment-qrs/momo_a2.jpg";
 import momo3 from "../assets/payment-qrs/momo_a3.jpg";
@@ -18,790 +31,558 @@ import zalopay1 from "../assets/payment-qrs/zalopay_b1.jpg";
 import zalopay2 from "../assets/payment-qrs/zalopayb2.jpg";
 import zalopay3 from "../assets/payment-qrs/zalopay_b3.jpg";
 
+const defaultTimeline = ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"];
+const defaultFaq = [
+  { q: "Hồ sơ thiếu giấy tờ thì sao?", a: "Hệ thống sẽ báo rõ giấy tờ còn thiếu ngay khi bạn bấm nộp hồ sơ." },
+  { q: "Có thể thanh toán online không?", a: "Có. Bạn có thể thanh toán qua MoMo hoặc ZaloPay theo quy trình hiển thị sau khi nộp." },
+  { q: "Mất bao lâu để xử lý?", a: "Thời gian xử lý sẽ hiển thị ngay trên trang dịch vụ để bạn dễ theo dõi." },
+];
+
+const demoServices = {
+  "demo-ho-tich": {
+    name: "Đăng ký khai sinh",
+    description: "Nộp hồ sơ khai sinh trực tuyến, theo dõi trạng thái và nhận thông báo xử lý.",
+    categoryName: "Hộ tịch",
+    processingTime: "3 ngày làm việc",
+    fee: 0,
+    documents: [
+      { key: "idCard", label: "CCCD/CMND người nộp", required: true },
+      { key: "birthCert", label: "Giấy chứng sinh", required: true },
+    ],
+    timeline: defaultTimeline,
+    faq: defaultFaq,
+  },
+  "demo-dat-dai": {
+    name: "Đăng ký biến động đất đai",
+    description: "Thực hiện tiếp nhận hồ sơ, đính kèm giấy tờ và theo dõi tiến độ xử lý.",
+    categoryName: "Đất đai",
+    processingTime: "5 ngày làm việc",
+    fee: 20000,
+    documents: [
+      { key: "landPaper", label: "Giấy chứng nhận quyền sử dụng đất", required: true },
+      { key: "requestForm", label: "Đơn đăng ký biến động", required: true },
+    ],
+    timeline: defaultTimeline,
+    faq: defaultFaq,
+  },
+  "demo-xay-dung": {
+    name: "Xin cấp phép xây dựng",
+    description: "Tra cứu điều kiện, giấy tờ cần nộp và thanh toán phí dịch vụ trực tuyến.",
+    categoryName: "Xây dựng",
+    processingTime: "7 ngày làm việc",
+    fee: 50000,
+    documents: [
+      { key: "landPaper", label: "Giấy tờ đất", required: true },
+      { key: "design", label: "Bản vẽ thiết kế", required: true },
+    ],
+    timeline: defaultTimeline,
+    faq: defaultFaq,
+  },
+  "demo-gplx": {
+    name: "Đổi giấy phép lái xe",
+    description: "Điền form, tải file hồ sơ và nhận mã tra cứu sau khi nộp.",
+    categoryName: "Giao thông",
+    processingTime: "4 ngày làm việc",
+    fee: 150000,
+    documents: [
+      { key: "oldLicense", label: "Giấy phép lái xe cũ", required: true },
+      { key: "health", label: "Giấy khám sức khỏe", required: true },
+    ],
+    timeline: defaultTimeline,
+    faq: defaultFaq,
+  },
+  "demo-ho-chieu": {
+    name: "Cấp hộ chiếu phổ thông",
+    description: "Hỗ trợ nộp hồ sơ online và thanh toán lệ phí theo quy trình điện tử.",
+    categoryName: "Hộ chiếu",
+    processingTime: "8 ngày làm việc",
+    fee: 200000,
+    documents: [
+      { key: "photo", label: "Ảnh chân dung", required: true },
+      { key: "idCard", label: "CCCD/CMND", required: true },
+    ],
+    timeline: defaultTimeline,
+    faq: defaultFaq,
+  },
+  "demo-doanh-nghiep": {
+    name: "Đăng ký thành lập doanh nghiệp",
+    description: "Quản lý biểu mẫu, giấy tờ và trạng thái xử lý hồ sơ doanh nghiệp.",
+    categoryName: "Doanh nghiệp",
+    processingTime: "3-5 ngày làm việc",
+    fee: 100000,
+    documents: [
+      { key: "charter", label: "Điều lệ công ty", required: true },
+      { key: "memberList", label: "Danh sách thành viên/cổ đông", required: true },
+    ],
+    timeline: defaultTimeline,
+    faq: defaultFaq,
+  },
+};
+
+const steps = [
+  { id: 1, title: "Chuẩn bị hồ sơ" },
+  { id: 2, title: "Thanh toán" },
+  { id: 3, title: "Hoàn tất" },
+];
+
+const currency = new Intl.NumberFormat("vi-VN");
+
 export default function ServiceWizard() {
   const { serviceId } = useParams();
-
-  const [step, setStep] = useState(1);
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [step, setStep] = useState(1);
   const [submitResult, setSubmitResult] = useState(null);
-  const [err, setErr] = useState("");
-
-  const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    citizenId: "",
-    address: "",
-    ward: "",
-    district: "",
-    city: "",
-    requestContent: ""
-  });
-
-  const [errors, setErrors] = useState({});
-  const [paymentMethod, setPaymentMethod] = useState("VNPay");
-  const [attachments, setAttachments] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-  
-  // Payment states
-  const [qrCode, setQrCode] = useState(null);
-  const [paymentStatus, setPaymentStatus] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState("PENDING");
   const [paymentExpireAt, setPaymentExpireAt] = useState(null);
-  const [paymentPolling, setPaymentPolling] = useState(false);
-  const pollIntervalRef = useRef(null);
-
-  // Map payment method to QR images
-  const getQRImage = useCallback(() => {
-    let serviceIndex = 1; // Default to 1
-    
-    // Try to determine service index from serviceId
-    if (serviceId === "1") serviceIndex = 1;
-    else if (serviceId === "2") serviceIndex = 2;
-    else if (serviceId === "3") serviceIndex = 3;
-    // For other IDs, try to extract number or use modulo
-    else {
-      const match = serviceId.match(/\d+/);
-      if (match) {
-        serviceIndex = ((parseInt(match[0]) - 1) % 3) + 1;
-      }
-    }
-
-    // Map payment method to QR code
-    if (paymentMethod === "MoMo") {
-      if (serviceIndex === 1) return momo1;
-      if (serviceIndex === 2) return momo2;
-      return momo3; // default to 3
-    } else if (paymentMethod === "ZaloPay" || paymentMethod === "ChuyenKhoan") {
-      if (serviceIndex === 1) return zalopay1;
-      if (serviceIndex === 2) return zalopay2;
-      return zalopay3; // default to 3
-    } else {
-      // Default to zalopay for other methods
-      if (serviceIndex === 1) return zalopay1;
-      if (serviceIndex === 2) return zalopay2;
-      return zalopay3;
-    }
-  }, [serviceId, paymentMethod]);
+  const [paymentMethod, setPaymentMethod] = useState("MoMo");
+  const [formData, setFormData] = useState({ fullName: "", citizenId: "", email: "", phone: "", address: "", note: "" });
+  const [formErrors, setFormErrors] = useState({});
+  const [fileItems, setFileItems] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const pollRef = useRef(null);
 
   useEffect(() => {
-    async function load() {
+    async function loadService() {
       try {
         const { data } = await getServiceById(serviceId);
         setService(data);
       } catch (e) {
-        setErr(getApiErrorMessage(e));
+        const demo = demoServices[serviceId];
+        if (demo) setService({ serviceId, id: serviceId, ...demo });
+        else setError(getApiErrorMessage(e) || "Không tìm thấy dịch vụ");
       } finally {
         setLoading(false);
       }
     }
-    load();
+    loadService();
   }, [serviceId]);
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const docs = useMemo(() => service?.documents || [], [service]);
+  const requiredDocs = useMemo(() => docs.filter((d) => d.required), [docs]);
+  const missingDocs = useMemo(() => requiredDocs.filter((d) => !fileItems[d.key]), [requiredDocs, fileItems]);
+  const feeText = useMemo(() => `${currency.format(service?.fee || 0)} VNĐ`, [service]);
+  const serviceTimeline = useMemo(() => (service?.timeline?.length ? service.timeline : defaultTimeline), [service]);
+  const faq = useMemo(() => (service?.faq?.length ? service.faq : defaultFaq), [service]);
+  const qrImage = useMemo(() => {
+    const idx = String(serviceId || "1").match(/\d+/)?.[0] || "1";
+    const n = ((Number(idx) - 1) % 3) + 1;
+    return paymentMethod === "MoMo" ? [momo1, momo2, momo3][n - 1] : [zalopay1, zalopay2, zalopay3][n - 1];
+  }, [serviceId, paymentMethod]);
 
   function validateField(name, value) {
     if (name === "fullName" && !value.trim()) return "Họ tên là bắt buộc";
-    if (name === "email" && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      return "Email không đúng định dạng";
-    }
-    if (name === "phone" && !/^\d{10}$/.test(value)) {
-      return "Số điện thoại phải đủ 10 số";
-    }
-    if (name === "citizenId" && !/^\d{9,12}$/.test(value)) {
-      return "CCCD/CMND phải từ 9 đến 12 số";
-    }
+    if (name === "citizenId" && !/^\d{9,12}$/.test(value)) return "CCCD/CMND phải từ 9 đến 12 số";
+    if (name === "email" && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Email không đúng định dạng";
+    if (name === "phone" && !/^\d{10,11}$/.test(value)) return "Số điện thoại không hợp lệ";
     if (name === "address" && !value.trim()) return "Địa chỉ là bắt buộc";
-    if (name === "requestContent" && !value.trim()) return "Nội dung yêu cầu là bắt buộc";
     return "";
   }
 
-  function handleChange(e) {
+  function onChange(e) {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({
-      ...prev,
-      [name]: validateField(name, value)
-    }));
+    setFormData((p) => ({ ...p, [name]: value }));
+    setFormErrors((p) => ({ ...p, [name]: validateField(name, value) }));
   }
 
-  function validateStep2() {
-    const requiredFields = [
-      "fullName",
-      "phone",
-      "citizenId",
-      "address",
-      "requestContent"
-    ];
-
-    const nextErrors = {};
-    requiredFields.forEach((key) => {
-      const msg = validateField(key, formData[key] || "");
-      if (msg) nextErrors[key] = msg;
+  function validateForm() {
+    const next = {};
+    ["fullName", "citizenId", "address", "phone"].forEach((k) => {
+      const msg = validateField(k, formData[k] || "");
+      if (msg) next[k] = msg;
     });
-
     if (formData.email) {
-      const emailError = validateField("email", formData.email);
-      if (emailError) nextErrors.email = emailError;
+      const msg = validateField("email", formData.email);
+      if (msg) next.email = msg;
     }
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    if (missingDocs.length) next.files = `Bạn còn thiếu ${missingDocs.length} giấy tờ bắt buộc`;
+    setFormErrors(next);
+    return Object.keys(next).length === 0;
   }
 
-  function handleFileChange(docKey, file) {
+  function onPickFile(key, file) {
     if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
-
-    setAttachments((prev) => ({
-      ...prev,
-      [docKey]: {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        previewUrl,
-        file  // Store the File object for later upload
-      }
-    }));
+    setFileItems((p) => ({ ...p, [key]: { file, name: file.name, type: file.type, previewUrl: URL.createObjectURL(file) } }));
   }
 
-  function validateStep3() {
-    if (!service) return false;
-    const missing = service.documents.filter(
-      (doc) => doc.required && !attachments[doc.key]
-    );
-    if (missing.length > 0) {
-      alert("Bạn chưa tải đủ giấy tờ bắt buộc.");
-      return false;
-    }
-    return true;
-  }
-
-  async function handleSubmitApplication() {
+  async function onSubmit() {
+    if (!validateForm()) return;
     try {
       setSubmitting(true);
-      // Upload all files to S3 first
-      const uploadedAttachments = {};
-      
-      for (const [docKey, attachmentData] of Object.entries(attachments)) {
-        if (!attachmentData.file) continue;
-        
-        try {
-          // Get presigned URL from backend
-          const presignRes = await presignAttachmentUpload({
-            fileName: attachmentData.name,
-            contentType: attachmentData.type,
-            applicationId: "new",
-            docKey: docKey
-          });
-
-          const { uploadUrl, publicUrl } = presignRes.data;
-
-          // Upload file directly to S3
-          await fetch(uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": attachmentData.type },
-            body: attachmentData.file
-          });
-
-          // Store the public URL instead of blob URL
-          uploadedAttachments[docKey] = {
-            name: attachmentData.name,
-            size: attachmentData.size,
-            type: attachmentData.type,
-            previewUrl: publicUrl  // Use S3 public URL
-          };
-        } catch (uploadErr) {
-          console.error(`Failed to upload ${docKey}:`, uploadErr);
-          alert(`Lỗi upload tệp ${docKey}. Vui lòng thử lại.`);
-          setSubmitting(false);
-          return;
-        }
+      const uploaded = [];
+      for (const [key, item] of Object.entries(fileItems)) {
+        const safeContentType = item.type || "application/octet-stream";
+        const safeKey = `chat-media/${serviceId || "service"}/${key}-${Date.now()}-${item.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        const presignRes = await presignAttachmentUpload({ key: safeKey, contentType: safeContentType, fileName: item.name, applicationId: "new", docKey: key });
+        await uploadToS3(item.file);
+        uploaded.push({ key, name: item.name, previewUrl: presignRes.data?.publicUrl || item.previewUrl, type: item.type });
       }
 
       const payload = {
-        serviceId: service.id,
-        formData,
+        serviceId: service?.serviceId || service?.id || serviceId,
+        formData: {
+          fullName: formData.fullName,
+          citizenId: formData.citizenId,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          requestContent: formData.note,
+        },
         paymentMethod,
-        attachments: Object.entries(uploadedAttachments).map(([key, value]) => ({
-          key,
-          ...value
-        }))
+        attachments: uploaded,
       };
 
       const { data } = await submitServiceApplication(payload);
       setSubmitResult(data);
-      
-      // Move to payment step with application code
-      await generateQRCode(data.applicationCode);
-      setStep(5);
+      setPaymentExpireAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
+      setPaymentStatus("PENDING");
+      setStep(2);
+
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        try {
+          const { data: st } = await verifyPaymentStatus(data.applicationCode);
+          setPaymentStatus(st.paymentStatus || "PENDING");
+          if (st.paymentStatus === "PAID") {
+            clearInterval(pollRef.current);
+            setStep(3);
+          }
+        } catch {
+          // keep polling silently for smoother UX
+        }
+      }, 3000);
     } catch (e) {
-      const message = getApiErrorMessage(e);
-      alert(message);
+      alert(getApiErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function generateQRCode(applicationCode) {
-    try {
-      // Use static QR image based on payment method
-      const qrImage = getQRImage();
-      setQrCode(qrImage);
-      setPaymentStatus("pending");
-
-      // Set expiry time to 60 minutes from now
-      const expireTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      setPaymentExpireAt(expireTime);
-
-      // Start polling for payment status
-      startPaymentPolling(applicationCode);
-    } catch (err) {
-      console.error("generateQRCode error:", err);
-      alert(getApiErrorMessage(err));
-    }
-  }
-
-  function startPaymentPolling(applicationCode) {
-    setPaymentPolling(true);
-    
-    // Poll every 3 seconds
-    pollIntervalRef.current = setInterval(async () => {
-      try {
-        const statusRes = await verifyPaymentStatus(applicationCode);
-        const { paymentStatus: status } = statusRes.data;
-
-        setPaymentStatus(status);
-
-        if (status === "completed") {
-          // Payment successful
-          clearInterval(pollIntervalRef.current);
-          setPaymentPolling(false);
-          setStep(6);
-        } else if (status === "expired") {
-          // Payment expired
-          clearInterval(pollIntervalRef.current);
-          setPaymentPolling(false);
-          alert("Hết thời gian thanh toán. Vui lòng nộp hồ sơ mới.");
-          setStep(1);
-        }
-      } catch (err) {
-        console.error("Polling error:", err);
-      }
-    }, 3000);
-  }
-
-  function stopPaymentPolling() {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-      setPaymentPolling(false);
-    }
-  }
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      stopPaymentPolling();
-    };
-  }, []);
-
-  function handleMockPaymentComplete() {
+  async function onMockPaid() {
     if (!submitResult?.applicationCode) return;
-    try {
-      mockPaymentComplete(submitResult.applicationCode);
-      setPaymentStatus("completed");
-      stopPaymentPolling();
-      setTimeout(() => {
-        setStep(6);
-      }, 500);
-    } catch (err) {
-      alert("Lỗi: " + getApiErrorMessage(err));
-    }
+    await mockPaymentComplete(submitResult.applicationCode);
+    setPaymentStatus("PAID");
+    if (pollRef.current) clearInterval(pollRef.current);
+    setStep(3);
   }
 
-  async function handleSubmit() {
-    try {
-      setSubmitting(true);
-      // Upload all files to S3 first
-      const uploadedAttachments = {};
-      
-      for (const [docKey, attachmentData] of Object.entries(attachments)) {
-        if (!attachmentData.file) continue;
-        
-        try {
-          // Get presigned URL from backend
-          const presignRes = await presignAttachmentUpload({
-            fileName: attachmentData.name,
-            contentType: attachmentData.type,
-            applicationId: "new",
-            docKey: docKey
-          });
+  if (loading) return <PageShell>Đang tải dữ liệu dịch vụ...</PageShell>;
+  if (error || !service) return <PageShell>Không tìm thấy dịch vụ</PageShell>;
 
-          const { uploadUrl, publicUrl } = presignRes.data;
-
-          // Upload file directly to S3
-          await fetch(uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": attachmentData.type },
-            body: attachmentData.file
-          });
-
-          // Store the public URL instead of blob URL
-          uploadedAttachments[docKey] = {
-            name: attachmentData.name,
-            size: attachmentData.size,
-            type: attachmentData.type,
-            previewUrl: publicUrl  // Use S3 public URL
-          };
-        } catch (uploadErr) {
-          console.error(`Failed to upload ${docKey}:`, uploadErr);
-          alert(`Lỗi upload tệp ${docKey}. Vui lòng thử lại.`);
-          setSubmitting(false);
-          return;
-        }
-      }
-
-      const payload = {
-        serviceId: service.id,
-        formData,
-        paymentMethod,
-        attachments: Object.entries(uploadedAttachments).map(([key, value]) => ({
-          key,
-          ...value
-        }))
-      };
-
-      const { data } = await submitServiceApplication(payload);
-      setSubmitResult(data);
-      setStep(5);
-    } catch (e) {
-      const message = getApiErrorMessage(e);
-      alert(message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const feeText = useMemo(() => {
-    if (!service) return "";
-    return new Intl.NumberFormat("vi-VN").format(service.fee) + " VNĐ";
-  }, [service]);
-
-  if (loading) {
-    return <div style={styles.page}>Đang tải dữ liệu dịch vụ...</div>;
-  }
-
-  if (err) {
-    return <div style={styles.page}>Lỗi: {err}</div>;
-  }
-
-  if (!service) {
-    return <div style={styles.page}>Không có dữ liệu dịch vụ</div>;
-  }
+  const completedCount = docs.filter((doc) => fileItems[doc.key]).length;
 
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-        <div style={styles.topBar}>
-          <Link to="/" style={styles.link}>Trang chủ</Link>
-          <span style={{ color: "#94a3b8" }}> / </span>
-          <Link to="/services" style={styles.link}>Dịch vụ</Link>
-          <span style={{ color: "#94a3b8" }}> / </span>
+        <div style={styles.breadcrumb}>
+          <Link to="/" style={styles.breadcrumbLink}><ArrowLeft size={14} /> Trang chủ</Link>
+          <span>/</span>
+          <Link to="/services" style={styles.breadcrumbLink}>Dịch vụ</Link>
+          <span>/</span>
           <span>{service.name}</span>
         </div>
 
-        <h1 style={styles.title}>{service.name}</h1>
-        <div style={styles.stepText}>Bước {step <= 5 ? step : 5} / 5</div>
+        <div style={styles.hero}>
+          <div style={styles.heroLeft}>
+            <span style={styles.badge}><Sparkles size={14} /> Dịch vụ công trực tuyến</span>
+            <h1 style={styles.title}>{service.name}</h1>
+            <p style={styles.subtitle}>{service.description || "Chi tiết hồ sơ, giấy tờ cần nộp và thanh toán được hiển thị rõ ràng bên dưới."}</p>
+            <div style={styles.metaRow}>
+              <Meta icon={Clock3} label={service.processingTime || "Đang cập nhật"} />
+              <Meta icon={BadgeCheck} label={feeText} />
+              <Meta icon={ShieldCheck} label={service.categoryName || service.category || "Hành chính công"} />
+            </div>
+          </div>
 
-        {step === 1 && (
-          <div style={styles.card}>
-            <h2 style={styles.sectionTitle}>Bước 1: Chọn dịch vụ & xem điều kiện</h2>
-            <p><strong>Thời gian giải quyết:</strong> {service.processingTime}</p>
-            <p><strong>Lệ phí:</strong> {feeText}</p>
-            <p><strong>Mô tả:</strong> {service.description}</p>
-
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Giấy tờ cần chuẩn bị:</div>
-              <ul style={{ paddingLeft: 20 }}>
-                {service.documents.map((doc) => (
-                  <li key={doc.key} style={{ marginBottom: 6 }}>
-                    {doc.label} {doc.required && <span style={{ color: "red" }}>*</span>}
-                  </li>
+          <div style={styles.heroRight}>
+            <div style={styles.progressCard}>
+              <div style={{ fontWeight: 900, marginBottom: 12, color: "#0f172a" }}>Luồng xử lý hồ sơ</div>
+              {steps.map((s) => (
+                <div key={s.id} style={styles.stepRow}>
+                  <div style={step >= s.id ? styles.stepDotActive : styles.stepDotInactive}>{step > s.id ? <CircleCheck size={14} /> : s.id}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={styles.stepTitle}>{s.title}</div>
+                    <div style={styles.stepDesc}>{s.id === 1 ? "Chuẩn bị và tải giấy tờ cần nộp" : s.id === 2 ? "Thanh toán lệ phí nếu có" : "Chờ xử lý và nhận kết quả"}</div>
+                  </div>
+                </div>
+              ))}
+              <div style={styles.timelineCard}>
+                <div style={styles.timelineCardTitle}>Trình tự dịch vụ</div>
+                {serviceTimeline.map((item, index) => (
+                  <div key={item} style={styles.timelineRow}>
+                    <span style={styles.timelineIndex}>{index + 1}</span>
+                    <span>{item}</span>
+                  </div>
                 ))}
-              </ul>
-            </div>
-
-            <button style={styles.primaryBtn} onClick={() => setStep(2)}>
-              Bắt đầu nộp hồ sơ
-            </button>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div style={styles.card}>
-            <h2 style={styles.sectionTitle}>Bước 2: Kê khai Form (E-Form)</h2>
-
-            <h3 style={styles.groupTitle}>Thông tin cá nhân</h3>
-            <div style={styles.grid2}>
-              <InputField label="Họ tên" name="fullName" value={formData.fullName} onChange={handleChange} error={errors.fullName} />
-              <InputField label="Email" name="email" value={formData.email} onChange={handleChange} error={errors.email} />
-              <InputField label="Số điện thoại" name="phone" value={formData.phone} onChange={handleChange} error={errors.phone} />
-              <InputField label="CCCD/CMND" name="citizenId" value={formData.citizenId} onChange={handleChange} error={errors.citizenId} />
-            </div>
-
-            <h3 style={styles.groupTitle}>Thông tin cư trú</h3>
-            <div style={styles.grid2}>
-              <InputField label="Địa chỉ" name="address" value={formData.address} onChange={handleChange} error={errors.address} />
-              <InputField label="Phường/Xã" name="ward" value={formData.ward} onChange={handleChange} error={errors.ward} />
-              <InputField label="Quận/Huyện" name="district" value={formData.district} onChange={handleChange} error={errors.district} />
-              <InputField label="Tỉnh/Thành phố" name="city" value={formData.city} onChange={handleChange} error={errors.city} />
-            </div>
-
-            <h3 style={styles.groupTitle}>Nội dung yêu cầu</h3>
-            <textarea
-              name="requestContent"
-              value={formData.requestContent}
-              onChange={handleChange}
-              rows={4}
-              style={{
-                ...styles.textarea,
-                borderColor: errors.requestContent ? "red" : "#cbd5e1",
-                background: errors.requestContent ? "#fef2f2" : "#fff"
-              }}
-            />
-            {errors.requestContent && (
-              <div style={styles.errorText}>{errors.requestContent}</div>
-            )}
-
-            <div style={styles.btnRow}>
-              <button style={styles.secondaryBtn} onClick={() => setStep(1)}>
-                Quay lại
-              </button>
-              <button
-                style={styles.primaryBtn}
-                onClick={() => {
-                  if (validateStep2()) setStep(3);
-                }}
-              >
-                Tiếp tục
-              </button>
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {step === 3 && (
-          <div style={styles.card}>
-            <h2 style={styles.sectionTitle}>Bước 3: Đính kèm tài liệu</h2>
+        <div style={styles.grid}>
+          <div style={styles.mainCol}>
+            <div style={styles.card}>
+              <SectionTitle icon={FileText} title="Hồ sơ cần nộp" />
+              <p style={styles.helperText}>Hãy chuẩn bị đủ các giấy tờ bắt buộc trước khi nộp. Những mục có nhãn <strong>Bắt buộc</strong> là điều kiện để gửi hồ sơ thành công.</p>
+              <div style={styles.requirementSummary}>
+                <SummaryChip label="Tổng giấy tờ" value={docs.length} />
+                <SummaryChip label="Bắt buộc" value={requiredDocs.length} />
+                <SummaryChip label="Đã đính kèm" value={completedCount} />
+              </div>
 
-            {service.documents.map((doc) => (
-              <div key={doc.key} style={styles.uploadBox}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                  {doc.label} {doc.required && <span style={{ color: "red" }}>*</span>}
+              <div style={styles.docList}>
+                {docs.length ? docs.map((doc) => {
+                  const attached = Boolean(fileItems[doc.key]);
+                  return (
+                    <div key={doc.key} style={styles.docRow}>
+                      <div style={styles.docMain}>
+                        <div style={styles.docIconWrap}>{attached ? <CircleCheck size={16} color="#16a34a" /> : <CircleDashed size={16} color="#94a3b8" />}</div>
+                        <div>
+                          <div style={styles.docTitle}>{doc.label}</div>
+                          <div style={styles.docMeta}>{doc.required ? "Bắt buộc" : "Tùy chọn"}</div>
+                        </div>
+                      </div>
+                      <span style={doc.required ? styles.req : styles.opt}>{doc.required ? "Bắt buộc" : "Tùy chọn"}</span>
+                    </div>
+                  );
+                }) : <div style={styles.emptyNote}>Chưa có danh sách giấy tờ cho dịch vụ này.</div>}
+              </div>
+            </div>
+
+            <div style={styles.card}>
+              <SectionTitle icon={Info} title="Câu hỏi thường gặp" />
+              <div style={styles.faqList}>
+                {faq.map((item) => (
+                  <details key={item.q} style={styles.faqItem}>
+                    <summary style={styles.faqQ}>{item.q}</summary>
+                    <div style={styles.faqA}>{item.a}</div>
+                  </details>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.sideCol}>
+            {step === 1 && (
+              <div style={styles.card}>
+                <SectionTitle icon={UploadCloud} title="Nộp hồ sơ online" />
+                <p style={styles.helperText}>Điền thông tin cá nhân và tải lên đúng các giấy tờ bắt buộc để hoàn tất hồ sơ một lần.</p>
+
+                <div style={styles.formGrid}>
+                  <Input label="Họ tên" name="fullName" value={formData.fullName} onChange={onChange} error={formErrors.fullName} />
+                  <Input label="CCCD/CMND" name="citizenId" value={formData.citizenId} onChange={onChange} error={formErrors.citizenId} />
+                  <Input label="Email" name="email" value={formData.email} onChange={onChange} error={formErrors.email} />
+                  <Input label="Số điện thoại" name="phone" value={formData.phone} onChange={onChange} error={formErrors.phone} />
+                  <Input label="Địa chỉ" name="address" value={formData.address} onChange={onChange} error={formErrors.address} fullWidth />
+                  <Textarea label="Ghi chú" name="note" value={formData.note} onChange={onChange} />
                 </div>
 
-                <input
-                  type="file"
-                  onChange={(e) => handleFileChange(doc.key, e.target.files?.[0])}
-                />
+                <div style={styles.uploadSection}>
+                  {docs.map((doc) => {
+                    const attached = fileItems[doc.key];
+                    return (
+                      <label key={doc.key} style={styles.uploadBox}>
+                        <div style={styles.uploadTitleRow}>
+                          <div>
+                            <div style={styles.uploadTitle}>{doc.label}</div>
+                            <div style={styles.uploadSub}>{doc.required ? "Bắt buộc" : "Tùy chọn"} · Chọn file hoặc ảnh để tải lên</div>
+                          </div>
+                          <span style={doc.required ? styles.req : styles.opt}>{doc.required ? "Bắt buộc" : "Tùy chọn"}</span>
+                        </div>
+                        <input type="file" onChange={(e) => onPickFile(doc.key, e.target.files?.[0])} style={styles.fileInput} />
+                        {attached ? (
+                          <div style={styles.filePreviewBox}>
+                            <div style={styles.fileName}>{attached.name}</div>
+                            {attached.type?.startsWith("image/") ? <img src={attached.previewUrl} alt="preview" style={styles.preview} /> : null}
+                          </div>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                </div>
 
-                {attachments[doc.key] && (
-                  <div style={{ marginTop: 12 }}>
-                    <div><strong>Tệp:</strong> {attachments[doc.key].name}</div>
-                    <div><strong>Loại:</strong> {attachments[doc.key].type || "Không xác định"}</div>
-
-                    {attachments[doc.key].type?.startsWith("image/") && (
-                      <img
-                        src={attachments[doc.key].previewUrl}
-                        alt="preview"
-                        style={styles.previewImage}
-                      />
-                    )}
-                  </div>
-                )}
+                {formErrors.files ? <div style={styles.error}>{formErrors.files}</div> : null}
+                <div style={styles.actions}>
+                  <button type="button" style={styles.primaryBtn} onClick={onSubmit} disabled={submitting}>
+                    {submitting ? "Đang xử lý..." : "Tiếp tục nộp hồ sơ"}
+                  </button>
+                </div>
               </div>
-            ))}
+            )}
 
-            <div style={styles.btnRow}>
-              <button style={styles.secondaryBtn} onClick={() => setStep(2)}>
-                Quay lại
-              </button>
-              <button
-                style={styles.primaryBtn}
-                onClick={() => {
-                  if (validateStep3()) setStep(4);
-                }}
-              >
-                Tiếp tục
-              </button>
-            </div>
+            {step === 2 && (
+              <div style={styles.card}>
+                <SectionTitle icon={CreditCard} title="Thanh toán phí dịch vụ" />
+                <div style={styles.paymentBox}>
+                  <div style={styles.paymentRow}><span>Mã hồ sơ</span><strong>{submitResult?.applicationCode}</strong></div>
+                  <div style={styles.paymentRow}><span>Trạng thái</span><strong>{paymentStatus}</strong></div>
+                  <div style={styles.paymentRow}><span>Hạn thanh toán</span><strong>{paymentExpireAt ? new Date(paymentExpireAt).toLocaleString("vi-VN") : "-"}</strong></div>
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  <label style={styles.label}>Phương thức thanh toán</label>
+                  <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={styles.select}>
+                    <option>MoMo</option>
+                    <option>ZaloPay</option>
+                  </select>
+                </div>
+                <img src={qrImage} alt="payment qr" style={styles.qr} />
+                <div style={styles.actions}>
+                  <button type="button" style={styles.secondaryBtn} onClick={() => setStep(1)}>Quay lại sửa hồ sơ</button>
+                  <button type="button" style={styles.primaryBtn} onClick={() => setStep(3)}>Xác nhận thanh toán</button>
+                </div>
+                <button type="button" onClick={onMockPaid} style={styles.mockBtn}>Đánh dấu thanh toán thành công (demo)</button>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div style={styles.card}>
+                <SectionTitle icon={CheckCircle2} title="Hồ sơ đã sẵn sàng xử lý" />
+                <div style={styles.successBox}>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Thanh toán thành công</div>
+                  <div>Mã hồ sơ: {submitResult?.applicationCode}</div>
+                  <div style={{ marginTop: 8, color: "#475569" }}>Hồ sơ đã được ghi nhận. Bạn có thể dùng mã này để tra cứu trạng thái về sau.</div>
+                </div>
+                <div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <Link to="/services" style={styles.linkBtn}>Danh sách dịch vụ</Link>
+                  <Link to="/" style={styles.linkBtnSecondary}>Trang chủ</Link>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-
-        {step === 4 && (
-          <div style={styles.card}>
-            <h2 style={styles.sectionTitle}>Bước 4: Thanh toán & Gửi hồ sơ</h2>
-
-            <p><strong>Tổng tiền:</strong> {feeText}</p>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontWeight: 700 }}>Phương thức thanh toán</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                style={styles.select}
-              >
-                <option value="ZaloPay">ZaloPay</option>
-                <option value="MoMo">MoMo</option>
-                <option value="ChuyenKhoan">Chuyển khoản</option>
-                <option value="TienMat">Tiền mặt tại quầy</option>
-              </select>
-            </div>
-
-            <div style={styles.btnRow}>
-              <button style={styles.secondaryBtn} onClick={() => setStep(3)} disabled={submitting}>
-                Quay lại
-              </button>
-              <button style={styles.successBtn} onClick={handleSubmitApplication} disabled={submitting}>
-                {submitting ? "Đang xử lý..." : "Tiến hành thanh toán"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 5 && qrCode && (
-          <div style={styles.card}>
-            <h2 style={styles.sectionTitle}>Bước 5: Quét mã QR để thanh toán</h2>
-
-            <div style={{ marginTop: 20, textAlign: "center" }}>
-              <p style={{ marginBottom: 12, fontSize: 14, color: "#666" }}>
-                <strong>Phương thức thanh toán:</strong> {paymentMethod}
-              </p>
-              <p style={{ marginBottom: 16, fontSize: 16 }}>
-                <strong>Quét mã QR bằng ứng dụng thanh toán:</strong>
-              </p>
-              <img src={qrCode} alt="Payment QR Code" style={{ maxWidth: 300, margin: "0 auto" }} />
-              <p style={{ marginTop: 16, color: "#666", fontSize: 14 }}>
-                {paymentMethod === "MoMo" && "Sử dụng ứng dụng MoMo để quét mã"}
-                {paymentMethod === "ZaloPay" && "Sử dụng ứng dụng ZaloPay để quét mã"}
-                {paymentMethod === "ChuyenKhoan" && "Sử dụng ứng dụng ngân hàng để quét mã"}
-              </p>
-
-              {paymentExpireAt && (
-                <p style={{ marginTop: 12, color: "#d84e31", fontSize: 14 }}>
-                  <strong>Hạn thanh toán:</strong> {new Date(paymentExpireAt).toLocaleString("vi-VN")}
-                </p>
-              )}
-
-              {paymentStatus === "pending" && (
-                <p style={{ marginTop: 12, color: "#666", fontSize: 14 }}>
-                  ⏳ Đang chờ thanh toán...
-                </p>
-              )}
-            </div>
-
-            <div style={styles.btnRow}>
-              <Link 
-                to="/" 
-                onClick={() => stopPaymentPolling()}
-                style={{...styles.secondaryBtn, textDecoration: "none", display: "inline-block", textAlign: "center", borderRadius: 12, border: "none", cursor: "pointer", flex: 1}}
-              >
-                Quay về trang chủ
-              </Link>
-              <button 
-                style={styles.primaryBtn} 
-                onClick={handleMockPaymentComplete}
-              >
-                Thanh toán
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 6 && submitResult && (
-          <div style={styles.successBox}>
-            <h2 style={{ marginBottom: 12 }}>✅ Thanh toán thành công</h2>
-            <p>
-              <strong>Mã số hồ sơ:</strong> {submitResult.applicationCode}
-            </p>
-            <p style={{ marginTop: 8 }}>
-              Mã này dùng để tra cứu hoặc chat 1v1 với cán bộ sau này.
-            </p>
-            <p style={{ marginTop: 12, fontSize: 14, color: "#666" }}>
-              Hồ sơ của bạn đã được ghi nhận. Cán bộ sẽ xử lý trong thời gian quy định.
-            </p>
-
-            <div style={{ marginTop: 16 }}>
-              <Link to="/services" style={styles.linkBtn}>
-                Quay về danh sách dịch vụ
-              </Link>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-function InputField({ label, name, value, onChange, error }) {
+function PageShell({ children }) {
   return (
-    <div>
-      <label style={styles.label}>{label}</label>
-      <input
-        name={name}
-        value={value}
-        onChange={onChange}
-        style={{
-          ...styles.input,
-          borderColor: error ? "red" : "#cbd5e1",
-          background: error ? "#fef2f2" : "#fff"
-        }}
-      />
-      {error && <div style={styles.errorText}>{error}</div>}
+    <div style={styles.page}>
+      <div style={{ maxWidth: 960, margin: "0 auto", background: "#fff", padding: 24, borderRadius: 16, border: "1px solid #e2e8f0" }}>
+        {children}
+      </div>
     </div>
   );
 }
 
+function SectionTitle({ icon: Icon, title }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+      <Icon size={18} color="#1d4ed8" />
+      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: "#0f172a" }}>{title}</h2>
+    </div>
+  );
+}
+
+function Meta({ icon: Icon, label }) {
+  return (
+    <div style={styles.meta}>
+      <Icon size={14} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function SummaryChip({ label, value }) {
+  return (
+    <div style={styles.summaryChip}>
+      <span style={styles.summaryLabel}>{label}</span>
+      <strong style={styles.summaryValue}>{value}</strong>
+    </div>
+  );
+}
+
+function Input({ label, name, value, onChange, error, fullWidth = false }) {
+  return (
+    <label style={fullWidth ? { ...styles.field, gridColumn: "1 / -1" } : styles.field}>
+      <span style={styles.label}>{label}</span>
+      <input name={name} value={value} onChange={onChange} style={{ ...styles.input, borderColor: error ? "#ef4444" : "#dbe3ee" }} />
+      {error ? <span style={styles.error}>{error}</span> : null}
+    </label>
+  );
+}
+
+function Textarea({ label, name, value, onChange }) {
+  return (
+    <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
+      <span style={styles.label}>{label}</span>
+      <textarea name={name} value={value} onChange={onChange} rows={4} style={styles.textarea} />
+    </label>
+  );
+}
+
 const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8fafc",
-    padding: "24px 16px"
-  },
-  container: {
-    maxWidth: 1000,
-    margin: "0 auto"
-  },
-  topBar: {
-    marginBottom: 16,
-    color: "#475569"
-  },
-  link: {
-    color: "#1d4ed8",
-    textDecoration: "none"
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: 800,
-    marginBottom: 8
-  },
-  stepText: {
-    color: "#475569",
-    marginBottom: 20
-  },
-  card: {
-    background: "#fff",
-    borderRadius: 16,
-    padding: 24,
-    border: "1px solid #e2e8f0"
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 700,
-    marginBottom: 16
-  },
-  groupTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    marginTop: 20,
-    marginBottom: 12
-  },
-  grid2: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 16
-  },
-  label: {
-    display: "block",
-    fontWeight: 600,
-    marginBottom: 6
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    outline: "none",
-    boxSizing: "border-box"
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    outline: "none",
-    boxSizing: "border-box"
-  },
-  errorText: {
-    color: "red",
-    fontSize: 14,
-    marginTop: 6
-  },
-  btnRow: {
-    display: "flex",
-    gap: 12,
-    marginTop: 24
-  },
-  primaryBtn: {
-    padding: "12px 18px",
-    background: "#1d4ed8",
-    color: "#fff",
-    border: "none",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontWeight: 700
-  },
-  secondaryBtn: {
-    padding: "12px 18px",
-    background: "#cbd5e1",
-    color: "#0f172a",
-    border: "none",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontWeight: 700
-  },
-  successBtn: {
-    padding: "12px 18px",
-    background: "#15803d",
-    color: "#fff",
-    border: "none",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontWeight: 700
-  },
-  uploadBox: {
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16
-  },
-  previewImage: {
-    marginTop: 12,
-    width: 160,
-    height: 120,
-    objectFit: "cover",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1"
-  },
-  select: {
-    width: "100%",
-    maxWidth: 320,
-    marginTop: 8,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1"
-  },
-  successBox: {
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
-    borderRadius: 16,
-    padding: 24
-  },
-  linkBtn: {
-    display: "inline-block",
-    background: "#1d4ed8",
-    color: "#fff",
-    textDecoration: "none",
-    padding: "12px 18px",
-    borderRadius: 12,
-    fontWeight: 700
-  }
+  page: { minHeight: "100vh", background: "linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%)", padding: 24 },
+  container: { maxWidth: 1240, margin: "0 auto" },
+  breadcrumb: { display: "flex", gap: 8, alignItems: "center", color: "#64748b", fontSize: 13, marginBottom: 16, flexWrap: "wrap" },
+  breadcrumbLink: { display: "inline-flex", gap: 6, alignItems: "center", color: "#1d4ed8", textDecoration: "none", fontWeight: 700 },
+  hero: { display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 16, marginBottom: 20 },
+  heroLeft: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 24, padding: 24, boxShadow: "0 10px 30px rgba(15,23,42,.05)" },
+  heroRight: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 24, padding: 24, boxShadow: "0 10px 30px rgba(15,23,42,.05)" },
+  badge: { display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 800 },
+  title: { margin: "14px 0 8px", fontSize: 34, fontWeight: 900, color: "#0f172a" },
+  subtitle: { margin: 0, color: "#475569", lineHeight: 1.7, maxWidth: 760 },
+  metaRow: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 },
+  meta: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 999, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155", fontSize: 13, fontWeight: 700 },
+  progressCard: { background: "#f8fafc", borderRadius: 20, padding: 18, border: "1px solid #e2e8f0" },
+  stepRow: { display: "flex", alignItems: "flex-start", gap: 10, marginTop: 12 },
+  stepDotActive: { width: 26, height: 26, borderRadius: 999, background: "#1d4ed8", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 },
+  stepDotInactive: { width: 26, height: 26, borderRadius: 999, background: "#e2e8f0", color: "#475569", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 },
+  stepTitle: { fontWeight: 800, color: "#0f172a" },
+  stepDesc: { marginTop: 2, color: "#64748b", fontSize: 13, lineHeight: 1.5 },
+  timelineCard: { marginTop: 16, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 14 },
+  timelineCardTitle: { fontWeight: 800, color: "#0f172a", marginBottom: 10 },
+  timelineRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 0", color: "#334155", fontSize: 14 },
+  timelineIndex: { width: 22, height: 22, borderRadius: 999, background: "#eff6ff", color: "#1d4ed8", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 },
+  grid: { display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 16 },
+  mainCol: { display: "flex", flexDirection: "column", gap: 16 },
+  sideCol: { display: "flex", flexDirection: "column", gap: 16 },
+  card: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 24, padding: 20, boxShadow: "0 8px 24px rgba(15,23,42,.04)" },
+  helperText: { margin: "0 0 14px", color: "#475569", lineHeight: 1.7 },
+  requirementSummary: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 14 },
+  summaryChip: { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 16, padding: 12 },
+  summaryLabel: { display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 },
+  summaryValue: { fontSize: 18, color: "#0f172a" },
+  docList: { display: "grid", gap: 12 },
+  docRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: 14, border: "1px solid #eef2f7", borderRadius: 18, background: "#fff" },
+  docMain: { display: "flex", gap: 12, alignItems: "center" },
+  docIconWrap: { width: 34, height: 34, borderRadius: 12, background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" },
+  docTitle: { fontWeight: 800, color: "#0f172a" },
+  docMeta: { marginTop: 3, fontSize: 12, color: "#64748b" },
+  req: { background: "#dcfce7", color: "#166534", padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 800, alignSelf: "center" },
+  opt: { background: "#eff6ff", color: "#1d4ed8", padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 800, alignSelf: "center" },
+  emptyNote: { color: "#64748b", padding: 14, border: "1px dashed #cbd5e1", borderRadius: 16, background: "#f8fafc" },
+  faqList: { display: "grid", gap: 8 },
+  faqItem: { padding: "10px 0", borderBottom: "1px solid #eef2f7" },
+  faqQ: { cursor: "pointer", fontWeight: 800, color: "#0f172a" },
+  faqA: { marginTop: 8, color: "#475569", lineHeight: 1.6 },
+  formGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 },
+  field: { display: "flex", flexDirection: "column", gap: 6 },
+  label: { fontSize: 13, fontWeight: 800, color: "#334155" },
+  input: { height: 46, borderRadius: 14, border: "1px solid #dbe3ee", padding: "0 14px", outline: "none", background: "#fff" },
+  textarea: { borderRadius: 14, border: "1px solid #dbe3ee", padding: 14, outline: "none", background: "#fff", fontFamily: "inherit" },
+  uploadSection: { display: "grid", gap: 12, marginTop: 14 },
+  uploadBox: { display: "block", border: "1px dashed #cbd5e1", borderRadius: 18, padding: 14, background: "#f8fafc" },
+  uploadTitleRow: { display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" },
+  uploadTitle: { fontWeight: 800, color: "#0f172a" },
+  uploadSub: { marginTop: 4, color: "#64748b", fontSize: 12 },
+  fileInput: { marginTop: 10, width: "100%" },
+  filePreviewBox: { marginTop: 10 },
+  fileName: { fontSize: 13, fontWeight: 700, color: "#334155" },
+  preview: { width: "100%", maxWidth: 240, marginTop: 10, borderRadius: 12, border: "1px solid #e2e8f0" },
+  error: { color: "#dc2626", fontSize: 13, fontWeight: 700, marginTop: 6 },
+  actions: { display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" },
+  primaryBtn: { background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
+  secondaryBtn: { background: "#e2e8f0", color: "#0f172a", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
+  mockBtn: { marginTop: 12, background: "#0f172a", color: "#fff", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
+  paymentBox: { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 18, padding: 14 },
+  paymentRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", color: "#334155" },
+  select: { width: "100%", height: 46, borderRadius: 14, border: "1px solid #dbe3ee", padding: "0 14px", marginTop: 8, background: "#fff" },
+  qr: { width: "100%", maxWidth: 320, display: "block", margin: "16px auto 0", borderRadius: 20, border: "1px solid #e2e8f0" },
+  successBox: { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", borderRadius: 18, padding: 16, lineHeight: 1.7 },
+  linkBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#1d4ed8", color: "#fff", textDecoration: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800 },
+  linkBtnSecondary: { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#e2e8f0", color: "#0f172a", textDecoration: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800 },
 };

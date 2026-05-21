@@ -13,6 +13,10 @@ function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function uniqueIds(values = []) {
+  return Array.from(new Set((Array.isArray(values) ? values : []).map(String).filter(Boolean)));
+}
+
 function normalizeRole(role) {
   if (role === "owner" || role === "deputy") return role;
   return "member";
@@ -39,61 +43,88 @@ function canManageGroup(room, userId) {
   return role === "owner" || role === "deputy";
 }
 
+
+function normalizePublicUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return raw;
+}
+
 function sanitizeMedia(media) {
   if (!media || typeof media !== "object") return null;
   const type =
     media.type === "video"
       ? "video"
       : media.type === "image"
-      ? "image"
-      : media.type === "file"
-      ? "file"
-      : null;
-  const url = String(media.url || "").trim();
-  if (!type || !url) return null;
+        ? "image"
+        : media.type === "location"
+          ? "location"
+          : media.type === "file" || media.type === "document"
+            ? "document"
+            : null;
+  const url = normalizePublicUrl(media.url || media.fileUrl || media.image || media.attachmentUrl || "");
+  const hasLocation = media.latitude != null && media.longitude != null;
+  if (!type && !hasLocation) return null;
+  if ((type === "image" || type === "video" || type === "document") && !url) return null;
   return {
-    type,
+    type: type || "location",
     url: url.slice(0, 2000000),
-    name: String(media.name || "").slice(0, 120)
+    name: String(media.name || media.label || "").slice(0, 120),
+    fileUrl: String(media.fileUrl || media.url || media.image || "").slice(0, 2000000),
+    fileType: String(media.fileType || "").slice(0, 20),
+    fileSize: Number(media.fileSize || media.size || 0) || 0,
+    latitude: hasLocation ? Number(media.latitude) : undefined,
+    longitude: hasLocation ? Number(media.longitude) : undefined,
+    mapsUrl: String(media.mapsUrl || "").slice(0, 500),
+    address: String(media.address || "").slice(0, 240),
+    label: String(media.label || "").slice(0, 160)
   };
 }
 
 function sanitizeLocation(location) {
   if (!location || typeof location !== "object") return null;
-  const lat = Number(location.lat);
-  const lng = Number(location.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-  const mapUrl = String(location.mapUrl || "").trim().slice(0, 2000);
-  return { lat, lng, mapUrl };
-}
-
-function sanitizeReactionMap(reactions) {
-  const allowed = new Set(["like", "love", "haha", "wow", "sad", "angry"]);
-  if (!reactions || typeof reactions !== "object") return {};
-  const out = {};
-  for (const key of Object.keys(reactions)) {
-    if (!allowed.has(key)) continue;
-    const users = Array.isArray(reactions[key]) ? reactions[key].map(String).filter(Boolean) : [];
-    out[key] = Array.from(new Set(users));
-  }
-  return out;
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    latitude,
+    longitude,
+    label: String(location.label || "").slice(0, 160),
+    address: String(location.address || "").slice(0, 240),
+    mapsUrl: String(location.mapsUrl || `https://www.google.com/maps?q=${latitude},${longitude}`).slice(0, 500)
+  };
 }
 
 function sanitizeMessage(message) {
   const deletedFor = Array.isArray(message?.deletedFor)
     ? Array.from(new Set(message.deletedFor.map(String)))
     : [];
+  const media = sanitizeMedia(message?.media);
   return {
     id: String(message?.id || makeId("msg")),
     senderId: String(message?.senderId || ""),
+    messageType: String(message?.messageType || (message?.location ? "location" : "text")),
     text: String(message?.text || "").slice(0, 4000),
-    media: sanitizeMedia(message?.media),
+    media,
     location: sanitizeLocation(message?.location),
-    reactions: sanitizeReactionMap(message?.reactions),
+    callLog: message?.callLog && typeof message.callLog === "object"
+      ? {
+          status: String(message.callLog.status || "").slice(0, 32),
+          durationSec: Number(message.callLog.durationSec || 0) || 0,
+          roomId: String(message.callLog.roomId || "").slice(0, 120),
+          callerId: String(message.callLog.callerId || "").slice(0, 120),
+          callerName: String(message.callLog.callerName || "").slice(0, 120),
+          endedBy: String(message.callLog.endedBy || "").slice(0, 120)
+        }
+      : null,
     replyToMessageId: String(message?.replyToMessageId || "").trim(),
     createdAt: message?.createdAt || nowIso(),
     unsentForAll: Boolean(message?.unsentForAll),
+    isPinned: Boolean(message?.isPinned || message?.pinned),
+    pinned: Boolean(message?.isPinned || message?.pinned),
+    pinnedAt: message?.pinnedAt || null,
+    pinnedBy: String(message?.pinnedBy || "").trim(),
     deletedFor
   };
 }
@@ -103,6 +134,15 @@ function sanitizeRoom(room) {
     ? room.members.map(normalizeMember).filter(Boolean)
     : [];
   const messages = Array.isArray(room?.messages) ? room.messages.map(sanitizeMessage) : [];
+  const pendingInvites = Array.isArray(room?.pendingInvites)
+    ? room.pendingInvites
+        .map((invite) => ({
+          userId: String(invite?.userId || "").trim(),
+          invitedBy: String(invite?.invitedBy || "").trim(),
+          createdAt: invite?.createdAt || nowIso()
+        }))
+        .filter((invite) => invite.userId && invite.invitedBy)
+    : [];
   return {
     id: String(room?.id || makeId("room")),
     type: room?.type === "group" ? "group" : "direct",
@@ -110,6 +150,7 @@ function sanitizeRoom(room) {
     avatarUrl: String(room?.avatarUrl || ""),
     createdBy: String(room?.createdBy || ""),
     members,
+    pendingInvites,
     messages,
     lastMessage: messages[messages.length - 1] || null,
     updatedAt: room?.updatedAt || nowIso(),
@@ -216,13 +257,16 @@ async function appendMessage({ roomId, senderId, text, media, location, replyToM
   const message = sanitizeMessage({
     id: makeId("msg"),
     senderId: sid,
+    messageType: location ? "location" : "text",
     text,
     media,
     location,
-    reactions: {},
     replyToMessageId: replyId,
     createdAt: nowIso(),
     unsentForAll: false,
+    pinned: false,
+    pinnedAt: null,
+    pinnedBy: "",
     deletedFor: []
   });
   const next = {
@@ -231,6 +275,102 @@ async function appendMessage({ roomId, senderId, text, media, location, replyToM
     lastMessage: message,
     updatedAt: message.createdAt
   };
+  return saveRoom(next);
+}
+
+async function appendCallLogMessage({
+  roomId,
+  actorUserId,
+  status,
+  durationSec = 0,
+  callRoomId = "",
+  callerId = "",
+  callerName = "",
+  endedBy = ""
+}) {
+  const room = await getRoomById(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng chat");
+  const sid = String(actorUserId || "").trim();
+  if (!sid || !isRoomMember(room, sid)) throw new Error("Bạn không phải thành viên của phòng chat");
+
+  const message = sanitizeMessage({
+    id: makeId("msg"),
+    senderId: sid,
+    messageType: "call_log",
+    text: "",
+    media: null,
+    callLog: {
+      status,
+      durationSec,
+      roomId: callRoomId,
+      callerId,
+      callerName,
+      endedBy
+    },
+    createdAt: nowIso(),
+    unsentForAll: false,
+    deletedFor: []
+  });
+
+  const next = {
+    ...room,
+    messages: [...room.messages, message],
+    lastMessage: message,
+    updatedAt: message.createdAt
+  };
+  return saveRoom(next);
+}
+
+async function inviteMembersToGroup({ roomId, requesterId, memberIds }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền mời vào nhóm");
+  const ids = uniqueIds(memberIds);
+  if (!ids.length) throw new Error("Chưa chọn bạn bè để mời");
+
+  const existingMemberIds = room.members.map((member) => member.id);
+  const pendingMap = new Map((room.pendingInvites || []).map((invite) => [invite.userId, invite]));
+  ids.forEach((userId) => {
+    if (existingMemberIds.includes(userId)) return;
+    pendingMap.set(userId, {
+      userId,
+      invitedBy: requesterId,
+      createdAt: nowIso()
+    });
+  });
+
+  const next = {
+    ...room,
+    pendingInvites: Array.from(pendingMap.values()),
+    updatedAt: nowIso()
+  };
+  return saveRoom(next);
+}
+
+async function listGroupInvitesForUser(userId) {
+  const rooms = await listRoomsForUser(userId);
+  const allRooms = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
+  const visibleGroupIds = new Set(rooms.map((room) => room.id));
+  return (allRooms.Items || [])
+    .map(sanitizeRoom)
+    .filter((room) => room.type === "group" && !visibleGroupIds.has(room.id))
+    .filter((room) => (room.pendingInvites || []).some((invite) => invite.userId === userId));
+}
+
+async function respondToGroupInvite({ roomId, userId, action }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  const invite = (room.pendingInvites || []).find((item) => item.userId === userId);
+  if (!invite) throw new Error("Không tìm thấy lời mời vào nhóm");
+
+  const next = {
+    ...room,
+    pendingInvites: (room.pendingInvites || []).filter((item) => item.userId !== userId),
+    updatedAt: nowIso()
+  };
+  if (action === "accept" && !next.members.some((member) => member.id === userId)) {
+    next.members = [...next.members, { id: userId, role: "member" }];
+  }
   return saveRoom(next);
 }
 
@@ -247,7 +387,11 @@ async function unsendMessage({ roomId, messageId, requesterId }) {
       ...m,
       text: "",
       media: null,
-      unsentForAll: true
+      location: null,
+      unsentForAll: true,
+      pinned: false,
+      pinnedAt: null,
+      pinnedBy: ""
     };
   });
   const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
@@ -260,11 +404,59 @@ async function deleteMessageForUser({ roomId, messageId, userId }) {
   if (!room) throw new Error("Không tìm thấy phòng chat");
   const uid = String(userId || "").trim();
   if (!isRoomMember(room, uid)) throw new Error("Bạn không phải thành viên của phòng chat");
+  const target = room.messages.find((m) => m.id === messageId);
+  if (!target) throw new Error("Không tìm thấy tin nhắn");
   const nextMessages = room.messages.map((m) => {
     if (m.id !== messageId) return m;
     const deletedFor = Array.from(new Set([...(m.deletedFor || []), uid]));
-    return { ...m, deletedFor };
+    return {
+      ...m,
+      deletedFor,
+      pinned: false,
+      isPinned: false,
+      pinnedAt: null,
+      pinnedBy: ""
+    };
   });
+  const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
+  next.lastMessage = next.messages[next.messages.length - 1] || null;
+  return saveRoom(next);
+}
+
+async function togglePinMessage({ roomId, messageId, requesterId }) {
+  const room = await getRoomById(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng chat");
+  const rid = String(requesterId || "").trim();
+  if (!isRoomMember(room, rid)) throw new Error("Bạn không phải thành viên của phòng chat");
+
+  const target = room.messages.find((m) => m.id === messageId);
+  if (!target) throw new Error("Không tìm thấy tin nhắn");
+  if (target.unsentForAll) throw new Error("Không thể ghim tin nhắn đã thu hồi");
+
+  const isCurrentlyPinned = Boolean(target.pinned || target.isPinned);
+  const nextPinnedState = !isCurrentlyPinned;
+  const nextMessages = room.messages.map((m) => {
+    if (m.id === messageId) {
+      return {
+        ...m,
+        pinned: nextPinnedState,
+        isPinned: nextPinnedState,
+        pinnedAt: nextPinnedState ? nowIso() : null,
+        pinnedBy: nextPinnedState ? rid : ""
+      };
+    }
+    if (nextPinnedState && (m.pinned || m.isPinned)) {
+      return {
+        ...m,
+        pinned: false,
+        isPinned: false,
+        pinnedAt: null,
+        pinnedBy: ""
+      };
+    }
+    return m;
+  });
+
   const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
   next.lastMessage = next.messages[next.messages.length - 1] || null;
   return saveRoom(next);
@@ -280,7 +472,8 @@ async function forwardMessage({ sourceRoomId, messageId, targetRoomId, senderId 
     roomId: targetRoomId,
     senderId,
     text: msg.text,
-    media: msg.media
+    media: msg.media,
+    location: msg.location
   });
 }
 
@@ -312,67 +505,6 @@ async function removeGroupMember({ roomId, requesterId, memberId }) {
     members: room.members.filter((m) => m.id !== targetId),
     updatedAt: nowIso()
   };
-  return saveRoom(next);
-}
-
-async function leaveGroup({ roomId, userId }) {
-  const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  const uid = String(userId || "").trim();
-  const current = room.members.find((m) => m.id === uid);
-  if (!current) throw new Error("Bạn không phải thành viên của nhóm");
-
-  const remaining = room.members.filter((m) => m.id !== uid);
-  if (remaining.length === 0) {
-    const dissolved = await dissolveGroup({ roomId, requesterId: uid });
-    return { ...dissolved, dissolved: true };
-  }
-
-  let nextMembers = remaining;
-  let newOwnerId = null;
-
-  if (current.role === "owner") {
-    const candidate = nextMembers[Math.floor(Math.random() * nextMembers.length)];
-    newOwnerId = candidate?.id || null;
-    nextMembers = nextMembers.map((m) => ({
-      ...m,
-      role: m.id === newOwnerId ? "owner" : m.role === "owner" ? "member" : m.role
-    }));
-  }
-
-  const next = {
-    ...room,
-    members: nextMembers,
-    updatedAt: nowIso()
-  };
-  return saveRoom({ ...next, newOwnerId });
-}
-
-async function reactToMessage({ roomId, messageId, userId, reaction }) {
-  const room = await getRoomById(roomId);
-  if (!room) throw new Error("Không tìm thấy phòng chat");
-  const uid = String(userId || "").trim();
-  if (!isRoomMember(room, uid)) throw new Error("Bạn không phải thành viên của phòng chat");
-  const key = String(reaction || "").trim();
-  const allowed = ["like", "love", "haha", "wow", "sad", "angry"];
-  if (!allowed.includes(key)) throw new Error("Reaction không hợp lệ");
-
-  let found = false;
-  const nextMessages = room.messages.map((m) => {
-    if (m.id !== messageId) return m;
-    found = true;
-    const base = sanitizeReactionMap(m.reactions || {});
-    for (const k of allowed) {
-      base[k] = (base[k] || []).filter((id) => id !== uid);
-    }
-    base[key] = Array.from(new Set([...(base[key] || []), uid]));
-    return { ...m, reactions: base };
-  });
-
-  if (!found) throw new Error("Không tìm thấy tin nhắn");
-
-  const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
-  next.lastMessage = next.messages[next.messages.length - 1] || null;
   return saveRoom(next);
 }
 
@@ -417,44 +549,8 @@ async function dissolveGroup({ roomId, requesterId }) {
   return saveRoom(next);
 }
 
-async function updateGroupInfo({ roomId, requesterId, name, avatarUrl }) {
-  const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền cập nhật thông tin nhóm");
-
-  const nextName = typeof name === "string" ? name.trim().slice(0, 120) : room.name;
-  const nextAvatar = typeof avatarUrl === "string" ? avatarUrl.trim().slice(0, 500) : room.avatarUrl;
-
-  const next = {
-    ...room,
-    name: nextName || room.name || "Nhóm chat",
-    avatarUrl: nextAvatar,
-    updatedAt: nowIso()
-  };
-  return saveRoom(next);
-}
-
 async function searchContacts({ keyword, currentUserId }) {
-  const q = String(keyword || "").trim().toLowerCase();
-  const rs = await dynamo.send(new ScanCommand({ TableName: process.env.USERS_TABLE || process.env.DYNAMODB_USERS_TABLE || "Users" }));
-  const users = (rs.Items || []).filter((u) => u.id !== currentUserId);
-  const filtered = !q
-    ? users
-    : users.filter((u) => {
-        const fullName = String(u.fullName || "").toLowerCase();
-        const email = String(u.email || "").toLowerCase();
-        const phone = String(u.phone || "").toLowerCase();
-        return fullName.includes(q) || email.includes(q) || phone.includes(q);
-      });
-  return filtered.map((u) => ({
-    id: u.id,
-    fullName: u.fullName || "Người dùng",
-    email: u.email || "",
-    phone: u.phone || "",
-    avatarUrl:
-      u.avatarUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName || "Nguoi dung")}&size=128`
-  }));
+  return await userStore.listFriends(currentUserId, keyword);
 }
 
 async function hydrateRoomForUser(room, currentUserId) {
@@ -513,16 +609,18 @@ module.exports = {
   ensureDirectRoom,
   createGroupRoom,
   appendMessage,
+  appendCallLogMessage,
   unsendMessage,
   deleteMessageForUser,
+  togglePinMessage,
   forwardMessage,
   addGroupMember,
   removeGroupMember,
-  leaveGroup,
-  reactToMessage,
   assignDeputy,
   dissolveGroup,
-  updateGroupInfo,
+  inviteMembersToGroup,
+  listGroupInvitesForUser,
+  respondToGroupInvite,
   searchContacts,
   hydrateRoomForUser
 };

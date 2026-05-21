@@ -2,27 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-<<<<<<< HEAD
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-    port: 5174,
-    strictPort: true,
-    proxy: {
-      "/api": {
-        target: "http://localhost:3000",
-        changeOrigin: true
-      },
-      "/socket.io": {
-        target: "http://localhost:3000",
-        ws: true,
-        changeOrigin: true
-      }
-    }
-  }
-});
-
-=======
 export default defineConfig(() => {
   const isNgrok = process.env.VITE_NGROK === "true";
 
@@ -69,4 +48,3 @@ export default defineConfig(() => {
     },
   };
 });
->>>>>>> 51cc27517d280490b4c1eb1cd5d570b82366995d

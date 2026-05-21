@@ -7,6 +7,8 @@ const c = require("../controllers/adminController");
 router.use(authMiddleware, adminOnly);
 
 router.get("/dashboard", c.dashboard);
+// Use the service controller's seed handler (was incorrectly referencing adminController)
+router.post("/services/seed", require("../controllers/serviceController").seedServices);
 
 router.get("/dossiers", c.dossierList);
 router.get("/dossiers/:id", c.dossierDetail);

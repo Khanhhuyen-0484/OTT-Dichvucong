@@ -14,9 +14,13 @@ import {
   SendHorizonal
 } from "lucide-react";
 
-function ServiceCard({ icon: Icon, title, desc }) {
+function ServiceCard({ icon: Icon, title, desc, onClick }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+    >
       <div className="flex items-start gap-4">
         <div className="rounded-xl bg-[#003366]/5 p-2.5 ring-1 ring-[#003366]/10">
           <Icon className="h-6 w-6 text-[#003366]" aria-hidden="true" />
@@ -26,7 +30,7 @@ function ServiceCard({ icon: Icon, title, desc }) {
           <div className="mt-1 text-sm text-slate-600">{desc}</div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -36,36 +40,12 @@ export default function Home() {
 
   const services = useMemo(
     () => [
-      {
-        icon: FileText,
-        title: "Hộ tịch",
-        desc: "Khai sinh, kết hôn, trích lục bản sao theo quy trình điện tử."
-      },
-      {
-        icon: FolderKanban,
-        title: "Đất đai",
-        desc: "Đăng ký biến động đất đai, cấp đổi giấy chứng nhận quyền sử dụng."
-      },
-      {
-        icon: Building2,
-        title: "Xây dựng",
-        desc: "Xin cấp phép xây dựng, điều chỉnh hồ sơ và theo dõi tiến độ."
-      },
-      {
-        icon: Landmark,
-        title: "Hộ chiếu",
-        desc: "Nộp hồ sơ cấp/đổi hộ chiếu và nhận thông báo xử lý trực tuyến."
-      },
-      {
-        icon: CarFront,
-        title: "Giao thông",
-        desc: "Đổi giấy phép lái xe, đăng ký phương tiện và tra cứu vi phạm."
-      },
-      {
-        icon: ClipboardList,
-        title: "Doanh nghiệp",
-        desc: "Đăng ký kinh doanh, thay đổi thông tin và dịch vụ chuyên ngành."
-      }
+      { icon: FileText, title: "Hộ tịch", desc: "Khai sinh, kết hôn, trích lục bản sao theo quy trình điện tử.", id: "demo-ho-tich" },
+      { icon: FolderKanban, title: "Đất đai", desc: "Đăng ký biến động đất đai, cấp đổi giấy chứng nhận quyền sử dụng.", id: "demo-dat-dai" },
+      { icon: Building2, title: "Xây dựng", desc: "Xin cấp phép xây dựng, điều chỉnh hồ sơ và theo dõi tiến độ.", id: "demo-xay-dung" },
+      { icon: Landmark, title: "Hộ chiếu", desc: "Nộp hồ sơ cấp/đổi hộ chiếu và nhận thông báo xử lý trực tuyến.", id: "demo-ho-chieu" },
+      { icon: CarFront, title: "Giao thông", desc: "Đổi giấy phép lái xe, đăng ký phương tiện và tra cứu vi phạm.", id: "demo-gplx" },
+      { icon: ClipboardList, title: "Doanh nghiệp", desc: "Đăng ký kinh doanh, thay đổi thông tin và dịch vụ chuyên ngành.", id: "demo-doanh-nghiep" }
     ],
     []
   );
@@ -133,7 +113,7 @@ export default function Home() {
                     <SendHorizonal className="h-4 w-4" />
                     Nộp hồ sơ
                   </button>
-                  <button className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
+                  <button className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10" onClick={() => navigate("/track") }>
                     <FileText className="h-4 w-4" />
                     Tra cứu kết quả
                   </button>
@@ -168,13 +148,24 @@ export default function Home() {
             <div>
               <h2 className="text-2xl font-black text-slate-900">Danh mục dịch vụ trọng điểm</h2>
               <p className="mt-1 text-sm text-slate-600">
-                Chọn nhóm dịch vụ để bắt đầu nộp hồ sơ điện tử hoặc xem yêu cầu biểu mẫu chi tiết.
+                Các nhóm thủ tục phổ biến nhất để người dân bắt đầu tra cứu nhanh.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => navigate("/services")}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Xem tất cả dịch vụ
+            </button>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {services.map((s) => (
-              <ServiceCard key={s.title} {...s} />
+              <ServiceCard
+                key={s.title}
+                {...s}
+                onClick={() => navigate(`/services/${s.id}`)}
+              />
             ))}
           </div>
         </section>
@@ -191,4 +182,3 @@ export default function Home() {
     </div>
   );
 }
-
