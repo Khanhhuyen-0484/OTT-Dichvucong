@@ -1,0 +1,12 @@
+[
+  {
+    "id": "u_demo_huyen",
+    "email": "tkhanhhuyen0484@gmail.com",
+    "fullName": "Huyen Nguyen Thi Kim",
+    "phone": "0912345678",
+    "address": "123 Đường Láng, Đống Đa, Hà Nội",
+    "avatarUrl": "",
+    "passwordHash": "$2b$10$HiGyAvDT.wZ0sUZm/ebgsOX8Zx/pg5WkmHOWemq6NZ0FS5CqHaZtS",
+    "createdAt": "2024-01-01T00:00:00.000Z"
+  }
+]
