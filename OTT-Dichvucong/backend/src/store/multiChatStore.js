@@ -22,25 +22,72 @@ function normalizeRole(role) {
   return "member";
 }
 
-function normalizeMember(member) {
-  if (!member?.id) return null;
-  return {
-    id: String(member.id),
-    role: normalizeRole(member.role)
-  };
+function normalizeMember(member, createdBy = "") {
+  if (typeof member === "string" || typeof member === "number") {
+    const id = String(member).trim();
+    if (!id) return null;
+    const role = id === String(createdBy || "").trim() ? "owner" : "member";
+    return { id, role: normalizeRole(role) };
+  }
+  const id = String(member?.id || member?.userId || "").trim();
+  if (!id) return null;
+  let role = normalizeRole(member?.role);
+  if (id === String(createdBy || "").trim()) role = "owner";
+  return { id, role };
+}
+
+const ROLE_RANK = { owner: 3, deputy: 2, member: 1 };
+
+function normalizeMembersList(rawMembers = [], createdBy = "") {
+  const creatorId = String(createdBy || "").trim();
+  const map = new Map();
+
+  (Array.isArray(rawMembers) ? rawMembers : []).forEach((entry) => {
+    const normalized = normalizeMember(entry, creatorId);
+    if (!normalized) return;
+    const prev = map.get(normalized.id);
+    if (!prev || (ROLE_RANK[normalized.role] || 0) > (ROLE_RANK[prev.role] || 0)) {
+      map.set(normalized.id, normalized);
+    }
+  });
+
+  if (creatorId && !map.has(creatorId)) {
+    map.set(creatorId, { id: creatorId, role: "owner" });
+  } else if (creatorId && map.has(creatorId)) {
+    map.set(creatorId, { ...map.get(creatorId), role: "owner" });
+  }
+
+  return Array.from(map.values());
 }
 
 function isRoomMember(room, userId) {
-  return Boolean(room?.members?.some((m) => m.id === userId));
+  const uid = String(userId || "").trim();
+  if (!uid || !room) return false;
+  const createdBy = String(room.createdBy || "").trim();
+  if (createdBy && createdBy === uid) return true;
+  return Boolean(
+    room.members?.some((m) => String(m?.id || "").trim() === uid)
+  );
 }
 
 function getMemberRole(room, userId) {
-  return room?.members?.find((m) => m.id === userId)?.role || null;
+  const uid = String(userId || "").trim();
+  if (!uid || !room) return null;
+  const member = room.members?.find((m) => m.id === uid);
+  if (member?.role === "owner" || member?.role === "deputy") return member.role;
+  if (String(room.createdBy || "").trim() === uid) return "owner";
+  return member?.role || null;
 }
 
+/** Trưởng/phó nhóm — xóa thành viên, phong phó nhóm, giải tán. */
 function canManageGroup(room, userId) {
   const role = getMemberRole(room, userId);
   return role === "owner" || role === "deputy";
+}
+
+/** Mọi thành viên trong nhóm (giống Zalo): đổi tên, đổi ảnh, thêm bạn. */
+function canEditGroupSettings(room, userId) {
+  return isRoomMember(room, userId);
 }
 
 
@@ -130,9 +177,8 @@ function sanitizeMessage(message) {
 }
 
 function sanitizeRoom(room) {
-  const members = Array.isArray(room?.members)
-    ? room.members.map(normalizeMember).filter(Boolean)
-    : [];
+  const createdBy = String(room?.createdBy || "").trim();
+  const members = normalizeMembersList(room?.members, createdBy);
   const messages = Array.isArray(room?.messages) ? room.messages.map(sanitizeMessage) : [];
   const pendingInvites = Array.isArray(room?.pendingInvites)
     ? room.pendingInvites
@@ -147,8 +193,11 @@ function sanitizeRoom(room) {
     id: String(room?.id || makeId("room")),
     type: room?.type === "group" ? "group" : "direct",
     name: String(room?.name || ""),
-    avatarUrl: String(room?.avatarUrl || ""),
-    createdBy: String(room?.createdBy || ""),
+    avatarUrl: (() => {
+      const raw = String(room?.avatarUrl || room?.avatar || "").trim();
+      return /^https?:\/\//i.test(raw) ? raw.slice(0, 500) : "";
+    })(),
+    createdBy,
     members,
     pendingInvites,
     messages,
@@ -185,9 +234,14 @@ async function getRoomById(roomId) {
 async function listRoomsForUser(userId) {
   const uid = String(userId || "").trim();
   if (!uid) return [];
-  const rs = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
-  const rooms = (rs.Items || []).map(sanitizeRoom).filter((room) => isRoomMember(room, uid));
-  return rooms.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  try {
+    const rs = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
+    const rooms = (rs.Items || []).map(sanitizeRoom).filter((room) => isRoomMember(room, uid));
+    return rooms.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  } catch (error) {
+    console.error("[multiChatStore.listRoomsForUser]", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
 async function ensureDirectRoom(userA, userB) {
@@ -324,7 +378,7 @@ async function appendCallLogMessage({
 async function inviteMembersToGroup({ roomId, requesterId, memberIds }) {
   const room = await getRoomById(roomId);
   if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền mời vào nhóm");
+  if (!canEditGroupSettings(room, requesterId)) throw new Error("Bạn không phải thành viên của nhóm");
   const ids = uniqueIds(memberIds);
   if (!ids.length) throw new Error("Chưa chọn bạn bè để mời");
 
@@ -423,6 +477,8 @@ async function deleteMessageForUser({ roomId, messageId, userId }) {
   return saveRoom(next);
 }
 
+const MAX_PINNED_MESSAGES = 3;
+
 async function togglePinMessage({ roomId, messageId, requesterId }) {
   const room = await getRoomById(roomId);
   if (!room) throw new Error("Không tìm thấy phòng chat");
@@ -435,6 +491,12 @@ async function togglePinMessage({ roomId, messageId, requesterId }) {
 
   const isCurrentlyPinned = Boolean(target.pinned || target.isPinned);
   const nextPinnedState = !isCurrentlyPinned;
+  const pinnedCount = room.messages.filter((m) => m.pinned || m.isPinned).length;
+
+  if (nextPinnedState && pinnedCount >= MAX_PINNED_MESSAGES) {
+    throw new Error(`Chỉ ghim tối đa ${MAX_PINNED_MESSAGES} tin nhắn`);
+  }
+
   const nextMessages = room.messages.map((m) => {
     if (m.id === messageId) {
       return {
@@ -443,15 +505,6 @@ async function togglePinMessage({ roomId, messageId, requesterId }) {
         isPinned: nextPinnedState,
         pinnedAt: nextPinnedState ? nowIso() : null,
         pinnedBy: nextPinnedState ? rid : ""
-      };
-    }
-    if (nextPinnedState && (m.pinned || m.isPinned)) {
-      return {
-        ...m,
-        pinned: false,
-        isPinned: false,
-        pinnedAt: null,
-        pinnedBy: ""
       };
     }
     return m;
@@ -480,7 +533,7 @@ async function forwardMessage({ sourceRoomId, messageId, targetRoomId, senderId 
 async function addGroupMember({ roomId, requesterId, memberId }) {
   const room = await getRoomById(roomId);
   if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền thêm thành viên");
+  if (!canEditGroupSettings(room, requesterId)) throw new Error("Bạn không phải thành viên của nhóm");
   const uid = String(memberId || "").trim();
   if (!uid) throw new Error("Thành viên không hợp lệ");
   if (room.members.some((m) => m.id === uid)) return room;
@@ -495,8 +548,14 @@ async function addGroupMember({ roomId, requesterId, memberId }) {
 async function removeGroupMember({ roomId, requesterId, memberId }) {
   const room = await getRoomById(roomId);
   if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền xóa thành viên");
   const targetId = String(memberId || "").trim();
+  const requester = String(requesterId || "").trim();
+  const isSelfLeave = targetId && targetId === requester;
+  if (isSelfLeave) {
+    if (!isRoomMember(room, requester)) throw new Error("Bạn không phải thành viên của nhóm");
+  } else if (!canManageGroup(room, requesterId)) {
+    throw new Error("Bạn không có quyền xóa thành viên");
+  }
   const target = room.members.find((m) => m.id === targetId);
   if (!target) return room;
   if (target.role === "owner") throw new Error("Không thể xóa trưởng nhóm");
@@ -520,6 +579,26 @@ async function assignDeputy({ roomId, requesterId, memberId, enabled }) {
     return { ...m, role: enabled ? "deputy" : "member" };
   });
   const next = { ...room, members: nextMembers, updatedAt: nowIso() };
+  return saveRoom(next);
+}
+
+async function updateGroupRoom({ roomId, requesterId, name, avatarUrl }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!canEditGroupSettings(room, requesterId)) {
+    throw new Error("Bạn không phải thành viên của nhóm");
+  }
+
+  const nextName = name !== undefined ? String(name || "").trim() : room.name;
+  if (!nextName) throw new Error("Tên nhóm không được để trống");
+
+  const next = {
+    ...room,
+    name: nextName.slice(0, 120),
+    avatarUrl:
+      avatarUrl !== undefined ? String(avatarUrl || "").slice(0, 500) : room.avatarUrl,
+    updatedAt: nowIso()
+  };
   return saveRoom(next);
 }
 
@@ -617,6 +696,7 @@ module.exports = {
   addGroupMember,
   removeGroupMember,
   assignDeputy,
+  updateGroupRoom,
   dissolveGroup,
   inviteMembersToGroup,
   listGroupInvitesForUser,

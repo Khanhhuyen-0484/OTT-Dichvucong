@@ -5,27 +5,30 @@ import {
   FileImage,
   Heart,
   MapPin,
+  ChevronDown,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
-  Pencil,
   Forward,
   Send,
   Smile,
   ThumbsUp,
   Trash2,
   Undo2,
-  UserMinus,
-  UserPlus,
-  Shield,
-  ShieldOff,
   CornerUpLeft,
   Pin,
   MapPinned,
+  UserPlus,
   Video,
-  X,
 } from "lucide-react";
 import Bubble from "./Bubble.jsx";
+import GroupInfoDrawer from "./GroupInfoDrawer.jsx";
+import { canManageGroupRoom } from "../lib/groupRoles.js";
+import {
+  MAX_PINNED_MESSAGES,
+  getPinnedMessages,
+  getPinnedPreviewText,
+} from "../lib/chatPinned.js";
 
 const GROUP_FALLBACK_AVATAR = "https://cdn-icons-png.flaticon.com/512/681/681494.png";
 const AVATAR_BG = ["bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
@@ -42,161 +45,31 @@ function getInitials(name) {
   return (words[0][0] + (words[1]?.[0] || "")).toUpperCase();
 }
 
+function isDisplayableAvatarSrc(src) {
+  const s = String(src || "").trim();
+  if (!s) return false;
+  if (/^https?:\/\//i.test(s) || s.startsWith("data:")) return true;
+  return false;
+}
+
 function Avatar({ src, name, className = "" }) {
-  if (src) {
-    return <img src={src} alt={name || "avatar"} className={className} />;
+  const [broken, setBroken] = React.useState(false);
+  React.useEffect(() => setBroken(false), [src]);
+
+  if (isDisplayableAvatarSrc(src) && !broken) {
+    return (
+      <img
+        src={src}
+        alt={name || "avatar"}
+        className={className}
+        onError={() => setBroken(true)}
+      />
+    );
   }
   const idx = (String(name || "A").charCodeAt(0) || 0) % AVATAR_BG.length;
   return (
     <div className={`${className} ${AVATAR_BG[idx]} flex items-center justify-center text-[11px] font-bold text-white`}>
       {getInitials(name)}
-    </div>
-  );
-}
-
-function GroupInfoDrawer({
-  open,
-  onClose,
-  activeRoom,
-  user,
-  myGroupRole,
-  newMemberId,
-  setNewMemberId,
-  contacts = [],
-  performGroupAction,
-  onUpdateGroupMeta,
-}) {
-  if (!open || activeRoom?.type !== "group") return null;
-  const canManageGroup = myGroupRole === "owner" || myGroupRole === "deputy";
-  const members = activeRoom.members || [];
-
-  return (
-    <div className="fixed inset-y-0 right-0 z-[65] w-full max-w-sm border-l border-slate-200 bg-white shadow-2xl">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
-        <div className="text-sm font-bold text-slate-800">Thông tin nhóm</div>
-        <button type="button" onClick={onClose} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="space-y-4 overflow-y-auto p-4">
-        <div className="flex items-center gap-3">
-          <label className="cursor-pointer">
-            <img
-              src={activeRoom.avatar || GROUP_FALLBACK_AVATAR}
-              alt={activeRoom.name || "Nhóm chat"}
-              className="h-16 w-16 rounded-full border border-slate-200 object-cover"
-            />
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => onUpdateGroupMeta?.({ avatarFile: e.target.files?.[0] || null })}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => onUpdateGroupMeta?.({ editableName: true })}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Đổi tên nhóm
-          </button>
-        </div>
-
-        <div>
-          <div className="text-xs text-slate-500">Tên nhóm</div>
-          <div
-            className="mt-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800"
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) => onUpdateGroupMeta?.({ name: e.currentTarget.textContent || "" })}
-          >
-            {activeRoom.name || "Nhóm chat"}
-          </div>
-        </div>
-
-        {canManageGroup && (
-          <div className="space-y-2 rounded-xl border border-slate-200 p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Quản lý thành viên
-            </div>
-            <div className="flex gap-2">
-              <select
-                value={newMemberId}
-                onChange={(e) => setNewMemberId(e.target.value)}
-                className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:border-[#003366]"
-              >
-                <option value="">Thêm thành viên...</option>
-                {contacts
-                  .filter((c) => !members.some((m) => m.id === c.id))
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>{c.fullName}</option>
-                  ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => performGroupAction("add", newMemberId)}
-                disabled={!newMemberId}
-                className="rounded-lg bg-emerald-100 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-200 disabled:opacity-40"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="max-h-52 space-y-1 overflow-y-auto">
-              {members
-                .filter((m) => m.id !== user?.id)
-                .map((m) => (
-                  <div key={m.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs">
-                    <span className="text-slate-700">
-                      {m.fullName}
-                      <span className="ml-1 text-slate-400">({m.role})</span>
-                    </span>
-                    <div className="flex gap-1">
-                      {myGroupRole === "owner" && m.role !== "owner" && (
-                        m.role === "deputy" ? (
-                          <button type="button" onClick={() => performGroupAction("demote", m.id)} className="text-amber-600 hover:text-amber-800">
-                            <ShieldOff className="h-3.5 w-3.5" />
-                          </button>
-                        ) : (
-                          <button type="button" onClick={() => performGroupAction("promote", m.id)} className="text-blue-600 hover:text-blue-800">
-                            <Shield className="h-3.5 w-3.5" />
-                          </button>
-                        )
-                      )}
-                      <button type="button" onClick={() => performGroupAction("remove", m.id)} className="text-red-500 hover:text-red-700">
-                        <UserMinus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => performGroupAction("leave")}
-              className="rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
-            >
-              Rời nhóm
-            </button>
-            {myGroupRole === "owner" && (
-              <button
-                type="button"
-                onClick={() => performGroupAction("dissolve")}
-                className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
-              >
-                Giải tán nhóm
-              </button>
-            )}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => performGroupAction("leave")}
-          className="w-full rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
-        >
-          Rời nhóm
-        </button>
-      </div>
     </div>
   );
 }
@@ -227,27 +100,47 @@ function ChatMultiPurpose({
   chatEndRef,
   onUpdateGroupMeta,
   setForwardingMessageId,
+  groupActionBusy = false,
 }) {
   const [reactionMap, setReactionMap] = useState({});
   const [hoverMessageId, setHoverMessageId] = useState(null);
   const [reactionHoverId, setReactionHoverId] = useState(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [groupInfoInitialTab, setGroupInfoInitialTab] = useState("overview");
+
+  const canEditGroup = canManageGroupRoom(activeRoom, user?.id);
+  const canManageGroup = canEditGroup;
+
+  const openGroupInfo = useCallback((tab = "overview") => {
+    setGroupInfoInitialTab(tab);
+    setShowGroupInfo(true);
+  }, []);
   const [showPinnedMenu, setShowPinnedMenu] = useState(false);
+  const [showPinnedList, setShowPinnedList] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState("");
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const reactionOptions = useMemo(() => ["❤️", "👍", "😂", "😮", "😢", "😡"], []);
+  const pinnedMessageRefs = useRef({});
   const latestPinnedMessageRef = useRef(null);
   const messages = activeRoom?.messages || [];
-  const pinnedMessages = useMemo(
-    () => messages.filter((message) => message.isPinned ?? message.pinned),
-    [messages]
-  );
-  const latestPinnedPreview = pinnedMessages[pinnedMessages.length - 1] || null;
-  const latestPinnedMessageId = latestPinnedPreview?.id;
+  const pinnedMessages = useMemo(() => getPinnedMessages(messages), [messages]);
+  const latestPinnedPreview = pinnedMessages[0] || null;
+  const latestPinnedMessageId = latestPinnedPreview?.id ?? null;
+  const pinnedCount = pinnedMessages.length;
+
+  const scrollToPinnedMessage = useCallback((messageId) => {
+    const node =
+      pinnedMessageRefs.current[messageId] ||
+      (messageId === latestPinnedMessageId ? latestPinnedMessageRef.current : null);
+    if (node) {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [latestPinnedMessageId]);
   const partner = activeRoom?.members?.find((m) => m.id !== user?.id);
-  const groupAvatar = activeRoom?.avatar || GROUP_FALLBACK_AVATAR;
+  const rawGroupAvatar = activeRoom?.avatar || activeRoom?.avatarUrl || "";
+  const groupAvatar = isDisplayableAvatarSrc(rawGroupAvatar) ? rawGroupAvatar : GROUP_FALLBACK_AVATAR;
   const headerAvatar = activeRoom?.type === "group" ? groupAvatar : getAvatarUrl(partner);
   const hasSendPayload = Boolean(roomInput.trim() || roomMedia);
   const lastMessage = messages[messages.length - 1];
@@ -306,12 +199,16 @@ function ChatMultiPurpose({
   };
 
   if (!activeRoom) {
-    return <div className="flex h-full items-center justify-center text-sm text-slate-400">Chọn hội thoại để bắt đầu chat</div>;
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center text-sm text-slate-400">
+        Chọn hội thoại để bắt đầu chat
+      </div>
+    );
   }
 
   return (
-    <div className="relative flex h-full flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-3 py-3 shadow-sm md:px-4">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2 shadow-sm md:px-4">
         <div className="flex flex-row items-center">
           <Avatar src={headerAvatar} name={activeRoom.type === "group" ? activeRoom.name : partner?.fullName} className="mr-3 h-10 w-10 rounded-full border border-slate-200 object-cover" />
           <div>
@@ -324,69 +221,117 @@ function ChatMultiPurpose({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {activeRoom.type === "group" && (
-            <button
-              type="button"
-              onClick={() => setShowGroupInfo(true)}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              Thông tin nhóm
-            </button>
-          )}
-          <button onClick={onStartVideoCall} className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100">
+          <button
+            type="button"
+            onClick={onStartVideoCall}
+            title="Gọi video"
+            className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100"
+          >
             <Video className="h-5 w-5" />
           </button>
+          {activeRoom.type === "group" && (
+            <>
+              {canEditGroup && (
+                <button
+                  type="button"
+                  onClick={() => openGroupInfo("members")}
+                  title="Thêm thành viên"
+                  className="rounded-full bg-emerald-50 p-2 text-emerald-600 transition hover:bg-emerald-100"
+                >
+                  <UserPlus className="h-5 w-5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => openGroupInfo("overview")}
+                className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Thông tin nhóm
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-[#F5F7FA] p-4">
-        {pinnedMessages.length > 0 && (
-          <div className="sticky top-0 z-30 mb-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <button
-              type="button"
-              onClick={() => latestPinnedMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-              className="flex w-full items-center gap-3 text-left"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                <MessageSquare className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                  Tin nhắn
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#F5F7FA] px-4 pb-4 pt-2">
+        {pinnedCount > 0 && (
+          <div className="relative sticky top-0 z-30 -mx-4 mb-2 border-b border-slate-200 bg-white px-3 py-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => scrollToPinnedMessage(latestPinnedPreview?.id)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <MessageSquare className="h-4 w-4" />
                 </div>
-                <div className="mt-1 truncate text-sm font-medium text-slate-900">
-                  {latestPinnedPreview?.text || "Tin nhắn ghim hiện không có nội dung"}
+                <div className="min-w-0 flex-1 leading-tight">
+                  <div className="text-xs font-bold text-slate-800">Tin nhắn</div>
+                  <div className="truncate text-[11px] text-slate-600">
+                    {getPinnedPreviewText(latestPinnedPreview)}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {pinnedMessages.length > 1 && (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">
-                    +{pinnedMessages.length - 1} ghim
-                  </span>
-                )}
+              </button>
+
+              {pinnedCount > 1 && (
                 <button
                   type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setShowPinnedMenu((prev) => !prev);
+                  onClick={() => {
+                    setShowPinnedList((prev) => !prev);
+                    setShowPinnedMenu(false);
                   }}
-                  className="rounded-xl bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-200"
+                  className="flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
                 >
-                  ...
+                  +{pinnedCount - 1} ghim
+                  <ChevronDown className={`h-3.5 w-3.5 transition ${showPinnedList ? "rotate-180" : ""}`} />
                 </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPinnedMenu((prev) => !prev);
+                  setShowPinnedList(false);
+                }}
+                className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-slate-100"
+                aria-label="Tùy chọn tin ghim"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </div>
+
+            {showPinnedList && pinnedCount > 1 && (
+              <div className="max-h-28 space-y-0.5 overflow-y-auto border-t border-slate-100 py-1">
+                {pinnedMessages.map((pm, index) => (
+                  <button
+                    key={pm.id}
+                    type="button"
+                    onClick={() => {
+                      scrollToPinnedMessage(pm.id);
+                      setShowPinnedList(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-slate-50"
+                  >
+                    <span className="w-4 text-center text-[10px] font-bold text-slate-400">{index + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-slate-700">
+                      {getPinnedPreviewText(pm)}
+                    </span>
+                  </button>
+                ))}
               </div>
-            </button>
+            )}
+
             {showPinnedMenu && (
-              <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+              <div className="absolute right-3 top-full z-40 mt-0.5 min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                 <button
                   type="button"
                   onClick={() => {
                     setShowPinnedMenu(false);
-                    latestPinnedMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    setShowPinnedList(true);
                   }}
-                  className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
                 >
-                  Xem tin nhắn ghim
+                  Xem {pinnedCount} tin ghim
                 </button>
                 <button
                   type="button"
@@ -394,9 +339,9 @@ function ChatMultiPurpose({
                     setShowPinnedMenu(false);
                     if (latestPinnedPreview) doMessageAction("pin", latestPinnedPreview.id);
                   }}
-                  className="mt-2 w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
                 >
-                  Bỏ ghim tin nhắn
+                  Bỏ ghim tin mới nhất
                 </button>
               </div>
             )}
@@ -414,7 +359,16 @@ function ChatMultiPurpose({
           return (
             <div
               key={m.id}
-              ref={m.id === latestPinnedMessageId ? latestPinnedMessageRef : null}
+              ref={(node) => {
+                if ((m.isPinned ?? m.pinned) && node) {
+                  pinnedMessageRefs.current[m.id] = node;
+                } else if (pinnedMessageRefs.current[m.id]) {
+                  delete pinnedMessageRefs.current[m.id];
+                }
+                if (m.id === latestPinnedMessageId) {
+                  latestPinnedMessageRef.current = node;
+                }
+              }}
               className={`group relative flex items-start gap-2 ${isMine ? "justify-end" : "justify-start"}`}
               onMouseEnter={() => setHoverMessageId(m.id)}
               onMouseLeave={() => {
@@ -423,7 +377,7 @@ function ChatMultiPurpose({
               }}
             >
               {!isMine && <Avatar src={senderAvatar} name={senderName} className="mt-1 h-7 w-7 rounded-full border border-slate-200 object-cover" />}
-              <div className={`relative flex max-w-[80%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+              <div className={`relative flex max-w-[88%] flex-col sm:max-w-[82%] ${isMine ? "items-end" : "items-start"}`}>
                 <Bubble
                   text={m.unsentForAll ? "Tin nhắn đã được thu hồi" : m.text}
                   isMine={isMine}
@@ -464,7 +418,17 @@ function ChatMultiPurpose({
                   <div className={`absolute top-8 z-50 min-w-[120px] rounded-xl border border-slate-200 bg-white py-1 shadow-xl ${isMine ? "right-0" : "left-0"}`}>
                     <button onClick={() => onReplyMessage(m)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><CornerUpLeft className="h-3.5 w-3.5"/> Phản hồi</button>
                     <button onClick={() => { setForwardingMessageId?.(m.id); setMessageMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Forward className="h-3.5 w-3.5"/> Chuyển tiếp</button>
-                    <button onClick={() => doMessageAction("pin", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Pin className="h-3.5 w-3.5"/> {(m.isPinned ?? m.pinned) ? "Bỏ ghim" : "Ghim tin nhắn"}</button>
+                    <button
+                      onClick={() => doMessageAction("pin", m.id)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
+                    >
+                      <Pin className="h-3.5 w-3.5" />
+                      {(m.isPinned ?? m.pinned)
+                        ? "Bỏ ghim"
+                        : pinnedCount >= MAX_PINNED_MESSAGES
+                          ? `Đã đủ ${MAX_PINNED_MESSAGES} tin ghim`
+                          : `Ghim tin nhắn (${pinnedCount}/${MAX_PINNED_MESSAGES})`}
+                    </button>
                     {isMine && (
                       <button onClick={() => doMessageAction("unsend", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Undo2 className="h-3.5 w-3.5"/> Thu hồi</button>
                     )}
@@ -478,6 +442,7 @@ function ChatMultiPurpose({
         <div ref={chatEndRef} />
       </div>
 
+      <div className="shrink-0">
       {replyToMessage && (
         <div className="flex items-center justify-between border-t border-blue-100 bg-blue-50 px-4 py-2">
           <div className="truncate text-xs text-blue-700">Đang trả lời: {replyToMessage.text}</div>
@@ -492,7 +457,7 @@ function ChatMultiPurpose({
         </div>
       )}
 
-      <form onSubmit={sendRoom} className="border-t border-slate-100 bg-white p-3">
+      <form onSubmit={sendRoom} className="shrink-0 border-t border-slate-100 bg-white p-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]">
         <div className="mb-2 flex items-center gap-3 border-b border-slate-100 pb-2 text-slate-500">
           <button type="button" className="hover:text-slate-700" onClick={() => imageInputRef.current?.click()}><FileImage className="h-5 w-5" /></button>
           <button type="button" className="hover:text-slate-700" onClick={() => fileInputRef.current?.click()}><Paperclip className="h-5 w-5" /></button>
@@ -521,9 +486,11 @@ function ChatMultiPurpose({
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleMediaPick(e.target.files?.[0], "image")} />
         <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => handleMediaPick(e.target.files?.[0], "file")} />
       </form>
+      </div>
 
       <GroupInfoDrawer
         open={showGroupInfo}
+        initialTab={groupInfoInitialTab}
         onClose={() => setShowGroupInfo(false)}
         activeRoom={activeRoom}
         user={user}
@@ -533,6 +500,7 @@ function ChatMultiPurpose({
         contacts={contacts}
         performGroupAction={performGroupAction}
         onUpdateGroupMeta={onUpdateGroupMeta}
+        busy={groupActionBusy}
       />
     </div>
   );

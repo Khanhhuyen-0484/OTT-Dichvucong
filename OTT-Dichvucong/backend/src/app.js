@@ -43,6 +43,8 @@ app.get("/", (_req, res) => res.send("API OK 🚀"));
 app.get("/api/health", (_req, res) => {
   const bucket = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET;
   const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+  const userStore = require("./store/userStore");
+  const { dynamo } = require("./config/dynamoClient");
   res.json({
     ok: true,
     hasEmailUser: Boolean(process.env.EMAIL_USER),
@@ -50,6 +52,8 @@ app.get("/api/health", (_req, res) => {
     hasJwtSecret: Boolean(process.env.JWT_SECRET),
     hasS3: Boolean(bucket && region),
     api: "ott-dichvucong-backend",
+    chatStoreReady:
+      typeof userStore.listFriends === "function" && typeof dynamo?.send === "function",
   });
 });
 

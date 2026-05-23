@@ -45,7 +45,6 @@ export default function LocationMessage({ message, isMine }) {
   if (!location) return null;
 
   const { lat, lng, label, mapsUrl } = location;
-  const staticMapSrc = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=15&size=520x320&markers=${lat},${lng},red-pushpin`;
 
   return (
     <>
@@ -56,13 +55,13 @@ export default function LocationMessage({ message, isMine }) {
           isMine ? "ring-blue-200" : "ring-slate-200"
         }`}
       >
-        <div className="relative h-[180px] w-full bg-slate-100">
-          <img
-            src={staticMapSrc}
-            alt={label}
-            className="h-full w-full object-cover transition duration-200 group-hover:brightness-105"
-            draggable="false"
-            loading="lazy"
+        <div className="relative h-[180px] w-full bg-gradient-to-br from-slate-200 via-slate-100 to-emerald-50">
+          <div
+            className="absolute inset-0 opacity-40"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(148,163,184,0.25) 24px), repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(148,163,184,0.25) 24px)",
+            }}
           />
 
           <div className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-sm">

@@ -1,9 +1,6 @@
 import React, { useEffect } from "react";
 import { X, ExternalLink, MapPin } from "lucide-react";
-
-function getGoogleMapsUrl(lat, lng) {
-  return `https://www.google.com/maps?q=${lat},${lng}`;
-}
+import { getGoogleMapsUrl, getOsmEmbedUrl } from "../lib/mapUrls.js";
 
 export default function MapModal({ open, lat, lng, label, onClose }) {
   useEffect(() => {
@@ -18,7 +15,7 @@ export default function MapModal({ open, lat, lng, label, onClose }) {
   if (!open || lat == null || lng == null) return null;
 
   const googleMapsUrl = getGoogleMapsUrl(lat, lng);
-  const staticMapSrc = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=15&size=900x560&markers=${lat},${lng},red-pushpin`;
+  const embedSrc = getOsmEmbedUrl(lat, lng);
 
   return (
     <div
@@ -38,17 +35,18 @@ export default function MapModal({ open, lat, lng, label, onClose }) {
         </button>
 
         <div className="relative aspect-[16/10] w-full bg-slate-100 sm:aspect-[16/9]">
-          <img
-            src={staticMapSrc}
-            alt={label || "Bản đồ vị trí"}
-            className="h-full w-full object-cover"
-            draggable="false"
+          <iframe
+            title={label || "Bản đồ vị trí"}
+            src={embedSrc}
+            className="h-full w-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
           />
-          <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
+          <div className="pointer-events-none absolute left-4 top-4 inline-flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
             <MapPin className="h-3.5 w-3.5" />
             <span>{label || "Shared location"}</span>
           </div>
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-4 pb-4 pt-10 text-white">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-4 pb-4 pt-10 text-white">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="text-sm font-semibold">Vị trí đã chia sẻ</div>
@@ -60,7 +58,7 @@ export default function MapModal({ open, lat, lng, label, onClose }) {
                 href={googleMapsUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex w-fit items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-900 shadow-lg transition hover:scale-[1.02]"
+                className="pointer-events-auto inline-flex w-fit items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-900 shadow-lg transition hover:scale-[1.02]"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open in Google Maps
