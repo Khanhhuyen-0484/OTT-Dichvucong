@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext.jsx";
 import Alert from "../components/Alert.jsx";
 import Button from "../components/Button.jsx";
 import Input from "../components/Input.jsx";
+import RegisterPasswordField from "../components/RegisterPasswordField.jsx";
+import { getRegisterPasswordError } from "../lib/passwordStrength.js";
 import {
   forgotPassword,
   getApiErrorMessage,
@@ -89,9 +91,12 @@ export default function Auth() {
 
   const passwordError = useMemo(() => {
     if (!password) return null;
+    if (mode === "register") {
+      return getRegisterPasswordError(password);
+    }
     if (password.length < 6) return "Mật khẩu phải có ít nhất 6 ký tự";
     return null;
-  }, [password]);
+  }, [password, mode]);
 
   const otpError = useMemo(() => {
     if (!otp) return null;
@@ -194,7 +199,7 @@ export default function Auth() {
         variant: "error",
         title: "Thiếu thông tin",
         message:
-          "Kiểm tra: họ tên (≥2 ký tự), số điện thoại, email, OTP 6 số, mật khẩu (≥6 ký tự)."
+          "Kiểm tra: họ tên (≥2 ký tự), số điện thoại, email, OTP 6 số, mật khẩu (tối thiểu Trung bình)."
       });
       return;
     }
@@ -545,12 +550,7 @@ export default function Auth() {
                         required
                         hint="Nhập đúng 6 chữ số trong email. Không dùng khoảng trắng."
                       />
-                      <Input
-                        label="Mật khẩu"
-                        name="password"
-                        type="password"
-                        autoComplete="new-password"
-                        placeholder="Tối thiểu 6 ký tự"
+                      <RegisterPasswordField
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         error={passwordError}

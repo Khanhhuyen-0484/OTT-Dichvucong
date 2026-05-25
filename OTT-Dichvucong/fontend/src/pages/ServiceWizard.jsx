@@ -13,6 +13,8 @@ import {
   CircleCheck,
   CircleDashed,
   CreditCard,
+  Copy,
+  RefreshCw,
 } from "lucide-react";
 import {
   getApiErrorMessage,
@@ -20,16 +22,10 @@ import {
   mockPaymentComplete,
   presignAttachmentUpload,
   submitServiceApplication,
-  verifyPaymentStatus,
+  createBankTransferPayment,
+  getBankTransferPaymentStatus,
 } from "../lib/api";
 import { uploadToS3 } from "../lib/uploadToS3.js";
-
-import momo1 from "../assets/payment-qrs/momo_a1.jpg";
-import momo2 from "../assets/payment-qrs/momo_a2.jpg";
-import momo3 from "../assets/payment-qrs/momo_a3.jpg";
-import zalopay1 from "../assets/payment-qrs/zalopay_b1.jpg";
-import zalopay2 from "../assets/payment-qrs/zalopayb2.jpg";
-import zalopay3 from "../assets/payment-qrs/zalopay_b3.jpg";
 
 const defaultTimeline = ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"];
 const defaultFaq = [
@@ -136,11 +132,14 @@ export default function ServiceWizard() {
   const [submitResult, setSubmitResult] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("PENDING");
   const [paymentExpireAt, setPaymentExpireAt] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState("MoMo");
+  const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
   const [formData, setFormData] = useState({ fullName: "", citizenId: "", email: "", phone: "", address: "", note: "" });
   const [formErrors, setFormErrors] = useState({});
   const [fileItems, setFileItems] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [bankPayment, setBankPayment] = useState(null);
+  const [paymentInfo, setPaymentInfo] = useState(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
   const pollRef = useRef(null);
 
   useEffect(() => {
@@ -167,11 +166,22 @@ export default function ServiceWizard() {
   const feeText = useMemo(() => `${currency.format(service?.fee || 0)} VNĐ`, [service]);
   const serviceTimeline = useMemo(() => (service?.timeline?.length ? service.timeline : defaultTimeline), [service]);
   const faq = useMemo(() => (service?.faq?.length ? service.faq : defaultFaq), [service]);
-  const qrImage = useMemo(() => {
-    const idx = String(serviceId || "1").match(/\d+/)?.[0] || "1";
-    const n = ((Number(idx) - 1) % 3) + 1;
-    return paymentMethod === "MoMo" ? [momo1, momo2, momo3][n - 1] : [zalopay1, zalopay2, zalopay3][n - 1];
-  }, [serviceId, paymentMethod]);
+  const currentDossierId = paymentInfo?.dossierId || bankPayment?.dossierId || "";
+  const isPaid = paymentStatus === "PAID";
+  const paymentStatusLabel = isPaid ? "Thanh toán thành công" : paymentStatus;
+
+  function getSubmitDossierId(result = {}) {
+    return String(
+      result?.dossierId ||
+      result?.application?.dossierId ||
+      result?.application?.id ||
+      result?.applicationCode ||
+      result?.dossierCode ||
+      result?.application?.applicationCode ||
+      result?.application?.applicationId ||
+      ""
+    ).trim();
+  }
 
   function validateField(name, value) {
     if (name === "fullName" && !value.trim()) return "Họ tên là bắt buộc";
@@ -217,8 +227,19 @@ export default function ServiceWizard() {
         const safeContentType = item.type || "application/octet-stream";
         const safeKey = `chat-media/${serviceId || "service"}/${key}-${Date.now()}-${item.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
         const presignRes = await presignAttachmentUpload({ key: safeKey, contentType: safeContentType, fileName: item.name, applicationId: "new", docKey: key });
-        await uploadToS3(item.file);
-        uploaded.push({ key, name: item.name, previewUrl: presignRes.data?.publicUrl || item.previewUrl, type: item.type });
+        const uploadRes = await uploadToS3(item.file);
+        const fileUrl = uploadRes?.publicUrl || presignRes.data?.publicUrl || item.previewUrl;
+        uploaded.push({
+          key,
+          fileName: item.name,
+          name: item.name,
+          mimeType: item.type || safeContentType,
+          fileType: item.type || safeContentType,
+          size: item.file.size,
+          fileUrl,
+          url: fileUrl,
+          path: fileUrl,
+        });
       }
 
       const payload = {
@@ -236,24 +257,22 @@ export default function ServiceWizard() {
       };
 
       const { data } = await submitServiceApplication(payload);
+      const dossierId = getSubmitDossierId(data);
+      if (!dossierId) throw new Error("Thiếu dossierId từ phản hồi nộp hồ sơ");
+
       setSubmitResult(data);
       setPaymentExpireAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
       setPaymentStatus("PENDING");
       setStep(2);
 
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        try {
-          const { data: st } = await verifyPaymentStatus(data.applicationCode);
-          setPaymentStatus(st.paymentStatus || "PENDING");
-          if (st.paymentStatus === "PAID") {
-            clearInterval(pollRef.current);
-            setStep(3);
-          }
-        } catch {
-          // keep polling silently for smoother UX
-        }
-      }, 3000);
+      // Tạo thanh toán chuyển khoản SePay
+      const { data: bankTransfer } = await createBankTransferPayment({ dossierId, amount: data.application?.fee || data.fee || service?.fee || 0 });
+      setBankPayment(bankTransfer || null);
+      setPaymentInfo(bankTransfer || null);
+      console.log("paymentInfo:", bankTransfer || null);
+      setSubmitResult((prev) => ({ ...(prev || {}), dossierId, bankPayment: bankTransfer || {} }));
+      setPaymentStatus(bankTransfer?.paymentStatus || bankTransfer?.status || "PENDING");
+
     } catch (e) {
       alert(getApiErrorMessage(e));
     } finally {
@@ -262,11 +281,32 @@ export default function ServiceWizard() {
   }
 
   async function onMockPaid() {
-    if (!submitResult?.applicationCode) return;
-    await mockPaymentComplete(submitResult.applicationCode);
+    const dossierId = currentDossierId;
+    if (!dossierId) return;
+    await mockPaymentComplete(dossierId);
     setPaymentStatus("PAID");
     if (pollRef.current) clearInterval(pollRef.current);
     setStep(3);
+  }
+
+  async function checkPaymentStatus() {
+    const dossierId = paymentInfo?.dossierId || bankPayment?.dossierId || currentDossierId;
+    console.log("checking dossierId:", paymentInfo?.dossierId);
+    if (!dossierId) return;
+    setCheckingPayment(true);
+    try {
+      const { data } = await getBankTransferPaymentStatus(dossierId);
+      setPaymentStatus(data.paymentStatus || "PENDING");
+      if (data.paymentStatus === "PAID") setStep(3);
+    } finally {
+      setCheckingPayment(false);
+    }
+  }
+
+  async function copyTransferContent() {
+    const text = bankPayment?.transferContent;
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); } catch {}
   }
 
   if (loading) return <PageShell>Đang tải dữ liệu dịch vụ...</PageShell>;
@@ -415,25 +455,30 @@ export default function ServiceWizard() {
 
             {step === 2 && (
               <div style={styles.card}>
-                <SectionTitle icon={CreditCard} title="Thanh toán phí dịch vụ" />
+                <SectionTitle icon={CreditCard} title="Thanh toán chuyển khoản" />
+                <p style={styles.helperText}>Quét QR hoặc chuyển khoản theo nội dung bên dưới. Sau khi thanh toán, bấm kiểm tra trạng thái để hệ thống cập nhật tự động.</p>
                 <div style={styles.paymentBox}>
-                  <div style={styles.paymentRow}><span>Mã hồ sơ</span><strong>{submitResult?.applicationCode}</strong></div>
-                  <div style={styles.paymentRow}><span>Trạng thái</span><strong>{paymentStatus}</strong></div>
-                  <div style={styles.paymentRow}><span>Hạn thanh toán</span><strong>{paymentExpireAt ? new Date(paymentExpireAt).toLocaleString("vi-VN") : "-"}</strong></div>
+                  <div style={styles.paymentRow}><span>Mã hồ sơ đang thanh toán</span><strong>{currentDossierId || "Chưa có mã hồ sơ"}</strong></div>
+                  <div style={styles.paymentRow}><span>Số tiền</span><strong>{currency.format(paymentInfo?.amount || bankPayment?.amount || service?.fee || 0)} VNĐ</strong></div>
+                  <div style={styles.paymentRow}><span>Trạng thái payment</span><strong>{paymentStatusLabel}</strong></div>
+                  <div style={styles.paymentRow}><span>Số tài khoản</span><strong>{paymentInfo?.bankAccount || bankPayment?.bankAccount || "Đang cập nhật"}</strong></div>
+                  <div style={styles.paymentRow}><span>Tên tài khoản</span><strong>{paymentInfo?.bankAccountName || bankPayment?.bankAccountName || "Đang cập nhật"}</strong></div>
+                  <div style={styles.paymentRow}><span>Nội dung CK</span><strong style={styles.transferContent}>{paymentInfo?.transferContent || bankPayment?.transferContent || "Chưa có từ backend"}</strong></div>
                 </div>
-                <div style={{ marginTop: 14 }}>
-                  <label style={styles.label}>Phương thức thanh toán</label>
-                  <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={styles.select}>
-                    <option>MoMo</option>
-                    <option>ZaloPay</option>
-                  </select>
+                <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                  <button type="button" style={styles.secondaryBtn} onClick={copyTransferContent} disabled={!paymentInfo?.transferContent && !bankPayment?.transferContent}><Copy size={16} /> Sao chép nội dung</button>
+                  <button type="button" style={styles.secondaryBtn} onClick={checkPaymentStatus} disabled={checkingPayment}><RefreshCw size={16} /> {checkingPayment ? "Đang kiểm tra..." : "Kiểm tra trạng thái thanh toán"}</button>
                 </div>
-                <img src={qrImage} alt="payment qr" style={styles.qr} />
+                {paymentInfo?.qrUrl || bankPayment?.qrUrl ? (
+                  <img src={paymentInfo?.qrUrl || bankPayment?.qrUrl} alt="payment qr" style={styles.qr} />
+                ) : (
+                  <div style={{ marginTop: 12, color: "#64748b" }}>Chưa có QR từ backend.</div>
+                )}
                 <div style={styles.actions}>
                   <button type="button" style={styles.secondaryBtn} onClick={() => setStep(1)}>Quay lại sửa hồ sơ</button>
-                  <button type="button" style={styles.primaryBtn} onClick={() => setStep(3)}>Xác nhận thanh toán</button>
+                  <button type="button" style={styles.primaryBtn} onClick={checkPaymentStatus} disabled={checkingPayment}>Kiểm tra trạng thái thanh toán</button>
                 </div>
-                <button type="button" onClick={onMockPaid} style={styles.mockBtn}>Đánh dấu thanh toán thành công (demo)</button>
+                <button type="button" onClick={onMockPaid} style={{ ...styles.mockBtn, opacity: isPaid ? 0.6 : 1, cursor: isPaid ? "not-allowed" : "pointer" }} disabled={isPaid}>Đánh dấu thanh toán thành công (demo)</button>
               </div>
             )}
 
@@ -441,8 +486,8 @@ export default function ServiceWizard() {
               <div style={styles.card}>
                 <SectionTitle icon={CheckCircle2} title="Hồ sơ đã sẵn sàng xử lý" />
                 <div style={styles.successBox}>
-                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Thanh toán thành công</div>
-                  <div>Mã hồ sơ: {submitResult?.applicationCode}</div>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{paymentStatusLabel}</div>
+                  <div>Mã hồ sơ: {currentDossierId || getSubmitDossierId(submitResult) || submitResult?.applicationCode}</div>
                   <div style={{ marginTop: 8, color: "#475569" }}>Hồ sơ đã được ghi nhận. Bạn có thể dùng mã này để tra cứu trạng thái về sau.</div>
                 </div>
                 <div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -579,9 +624,10 @@ const styles = {
   secondaryBtn: { background: "#e2e8f0", color: "#0f172a", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
   mockBtn: { marginTop: 12, background: "#0f172a", color: "#fff", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
   paymentBox: { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 18, padding: 14 },
-  paymentRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", color: "#334155" },
+  paymentRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", color: "#334155", alignItems: "flex-start" },
+  transferContent: { textAlign: "right", wordBreak: "break-word", maxWidth: 260 },
   select: { width: "100%", height: 46, borderRadius: 14, border: "1px solid #dbe3ee", padding: "0 14px", marginTop: 8, background: "#fff" },
-  qr: { width: "100%", maxWidth: 320, display: "block", margin: "16px auto 0", borderRadius: 20, border: "1px solid #e2e8f0" },
+  qr: { width: "100%", maxWidth: 360, display: "block", margin: "16px auto 0", borderRadius: 20, border: "1px solid #e2e8f0", background: "#fff" },
   successBox: { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", borderRadius: 18, padding: 16, lineHeight: 1.7 },
   linkBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#1d4ed8", color: "#fff", textDecoration: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800 },
   linkBtnSecondary: { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#e2e8f0", color: "#0f172a", textDecoration: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800 },
