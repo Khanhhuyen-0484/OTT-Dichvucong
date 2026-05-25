@@ -8,6 +8,7 @@ console.log(
 );
 
 const http = require("http");
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { initSocket } = require("./socket");
@@ -28,8 +29,16 @@ app.use(
 );
 
 // ─── Body parsers ─────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "10mb" }));
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 if (process.env.NODE_ENV !== "production") {
   app.use((req, _res, next) => {
@@ -67,6 +76,7 @@ app.use("/api/admin", require("./routes/admin"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/upload", require("./routes/upload"));
 app.use("/api/services", require("./routes/service"));
+app.use("/api/payments", require("./routes/payments"));
 app.use("/api", require("./routes/public"));
 
 app.use("/api", (req, res) => {
@@ -91,7 +101,7 @@ initSocket(server);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log(`✅ Server chạy http://localhost:${PORT}`);
-  console.log("[API] Routes: /api/auth, /api/chat, /api/admin, /api/upload, /api/services, /api/me, /api/login …");
+  console.log("[API] Routes: /api/auth, /api/chat, /api/admin, /api/upload, /api/services, /api/payments, /api/me, /api/login …");
   try {
     const result = await seedServicesToDynamo();
     console.log(`[seed] Public services seeded: ${result.seeded}`);

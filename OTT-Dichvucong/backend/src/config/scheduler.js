@@ -23,11 +23,12 @@ function startPaymentExpiryScheduler() {
           app.paymentExpireAt &&
           new Date(app.paymentExpireAt) < now
         ) {
+          const dossierId = app.dossierId || app.id || app.applicationCode;
           console.log(
-            `[Scheduler] Cancelling expired payment for application: ${app.applicationCode}`
+            `[Scheduler] Cancelling expired payment for dossier: ${dossierId}`
           );
 
-          updateByCode(app.applicationCode, {
+          updateByCode(dossierId, {
             paymentStatus: PAYMENT_STATUS.EXPIRED,
             status: "Hủy (Hết hạn thanh toán)"
           });

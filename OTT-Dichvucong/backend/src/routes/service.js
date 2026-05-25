@@ -13,16 +13,20 @@ const {
   payForApplication,
   adminCreateService,
   adminUpdateService,
-  adminDeleteService
+  adminDeleteService,
+  addApplicationSupplement,
+  downloadApplicationResult
 } = require("../controllers/serviceController");
 
 router.get("/", getServices);
 router.get("/my-applications", authMiddleware, getMyApplications);
 router.get("/application/code/:applicationCode", getApplicationByCode);
 router.get("/track/:applicationCode", trackApplication);
+router.get("/application/:applicationCode/result", authMiddleware, downloadApplicationResult);
 router.get("/:serviceId", getServiceById);
 router.post("/submit", authMiddleware, submitApplication);
 router.post("/pay", authMiddleware, payForApplication);
+router.post("/application/:applicationCode/supplement", authMiddleware, addApplicationSupplement);
 router.post("/admin", authMiddleware, adminOnly, adminCreateService);
 router.post("/admin/seed", authMiddleware, adminOnly, require("../controllers/serviceController").seedServices);
 router.put("/admin/:serviceId", authMiddleware, adminOnly, adminUpdateService);

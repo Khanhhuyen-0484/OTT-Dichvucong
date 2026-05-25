@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { sendMail, serializeSmtpError } = require("../config/mailer");
 const { otpEmail, resetPasswordEmail } = require("../emails/templates");
+const { validateRegisterPassword } = require("../utils/passwordStrength");
 const { generateOtp, setOtp, verifyOtp, consumeOtp } = require("../store/otpStore");
 const {
   findByEmail,
@@ -95,10 +96,9 @@ exports.register = async (req, res) => {
     if (!email || typeof email !== "string") {
       return res.status(400).json({ message: "Email không hợp lệ" });
     }
-    if (!password || typeof password !== "string" || password.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Mật khẩu phải có ít nhất 6 ký tự" });
+    const passwordCheck = validateRegisterPassword(password);
+    if (!passwordCheck.ok) {
+      return res.status(400).json({ message: passwordCheck.message });
     }
     if (!otp || typeof otp !== "string") {
       return res.status(400).json({ message: "OTP không hợp lệ" });

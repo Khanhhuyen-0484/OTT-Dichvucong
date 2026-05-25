@@ -1,60 +1,76 @@
 const QRCode = require("qrcode");
-const crypto = require("crypto");
 const {
   MOMO_CONFIG,
   PAYMENT_STATUS,
-  PAYMENT_TIMEOUT_MS,
-  generateRequestId,
-  generateMoMoSignature
+  PAYMENT_TIMEOUT_MS
 } = require("../config/payment");
 const { findByCode, updateByCode } = require("../store/serviceApplicationStore");
 
-/**
- * Generate QR code for MoMo payment
- * POST /api/services/payment/generate-qr
- */
+function resolveDossierId(payload = {}) {
+  return String(
+    payload.dossierId ||
+    payload.dossierCode ||
+    payload.applicationCode ||
+    payload.applicationId ||
+    ""
+  ).trim();
+}
+
+function buildPaymentResponse(application, dossierId) {
+  return {
+    dossierId,
+    dossierCode: application.dossierCode || application.applicationCode || dossierId,
+    paymentStatus: application.paymentStatus || PAYMENT_STATUS.PENDING,
+    paymentAmount: application.paymentAmount,
+    paymentExpireAt: application.paymentExpireAt,
+    serviceName: application.serviceName,
+    message:
+      application.paymentStatus === PAYMENT_STATUS.COMPLETED
+        ? "Thanh toán thành công!"
+        : application.paymentStatus === PAYMENT_STATUS.PENDING
+          ? "Chưa thanh toán. Vui lòng quét mã QR để tiếp tục."
+          : "Thanh toán thất bại hoặc hết hạn."
+  };
+}
+
 exports.generatePaymentQr = async (req, res) => {
   try {
-    const { applicationCode, amount, serviceDescription } = req.body;
+    const dossierId = resolveDossierId(req.body);
+    const amount = Number(req.body.amount);
+    const serviceDescription = String(req.body.serviceDescription || "Thanh toán phí dịch vụ").trim();
 
-    if (!applicationCode || !amount) {
+    if (!dossierId || !Number.isFinite(amount)) {
       return res.status(400).json({
-        message: "Thiếu applicationCode hoặc amount"
+        message: "Thiếu dossierId hoặc amount"
       });
     }
 
-    // Fetch application to verify
-    const application = findByCode(applicationCode);
+    const application = await findByCode(dossierId);
     if (!application) {
       return res.status(404).json({
         message: "Không tìm thấy hồ sơ"
       });
     }
 
-    // Update application with payment_status = pending
-    updateByCode(applicationCode, {
+    await updateByCode(dossierId, {
       paymentStatus: PAYMENT_STATUS.PENDING,
       paymentExpireAt: new Date(Date.now() + PAYMENT_TIMEOUT_MS).toISOString(),
       paymentAmount: amount,
-      paymentDescription: serviceDescription || "Thanh toán phí dịch vụ"
+      paymentDescription: serviceDescription
     });
 
-    // Generate callback URL
     const backendUrl = process.env.BACKEND_URL || "http://localhost:3000";
-    const callbackUrl = `${backendUrl}/api/services/payment/verify/${applicationCode}`;
+    const callbackUrl = `${backendUrl}/api/services/payment/verify/${dossierId}`;
 
-    // Create QR code data (simplified for testing)
-    // In production, you would integrate with MoMo API
     const qrData = {
       partnerCode: MOMO_CONFIG.partnerCode,
       amount: Math.round(amount),
       description: serviceDescription,
       callbackUrl,
-      applicationCode,
+      dossierId,
       timestamp: Date.now()
     };
 
-    // Generate QR code as data URL
     const qrDataString = JSON.stringify(qrData);
     const qrDataUrl = await QRCode.toDataURL(qrDataString, {
       errorCorrectionLevel: "H",
@@ -69,7 +85,8 @@ exports.generatePaymentQr = async (req, res) => {
 
     res.json({
       success: true,
-      applicationCode,
+      dossierId,
+      dossierCode: application.dossierCode || application.applicationCode || dossierId,
       amount,
       description: serviceDescription,
       qrCode: qrDataUrl,
@@ -85,50 +102,38 @@ exports.generatePaymentQr = async (req, res) => {
   }
 };
 
-/**
- * Verify payment status
- * GET /api/services/payment/verify/:applicationCode
- */
-exports.verifyPaymentStatus = (req, res) => {
+exports.verifyPaymentStatus = async (req, res) => {
   try {
-    const { applicationCode } = req.params;
+    const dossierId = resolveDossierId(req.params);
 
-    const application = findByCode(applicationCode);
+    if (!dossierId) {
+      return res.status(400).json({
+        message: "Thiếu dossierId"
+      });
+    }
+
+    const application = await findByCode(dossierId);
     if (!application) {
       return res.status(404).json({
         message: "Không tìm thấy hồ sơ"
       });
     }
 
-    // Check if payment expired
     if (
       application.paymentStatus === PAYMENT_STATUS.PENDING &&
       application.paymentExpireAt &&
       new Date(application.paymentExpireAt) < new Date()
     ) {
-      updateByCode(applicationCode, {
+      await updateByCode(dossierId, {
         paymentStatus: PAYMENT_STATUS.EXPIRED
       });
       return res.json({
-        applicationCode,
-        paymentStatus: PAYMENT_STATUS.EXPIRED,
+        ...buildPaymentResponse({ ...application, paymentStatus: PAYMENT_STATUS.EXPIRED }, dossierId),
         message: "Hết thời gian thanh toán (60 phút). Hồ sơ đã bị hủy."
       });
     }
 
-    res.json({
-      applicationCode,
-      paymentStatus: application.paymentStatus || PAYMENT_STATUS.PENDING,
-      paymentAmount: application.paymentAmount,
-      paymentExpireAt: application.paymentExpireAt,
-      serviceName: application.serviceName,
-      message:
-        application.paymentStatus === PAYMENT_STATUS.COMPLETED
-          ? "Thanh toán thành công!"
-          : application.paymentStatus === PAYMENT_STATUS.PENDING
-            ? "Chưa thanh toán. Vui lòng quét mã QR để tiếp tục."
-            : "Thanh toán thất bại hoặc hết hạn."
-    });
+    res.json(buildPaymentResponse(application, dossierId));
   } catch (err) {
     console.error("verifyPaymentStatus error:", err);
     res.status(500).json({
@@ -138,46 +143,44 @@ exports.verifyPaymentStatus = (req, res) => {
   }
 };
 
-/**
- * Webhook callback từ payment gateway (MoMo, ZaloPay, ...)
- * POST /api/services/payment/webhook
- */
-exports.paymentWebhook = (req, res) => {
+exports.paymentWebhook = async (req, res) => {
   try {
-    const { applicationCode, status, transactionId } = req.body;
+    const dossierId = resolveDossierId(req.body);
+    const status = String(req.body.status || "").trim();
+    const transactionId = String(req.body.transactionId || "").trim();
 
-    if (!applicationCode || !status) {
+    if (!dossierId || !status) {
       return res.status(400).json({
         message: "Missing required fields"
       });
     }
 
-    const application = findByCode(applicationCode);
+    const application = await findByCode(dossierId);
     if (!application) {
       return res.status(404).json({
         message: "Application not found"
       });
     }
 
-    // Update payment status based on webhook
     const newStatus =
       status === "success" || status === "completed"
         ? PAYMENT_STATUS.COMPLETED
         : PAYMENT_STATUS.FAILED;
 
-    const updated = updateByCode(applicationCode, {
+    const updated = await updateByCode(dossierId, {
       paymentStatus: newStatus,
       paymentTransactionId: transactionId || null,
       paymentCompletedAt: newStatus === PAYMENT_STATUS.COMPLETED ? new Date().toISOString() : null,
       status: newStatus === PAYMENT_STATUS.COMPLETED ? "Đã tiếp nhận" : "Chưa thanh toán"
     });
 
-    console.log(`[Payment Webhook] ${applicationCode}: ${newStatus}`);
+    console.log(`[Payment Webhook] ${dossierId}: ${newStatus}`);
 
     res.json({
       success: true,
       message: `Payment ${newStatus}`,
-      applicationCode,
+      dossierId,
+      dossierCode: updated?.dossierCode || application.dossierCode || dossierId,
       paymentStatus: newStatus
     });
   } catch (err) {
@@ -190,28 +193,24 @@ exports.paymentWebhook = (req, res) => {
   }
 };
 
-/**
- * Update payment status manually (for testing)
- * POST /api/services/payment/mock-complete
- */
-exports.mockPaymentComplete = (req, res) => {
+exports.mockPaymentComplete = async (req, res) => {
   try {
-    const { applicationCode } = req.body;
+    const dossierId = resolveDossierId(req.body);
 
-    if (!applicationCode) {
+    if (!dossierId) {
       return res.status(400).json({
-        message: "Missing applicationCode"
+        message: "Missing dossierId"
       });
     }
 
-    const application = findByCode(applicationCode);
+    const application = await findByCode(dossierId);
     if (!application) {
       return res.status(404).json({
         message: "Application not found"
       });
     }
 
-    const updated = updateByCode(applicationCode, {
+    const updated = await updateByCode(dossierId, {
       paymentStatus: PAYMENT_STATUS.COMPLETED,
       paymentCompletedAt: new Date().toISOString(),
       status: "Đã tiếp nhận"
@@ -220,6 +219,8 @@ exports.mockPaymentComplete = (req, res) => {
     res.json({
       success: true,
       message: "Payment marked as completed (MOCK)",
+      dossierId,
+      dossierCode: updated?.dossierCode || application.dossierCode || dossierId,
       paymentStatus: PAYMENT_STATUS.COMPLETED,
       application: updated
     });

@@ -59,7 +59,7 @@
       "city": "Tphcm",
       "requestContent": "124"
     },
-    "paymentMethod": "VNPay",
+    "paymentMethod": "BANK_TRANSFER",
     "attachments": [
       {
         "key": "oldLicense",
@@ -96,7 +96,7 @@
       "city": "Tphcm",
       "requestContent": "yctd"
     },
-    "paymentMethod": "VNPay",
+    "paymentMethod": "BANK_TRANSFER",
     "attachments": [
       {
         "key": "cccd",
@@ -185,7 +185,7 @@
       "city": "Tphcm",
       "requestContent": "sdf"
     },
-    "paymentMethod": "VNPay",
+    "paymentMethod": "BANK_TRANSFER",
     "attachments": [
       {
         "key": "oldLicense",
@@ -223,7 +223,7 @@
       "city": "Tphcm",
       "requestContent": "sấ"
     },
-    "paymentMethod": "VNPay",
+    "paymentMethod": "BANK_TRANSFER",
     "attachments": [
       {
         "key": "oldLicense",
@@ -299,7 +299,7 @@
       "city": "Tphcm",
       "requestContent": "sấ"
     },
-    "paymentMethod": "VNPay",
+    "paymentMethod": "BANK_TRANSFER",
     "attachments": [
       {
         "key": "cccd",

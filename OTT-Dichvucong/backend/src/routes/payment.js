@@ -12,7 +12,7 @@ const {
 router.post("/generate-qr", authMiddleware, generatePaymentQr);
 
 // Verify payment status
-router.get("/verify/:applicationCode", verifyPaymentStatus);
+router.get("/verify/:dossierId", verifyPaymentStatus);
 
 // Webhook from payment gateway
 router.post("/webhook", paymentWebhook);
