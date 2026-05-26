@@ -12,7 +12,7 @@ function DisplayRow({ label, value }) {
       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
         {label}
       </div>
-      <div className="mt-1.5 text-base sm:text-lg font-semibold text-slate-900 break-words leading-snug">
+      <div className="mt-1.5 text-base sm:text-lg font-semibold text-slate-900 wrap-break-word leading-snug">
         {value && String(value).trim() ? value : "—"}
       </div>
     </div>
@@ -34,17 +34,14 @@ export default function Profile() {
   const fileRef = useRef(null);
 
   const [showEditForm, setShowEditForm] = useState(false);
-  const [form, setForm] = useState({
-    fullName: "",
-    phone: "",
-    address: ""
-  });
+  const [form, setForm] = useState({ fullName: "", phone: "", address: "" });
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarErr, setAvatarErr] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteBlockMessage, setDeleteBlockMessage] = useState("");
 
   useEffect(() => {
     if (ready && !user) {
@@ -123,12 +120,17 @@ export default function Profile() {
     setDeleteLoading(true);
     try {
       await deleteAccount();
+      alert("Xóa tài khoản thành công");
       navigate("/", { replace: true });
     } catch (err) {
-      alert(getApiErrorMessage(err) || "Không thể xóa tài khoản");
+      const message = getApiErrorMessage(err) || "Không thể xóa tài khoản";
+      if (message.includes("Tài khoản còn hồ sơ đang xử lý")) {
+        setDeleteBlockMessage("Tài khoản còn hồ sơ đang xử lý");
+      } else {
+        alert(message);
+      }
     } finally {
       setDeleteLoading(false);
-      setShowDeleteConfirm(false);
     }
   };
 
@@ -163,7 +165,7 @@ export default function Profile() {
         </p>
 
         <div className="mt-8 rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-[var(--gov-navy)] px-5 py-4 text-white">
+          <div className="bg-(--gov-navy) px-5 py-4 text-white">
             <div className="text-xs font-semibold text-white/80 uppercase tracking-wide">
               Ảnh đại diện
             </div>
@@ -190,9 +192,7 @@ export default function Profile() {
                 ) : null}
               </div>
             </div>
-            {avatarErr && (
-              <p className="mt-3 text-sm text-red-200">{avatarErr}</p>
-            )}
+            {avatarErr && <p className="mt-3 text-sm text-red-200">{avatarErr}</p>}
             <input
               ref={fileRef}
               type="file"
@@ -204,21 +204,20 @@ export default function Profile() {
 
           <div className="px-5 py-5 sm:px-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide border-l-4 border-[var(--gov-red)] pl-3">
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide border-l-4 border-(--gov-red) pl-3">
                 Thông tin đã đăng ký
               </h2>
               <button
                 type="button"
                 onClick={() => setShowEditForm(!showEditForm)}
-                className="text-xs font-semibold text-[var(--gov-blue)] hover:text-[var(--gov-red)] underline underline-offset-2"
+                className="text-xs font-semibold text-(--gov-blue) hover:text-(--gov-red) underline underline-offset-2"
                 disabled={saving}
               >
                 {showEditForm ? "Hủy" : "Cập nhật"}
               </button>
             </div>
             <p className="text-xs text-slate-500 mt-2 mb-4">
-              Dữ liệu hiện có trên tài khoản của bạn (theo lần đăng ký / cập nhật
-              gần nhất).
+              Dữ liệu hiện có trên tài khoản của bạn (theo lần đăng ký / cập nhật gần nhất).
             </p>
 
             {!showEditForm ? (
@@ -300,7 +299,7 @@ export default function Profile() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex-1 px-4 py-2.5 text-sm font-semibold bg-[var(--gov-blue)] text-white rounded-xl hover:bg-[var(--gov-red)] disabled:opacity-50"
+                    className="flex-1 px-4 py-2.5 text-sm font-semibold bg-(--gov-blue) text-white rounded-xl hover:bg-(--gov-red) disabled:opacity-50"
                   >
                     {saving ? "Đang lưu…" : "Lưu thay đổi"}
                   </button>
@@ -335,7 +334,7 @@ export default function Profile() {
                   Xóa tài khoản?
                 </h3>
                 <p className="text-sm text-slate-600 mb-6">
-                  Hành động này không thể hoàn tác. Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn.
+                  Hành động này không thể hoàn tác. Bạn có chắc chắn muốn xóa toàn bộ thông tin tài khoản?
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -352,9 +351,32 @@ export default function Profile() {
                     disabled={deleteLoading}
                     className="flex-1 px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                   >
-                    {deleteLoading ? "Đang xóa…" : "Xóa tài khoản"}
+                    {deleteLoading ? "Đang xóa…" : "Xác nhận xóa"}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {deleteBlockMessage && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-xl max-w-sm w-full shadow-xl p-6">
+                <h3 className="text-lg font-bold text-slate-900 mb-3">
+                  Không thể xóa tài khoản
+                </h3>
+                <p className="text-sm text-slate-600 mb-6">
+                  {deleteBlockMessage}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteBlockMessage("");
+                    setShowDeleteConfirm(false);
+                  }}
+                  className="w-full px-4 py-2 text-sm font-semibold bg-(--gov-blue) text-white rounded-lg hover:bg-(--gov-red)"
+                >
+                  OK
+                </button>
               </div>
             </div>
           )}

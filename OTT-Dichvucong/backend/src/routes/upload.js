@@ -2,10 +2,10 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const authMiddleware = require("../middleware/authMiddleware");
-const { normalizeFileName, buildPublicUrl } = require("../store/attachmentStore");
+const { getObjectStream } = require("../config/s3");
 
 const BUCKET = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET;
 const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-southeast-1";
@@ -23,12 +23,18 @@ const s3 = new S3Client({
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+function normalizeFileName(name) {
+  return String(name || `file-${Date.now()}`)
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .slice(0, 140);
+}
+
 router.post("/file", authMiddleware, upload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Thiếu file upload" });
     if (!BUCKET) return res.status(500).json({ message: "S3_BUCKET chưa được cấu hình trong .env" });
 
-    const safeName = normalizeFileName(req.file.originalname || `file-${Date.now()}`);
+    const safeName = normalizeFileName(req.file.originalname);
     const key = `attachments/${Date.now()}-${safeName}`;
     const command = new PutObjectCommand({
       Bucket: BUCKET,
@@ -67,7 +73,9 @@ router.post("/presign", authMiddleware, async (req, res, next) => {
     }
 
     if (!BUCKET) {
-      return res.status(500).json({ message: "S3_BUCKET chưa được cấu hình trong .env — không thể upload." });
+      return res.status(500).json({
+        message: "S3_BUCKET chưa được cấu hình trong .env — không thể upload.",
+      });
     }
 
     const allowedPrefixes = ["chat-media/", "avatars/"];
@@ -83,6 +91,42 @@ router.post("/presign", authMiddleware, async (req, res, next) => {
     res.json({ uploadUrl, publicUrl, key });
   } catch (err) {
     next(err);
+  }
+});
+
+function keyFromUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || ""));
+    return decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+  } catch {
+    return "";
+  }
+}
+
+function sanitizeKey(key) {
+  const value = String(key || "").trim();
+  if (!value || value.includes("..") || value.startsWith("/")) return "";
+  const allowedPrefixes = ["attachments/", "chat-media/", "avatars/"];
+  return allowedPrefixes.some((p) => value.startsWith(p)) ? value : "";
+}
+
+router.get("/file", async (req, res) => {
+  const key = sanitizeKey(req.query.key || keyFromUrl(req.query.url));
+  if (!key) {
+    return res.status(400).json({ message: "Thiếu hoặc sai key tệp." });
+  }
+
+  try {
+    const object = await getObjectStream(key);
+    res.setHeader("Content-Type", object.contentType);
+    if (object.contentLength) {
+      res.setHeader("Content-Length", String(object.contentLength));
+    }
+    res.setHeader("Cache-Control", "private, max-age=300");
+    object.body.pipe(res);
+  } catch (err) {
+    const status = err?.name === "NoSuchKey" || err?.$metadata?.httpStatusCode === 404 ? 404 : 500;
+    res.status(status).json({ message: status === 404 ? "Không tìm thấy tệp đã nộp." : "Không tải được tệp đã nộp." });
   }
 });
 

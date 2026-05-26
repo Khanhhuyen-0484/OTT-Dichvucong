@@ -20,7 +20,6 @@ import {
   getApiErrorMessage,
   getServiceById,
   mockPaymentComplete,
-  presignAttachmentUpload,
   submitServiceApplication,
   createBankTransferPayment,
   getBankTransferPaymentStatus,
@@ -123,6 +122,23 @@ const steps = [
 
 const currency = new Intl.NumberFormat("vi-VN");
 
+function paymentStatusLabel(status) {
+  switch (status) {
+    case "PENDING":
+    case "pending":
+    case "UNPAID":
+      return "Chờ thanh toán";
+    case "PAID":
+    case "completed":
+      return "Đã thanh toán";
+    case "EXPIRED":
+    case "expired":
+      return "Hết hạn thanh toán";
+    default:
+      return status || "Chờ thanh toán";
+  }
+}
+
 export default function ServiceWizard() {
   const { serviceId } = useParams();
   const [service, setService] = useState(null);
@@ -166,9 +182,9 @@ export default function ServiceWizard() {
   const feeText = useMemo(() => `${currency.format(service?.fee || 0)} VNĐ`, [service]);
   const serviceTimeline = useMemo(() => (service?.timeline?.length ? service.timeline : defaultTimeline), [service]);
   const faq = useMemo(() => (service?.faq?.length ? service.faq : defaultFaq), [service]);
-  const currentDossierId = paymentInfo?.dossierId || bankPayment?.dossierId || "";
+  const currentDossierId = paymentInfo?.dossierId || bankPayment?.dossierId || getSubmitDossierId(submitResult);
   const isPaid = paymentStatus === "PAID";
-  const paymentStatusLabel = isPaid ? "Thanh toán thành công" : paymentStatus;
+  const paymentStatusText = isPaid ? "Thanh toán thành công" : paymentStatusLabel(paymentStatus);
 
   function getSubmitDossierId(result = {}) {
     return String(
@@ -224,21 +240,21 @@ export default function ServiceWizard() {
       setSubmitting(true);
       const uploaded = [];
       for (const [key, item] of Object.entries(fileItems)) {
-        const safeContentType = item.type || "application/octet-stream";
-        const safeKey = `chat-media/${serviceId || "service"}/${key}-${Date.now()}-${item.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-        const presignRes = await presignAttachmentUpload({ key: safeKey, contentType: safeContentType, fileName: item.name, applicationId: "new", docKey: key });
-        const uploadRes = await uploadToS3(item.file);
-        const fileUrl = uploadRes?.publicUrl || presignRes.data?.publicUrl || item.previewUrl;
+        const stored = await uploadToS3(item.file);
+        const fileUrl = stored.publicUrl || stored.url || item.previewUrl;
         uploaded.push({
           key,
           fileName: item.name,
           name: item.name,
-          mimeType: item.type || safeContentType,
-          fileType: item.type || safeContentType,
+          mimeType: stored.contentType || item.type || "application/octet-stream",
+          fileType: stored.contentType || item.type || "application/octet-stream",
           size: item.file.size,
           fileUrl,
           url: fileUrl,
           path: fileUrl,
+          previewUrl: fileUrl,
+          s3Key: stored.key,
+          type: stored.contentType || item.type || "application/octet-stream"
         });
       }
 
@@ -260,10 +276,13 @@ export default function ServiceWizard() {
       const dossierId = getSubmitDossierId(data);
       if (!dossierId) throw new Error("Thiếu dossierId từ phản hồi nộp hồ sơ");
 
+      const isFreeService = Number(service?.fee || 0) <= 0;
       setSubmitResult(data);
       setPaymentExpireAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
-      setPaymentStatus("PENDING");
-      setStep(2);
+      setPaymentStatus(isFreeService ? "PAID" : "PENDING");
+      setStep(isFreeService ? 3 : 2);
+
+      if (isFreeService) return;
 
       // Tạo thanh toán chuyển khoản SePay
       const { data: bankTransfer } = await createBankTransferPayment({ dossierId, amount: data.application?.fee || data.fee || service?.fee || 0 });
@@ -447,7 +466,7 @@ export default function ServiceWizard() {
                 {formErrors.files ? <div style={styles.error}>{formErrors.files}</div> : null}
                 <div style={styles.actions}>
                   <button type="button" style={styles.primaryBtn} onClick={onSubmit} disabled={submitting}>
-                    {submitting ? "Đang xử lý..." : "Tiếp tục nộp hồ sơ"}
+                    {submitting ? "Đang xử lý..." : "Thanh toán"}
                   </button>
                 </div>
               </div>
@@ -460,7 +479,7 @@ export default function ServiceWizard() {
                 <div style={styles.paymentBox}>
                   <div style={styles.paymentRow}><span>Mã hồ sơ đang thanh toán</span><strong>{currentDossierId || "Chưa có mã hồ sơ"}</strong></div>
                   <div style={styles.paymentRow}><span>Số tiền</span><strong>{currency.format(paymentInfo?.amount || bankPayment?.amount || service?.fee || 0)} VNĐ</strong></div>
-                  <div style={styles.paymentRow}><span>Trạng thái payment</span><strong>{paymentStatusLabel}</strong></div>
+                  <div style={styles.paymentRow}><span>Trạng thái payment</span><strong>{paymentStatusText}</strong></div>
                   <div style={styles.paymentRow}><span>Số tài khoản</span><strong>{paymentInfo?.bankAccount || bankPayment?.bankAccount || "Đang cập nhật"}</strong></div>
                   <div style={styles.paymentRow}><span>Tên tài khoản</span><strong>{paymentInfo?.bankAccountName || bankPayment?.bankAccountName || "Đang cập nhật"}</strong></div>
                   <div style={styles.paymentRow}><span>Nội dung CK</span><strong style={styles.transferContent}>{paymentInfo?.transferContent || bankPayment?.transferContent || "Chưa có từ backend"}</strong></div>
@@ -477,6 +496,7 @@ export default function ServiceWizard() {
                 <div style={styles.actions}>
                   <button type="button" style={styles.secondaryBtn} onClick={() => setStep(1)}>Quay lại sửa hồ sơ</button>
                   <button type="button" style={styles.primaryBtn} onClick={checkPaymentStatus} disabled={checkingPayment}>Kiểm tra trạng thái thanh toán</button>
+                  <Link to="/my-applications" style={styles.exitBtn}>Thoát</Link>
                 </div>
                 <button type="button" onClick={onMockPaid} style={{ ...styles.mockBtn, opacity: isPaid ? 0.6 : 1, cursor: isPaid ? "not-allowed" : "pointer" }} disabled={isPaid}>Đánh dấu thanh toán thành công (demo)</button>
               </div>
@@ -486,7 +506,7 @@ export default function ServiceWizard() {
               <div style={styles.card}>
                 <SectionTitle icon={CheckCircle2} title="Hồ sơ đã sẵn sàng xử lý" />
                 <div style={styles.successBox}>
-                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{paymentStatusLabel}</div>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{paymentStatusText}</div>
                   <div>Mã hồ sơ: {currentDossierId || getSubmitDossierId(submitResult) || submitResult?.applicationCode}</div>
                   <div style={{ marginTop: 8, color: "#475569" }}>Hồ sơ đã được ghi nhận. Bạn có thể dùng mã này để tra cứu trạng thái về sau.</div>
                 </div>
@@ -622,6 +642,7 @@ const styles = {
   actions: { display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" },
   primaryBtn: { background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
   secondaryBtn: { background: "#e2e8f0", color: "#0f172a", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
+  exitBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#fff", color: "#334155", border: "1px solid #cbd5e1", borderRadius: 14, padding: "12px 18px", fontWeight: 800, textDecoration: "none" },
   mockBtn: { marginTop: 12, background: "#0f172a", color: "#fff", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
   paymentBox: { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 18, padding: 14 },
   paymentRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", color: "#334155", alignItems: "flex-start" },

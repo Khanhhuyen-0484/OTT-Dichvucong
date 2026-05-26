@@ -42,7 +42,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 if (process.env.NODE_ENV !== "production") {
   app.use((req, _res, next) => {
-    console.log(`🔥 [${req.method}] ${req.url}`, req.body);
+    const hasBody = req.body && Object.keys(req.body).length > 0;
+    console.log(`🔥 [${req.method}] ${req.url}${hasBody ? ` ${JSON.stringify(req.body)}` : ""}`);
     next();
   });
 }
@@ -102,11 +103,17 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log(`✅ Server chạy http://localhost:${PORT}`);
   console.log("[API] Routes: /api/auth, /api/chat, /api/admin, /api/upload, /api/services, /api/payments, /api/me, /api/login …");
-  try {
-    const result = await seedServicesToDynamo();
-    console.log(`[seed] Public services seeded: ${result.seeded}`);
-  } catch (error) {
-    console.error("[seed] Failed to seed services:", error.message);
+
+  if (process.env.SEED_SERVICES_ON_STARTUP === "true") {
+    try {
+      const result = await seedServicesToDynamo();
+      console.log(`[seed] Public services seeded: ${result.seeded}`);
+    } catch (error) {
+      console.warn("[seed] Bỏ qua seed dịch vụ khi khởi động:", error.message);
+    }
+  } else {
+    console.log("[seed] Bỏ qua seed dịch vụ khi khởi động. Đặt SEED_SERVICES_ON_STARTUP=true nếu cần seed DynamoDB.");
   }
+
   verifyTransport();
 });

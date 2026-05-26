@@ -11,6 +11,8 @@ import ChatPage from "./pages/ChatPage.jsx";
 import ServiceList from "./pages/ServiceList.jsx";
 import ServiceWizard from "./pages/ServiceWizard.jsx";
 import TrackApplication from "./pages/TrackApplication.jsx";
+import MyApplications from "./pages/MyApplications.jsx";
+import ApplicationDetail from "./pages/ApplicationDetail.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 
 export default function App() {
@@ -27,6 +29,8 @@ export default function App() {
       <Route path="/services" element={<ServiceList />} />
       <Route path="/services/:serviceId" element={<ServiceWizard />} />
       <Route path="/track" element={<TrackApplication />} />
+      <Route path="/my-applications" element={user ? <MyApplications /> : <Navigate to="/auth" replace />} />
+      <Route path="/my-applications/:applicationCode" element={user ? <ApplicationDetail /> : <Navigate to="/auth" replace />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/chat" element={<ChatPage />} />
