@@ -64,7 +64,7 @@ export default function Home() {
       <GovHeader />
 
       <main>
-        <section className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#0a3f74] to-[#003366] text-white">
+        <section className="relative overflow-hidden bg-linear-to-br from-[#003366] via-[#0a3f74] to-[#003366] text-white">
           <div className="absolute -right-24 -top-28 h-72 w-72 rounded-full bg-white/10 blur-2xl" />
           <div className="mx-auto max-w-7xl px-4 py-14 md:py-18">
             <div className="grid items-center gap-10 lg:grid-cols-12">
@@ -113,9 +113,9 @@ export default function Home() {
                     <SendHorizonal className="h-4 w-4" />
                     Nộp hồ sơ
                   </button>
-                  <button className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10" onClick={() => navigate("/track") }>
+                  <button className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10" onClick={() => navigate("/my-applications") }>
                     <FileText className="h-4 w-4" />
-                    Tra cứu kết quả
+                    Hồ sơ đã nộp
                   </button>
                   <button
                     onClick={() => navigate("/chat")}

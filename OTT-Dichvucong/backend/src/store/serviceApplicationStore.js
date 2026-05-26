@@ -47,7 +47,7 @@ function normalizeApplication(application) {
     history: timeline,
     attachments: normalizeAttachments(application.attachments || []).map((item) => ({
       ...item,
-      previewUrl: item.fileUrl || item.url || item.path || "",
+      previewUrl: item.fileUrl || item.url || item.path || item.previewUrl || item.publicUrl || "",
     })),
     createdAt: application.createdAt || new Date().toISOString(),
     updatedAt: application.updatedAt || new Date().toISOString(),
@@ -80,8 +80,18 @@ async function findByCode(dossierIdOrCode) {
   const dossierId = String(dossierIdOrCode || "").trim();
   if (!dossierId) return null;
   const client = getClient();
-  const result = await client.send(new GetCommand({ TableName: TABLE_NAME, Key: getDossierKey(dossierId) }));
-  return normalizeApplication(result.Item);
+  try {
+    const result = await client.send(new GetCommand({ TableName: TABLE_NAME, Key: getDossierKey(dossierId) }));
+    const item = normalizeApplication(result.Item);
+    if (item) return item;
+  } catch (error) {
+    console.warn("[serviceApplicationStore.findByCode] fallback scan:", error?.message || error);
+  }
+
+  const items = await readAll();
+  return items.find((item) =>
+    [item.dossierId, item.dossierCode, item.id, item.applicationCode, item.applicationId].includes(dossierId)
+  ) || null;
 }
 
 async function findByUserId(userId) {

@@ -11,6 +11,8 @@ const {
   getMyApplications,
   trackApplication,
   payForApplication,
+  getPaymentStatus,
+  mockPaymentComplete,
   adminCreateService,
   adminUpdateService,
   adminDeleteService,
@@ -23,6 +25,8 @@ router.get("/my-applications", authMiddleware, getMyApplications);
 router.get("/application/code/:applicationCode", getApplicationByCode);
 router.get("/track/:applicationCode", trackApplication);
 router.get("/application/:applicationCode/result", authMiddleware, downloadApplicationResult);
+router.get("/payment-status/:applicationCode", getPaymentStatus);
+router.post("/payment-mock/:applicationCode", mockPaymentComplete);
 router.get("/:serviceId", getServiceById);
 router.post("/submit", authMiddleware, submitApplication);
 router.post("/pay", authMiddleware, payForApplication);
