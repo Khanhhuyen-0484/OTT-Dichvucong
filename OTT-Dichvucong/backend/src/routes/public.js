@@ -17,14 +17,12 @@ const {
   me,
   patchMe,
   presignAvatar,
-  uploadAvatar,
-  deleteMe
+  uploadAvatar
 } = require("../controllers/authController");
 
-/** Hồ sơ JWT đặt trong router /api để luôn có GET/PATCH/DELETE /api/me khi mount đúng. */
+/** H?" so JWT ??" ?'?t trong router /api ?'?f lu?n c? GET/PATCH /api/me khi mount ?'?ng. */
 router.get("/me", authMiddleware, me);
 router.patch("/me", authMiddleware, patchMe);
-router.delete("/me", authMiddleware, deleteMe);
 router.post("/me/avatar/presign", authMiddleware, presignAvatar);
 router.post("/me/avatar/upload", authMiddleware, upload.single("file"), uploadAvatar);
 

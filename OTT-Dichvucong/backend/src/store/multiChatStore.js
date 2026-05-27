@@ -1,4 +1,4 @@
-const { DeleteCommand, GetCommand, PutCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
+const { GetCommand, PutCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
 const { dynamo } = require("../config/dynamoClient");
 const userStore = require("./userStore");
 
@@ -229,18 +229,6 @@ async function getRoomById(roomId) {
   );
   if (!rs.Item) return null;
   return sanitizeRoom(rs.Item);
-}
-
-async function deleteRoomById(roomId) {
-  const id = String(roomId || "").trim();
-  if (!id) return false;
-  await dynamo.send(
-    new DeleteCommand({
-      TableName: MULTI_CHAT_ROOMS_TABLE,
-      Key: { id }
-    })
-  );
-  return true;
 }
 
 async function listRoomsForUser(userId) {
@@ -489,24 +477,6 @@ async function deleteMessageForUser({ roomId, messageId, userId }) {
   return saveRoom(next);
 }
 
-async function clearDirectHistoryForUser({ roomId, userId }) {
-  const room = await getRoomById(roomId);
-  if (!room) throw new Error("Không tìm thấy phòng chat");
-  if (room.type !== "direct") throw new Error("Chỉ hỗ trợ xóa lịch sử chat cá nhân");
-  const uid = String(userId || "").trim();
-  if (!isRoomMember(room, uid)) throw new Error("Bạn không phải thành viên của phòng chat");
-
-  const nextMessages = room.messages.map((message) => ({
-    ...message,
-    deletedFor: Array.from(new Set([...(message.deletedFor || []), uid])),
-    pinned: (message.deletedFor || []).includes(uid) ? false : message.pinned,
-    isPinned: (message.deletedFor || []).includes(uid) ? false : message.isPinned
-  }));
-  const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
-  next.lastMessage = next.messages[next.messages.length - 1] || null;
-  return saveRoom(next);
-}
-
 const MAX_PINNED_MESSAGES = 3;
 
 async function togglePinMessage({ roomId, messageId, requesterId }) {
@@ -638,8 +608,24 @@ async function dissolveGroup({ roomId, requesterId }) {
   if (getMemberRole(room, requesterId) !== "owner") {
     throw new Error("Chỉ trưởng nhóm được phép giải tán nhóm");
   }
-  await deleteRoomById(room.id);
-  return room;
+  const next = {
+    ...room,
+    members: [],
+    messages: [
+      ...room.messages,
+      sanitizeMessage({
+        id: makeId("sys"),
+        senderId: requesterId,
+        text: "Nhóm đã được giải tán",
+        createdAt: nowIso(),
+        unsentForAll: false,
+        deletedFor: []
+      })
+    ],
+    updatedAt: nowIso()
+  };
+  next.lastMessage = next.messages[next.messages.length - 1] || null;
+  return saveRoom(next);
 }
 
 async function searchContacts({ keyword, currentUserId }) {
@@ -692,8 +678,7 @@ async function hydrateRoomForUser(room, currentUserId) {
   return {
     ...room,
     members,
-    messages: hydratedMessages,
-    lastMessage: hydratedMessages[hydratedMessages.length - 1] || null
+    messages: hydratedMessages
   };
 }
 
@@ -706,7 +691,6 @@ module.exports = {
   appendCallLogMessage,
   unsendMessage,
   deleteMessageForUser,
-  clearDirectHistoryForUser,
   togglePinMessage,
   forwardMessage,
   addGroupMember,

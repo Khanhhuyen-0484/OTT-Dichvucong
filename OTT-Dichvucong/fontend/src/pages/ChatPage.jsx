@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   Send,
+  ArrowLeft,
   Mic,
   MicOff,
   Video,
@@ -17,12 +18,10 @@ import FriendHubModal from "../components/FriendHubModal.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import VideoCall from "../components/VideoCall.jsx";
 import IncomingCallModal from "../components/IncomingCallModal.jsx";
-import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
   assignGroupDeputy,
-  clearDirectChatHistory,
   createGroupRoom,
   deleteFriend,
   deleteFriendRequest,
@@ -58,14 +57,14 @@ import { uploadToS3 } from "../lib/uploadToS3.js";
 import { resolveMyGroupRole } from "../lib/groupRoles.js";
 import { MAX_PINNED_MESSAGES, canPinMore } from "../lib/chatPinned.js";
 
-// ?"??"??"? SUB-COMPONENTS ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+// ─── SUB-COMPONENTS ──────────────────────────────────────────────────────────
 
 function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
       <div className="flex flex-col items-center gap-3">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#003366] border-t-transparent" />
-        <span className="text-sm font-bold text-slate-600">?ang tï¿½i h?? th?'ng...</span>
+        <span className="text-sm font-bold text-slate-600">Đang tải hệ thống...</span>
       </div>
     </div>
   );
@@ -76,7 +75,7 @@ function ForwardModal({ rooms, activeRoomId, userId, doForward, onClose }) {
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-800">Chuy?fn ti?p</h3>
+          <h3 className="text-lg font-bold text-slate-800">Chuyển tiếp</h3>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full">
             <X size={20} />
           </button>
@@ -91,8 +90,8 @@ function ForwardModal({ rooms, activeRoomId, userId, doForward, onClose }) {
                 className="w-full rounded-2xl px-4 py-4 text-left text-sm font-semibold hover:bg-blue-50 border border-slate-100 transition-all active:scale-[0.98]"
               >
                 {r.type === "group"
-                  ? `?Y'? ${r.name || "Nh?m"}`
-                  : `?Y'? ${r.members?.find((m) => m.id !== userId)?.fullName || "Ngu?i dï¿½ng"}`}
+                  ? `👥 ${r.name || "Nhóm"}`
+                  : `👤 ${r.members?.find((m) => m.id !== userId)?.fullName || "Người dùng"}`}
               </button>
             ))}
         </div>
@@ -101,7 +100,7 @@ function ForwardModal({ rooms, activeRoomId, userId, doForward, onClose }) {
   );
 }
 
-// ?"??"??"? MAIN COMPONENT ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 
 export default function ChatPage() {
   const navigate = useNavigate();
@@ -156,8 +155,8 @@ export default function ChatPage() {
   const [incomingCall, setIncomingCall] = useState(null);
   const [isCalling, setIsCalling] = useState(false);
 
-  // ?"??"??"? Refs: cho phï¿½p socket handler ?'?c gi? tr?< m?>i nh?t
-  //           m? khï¿½ng c?n re-register listener ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+  // ─── Refs: cho phép socket handler đọc giá trị mới nhất
+  //           mà không cần re-register listener ────────────────────────────────
   const activeRoomIdRef = useRef(activeRoomId);
   const tabStateRef     = useRef(tabState);
   const loadRoomsRef    = useRef(null);
@@ -167,7 +166,7 @@ export default function ChatPage() {
   useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
   useEffect(() => { tabStateRef.current     = tabState;     }, [tabState]);
 
-  // ?"??"??"? Helpers ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -214,12 +213,12 @@ export default function ChatPage() {
     const normalizedDigits = raw.replace(/\D/g, "");
     const isValidLookup = raw.includes("@") || normalizedDigits.length >= 8;
     if (!raw) {
-      setFriendSearchNotice("Nhï¿½p email ho?c s?' ?'i??n tho?i ?'?f t?m v? kï¿½t b?n.");
+      setFriendSearchNotice("Nhập email hoặc số điện thoại để tìm và kết bạn.");
       setFriendDiscovery([]);
       return;
     }
     if (!isValidLookup) {
-      setFriendSearchNotice("Ch?? h?- tr? t?m b?n b?ng email ho?c s?' ?'i??n tho?i ?'?f tr?nh trï¿½ng t?n.");
+      setFriendSearchNotice("Chỉ hỗ trợ tìm bạn bằng email hoặc số điện thoại để tránh trùng tên.");
       setFriendDiscovery([]);
       return;
     }
@@ -319,12 +318,12 @@ export default function ChatPage() {
     const socket = connectSocket();
 
     const handleNewMessage = async (msg) => {
-      console.log("[ChatPage] new-message:", msg);
+      console.log("[ChatPage] 📨 new-message:", msg);
 
-      // Reload rooms ?'?f l?y messages m?>i nh?t c?a t?t c? thï¿½nh vi?n
+      // Reload rooms để lấy messages mới nhất của tất cả thành viên
       await loadRoomsRef.current();
 
-      // Scroll xu?'ng n?u tin thu?Tc room ?'ang m?Y
+      // Scroll xuống nếu tin thuộc room đang mở
       const incomingRoomId = msg?.roomId ?? null;
       const currentRoomId  = activeRoomIdRef.current;
       const isActiveRoom   = !incomingRoomId || incomingRoomId === currentRoomId;
@@ -332,7 +331,7 @@ export default function ChatPage() {
         setTimeout(() => scrollBotRef.current(), 100);
       }
 
-      // X? l? tab staff
+      // Xử lý tab staff
       if (tabStateRef.current === "staff") {
         loadStaffRef.current();
       } else if (msg?.from === "staff") {
@@ -341,12 +340,12 @@ export default function ChatPage() {
     };
 
     const handleIncomingCall = (data) => {
-      console.log("[ChatPage] incoming-call:", data);
-      // Khï¿½ng t? ?'?Tng reject: lu?n hi?fn th?< modal ?'?f ngu?i dï¿½ng quy?t ?'?<nh.
+      console.log("[ChatPage] 📞 incoming-call:", data);
+      // Không tự động reject: luôn hiển thị modal để người dùng quyết định.
       if (data.isGroupCall) {
         setIncomingCall((prev) => ({
           isGroupCall:  true,
-          groupName:    data.groupName || prev?.groupName || "Cu?Tc gï¿½i nh?m",
+          groupName:    data.groupName || prev?.groupName || "Cuộc gọi nhóm",
           roomId:       data.roomId,
           callerOffers: { ...(prev?.callerOffers || {}), [data.fromUserId]: data.offer },
           callerNames:  (prev?.callerNames || []).includes(data.callerName)
@@ -365,29 +364,18 @@ export default function ChatPage() {
       }
     };
 
-    const handleGroupDissolved = async (data) => {
-      const roomId = data?.roomId;
-      const message = data?.message || "Nhóm đã được giải tán";
-      setToast({ type: "success", message });
-      if (roomId && activeRoomIdRef.current === roomId) {
-        setActiveRoomId(null);
-      }
-      await loadRoomsRef.current();
-    };
-
     socket.on("new-message",   handleNewMessage);
     socket.on("incoming-call", handleIncomingCall);
-    socket.on("group-dissolved", handleGroupDissolved);
 
     return () => {
       socket.off("new-message",   handleNewMessage);
       socket.off("incoming-call", handleIncomingCall);
-      socket.off("group-dissolved", handleGroupDissolved);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, user]); // ??? ch?? [ready, user], m?i th? kh?c ?'?c qua ref
+  }, [ready, user]); // ← chỉ [ready, user], mọi thứ khác đọc qua ref
 
-  // Data loading`r`n
+  // ─── Data loading ─────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (rooms.length > 0 && !activeRoomId) {
       setActiveRoomId(rooms[0].id);
@@ -426,7 +414,7 @@ export default function ChatPage() {
   const openAddFriendModal = useCallback(() => {
     setShowAddFriendModal(true);
     setFriendQuery("");
-    setFriendSearchNotice("Nhï¿½p email ho?c s?' ?'i??n tho?i ?'?f t?m v? kï¿½t b?n.");
+    setFriendSearchNotice("Nhập email hoặc số điện thoại để tìm và kết bạn.");
     setFriendDiscovery([]);
     loadFriendRequests();
     loadFriendSuggestions();
@@ -445,7 +433,7 @@ export default function ChatPage() {
     setFriendLoading(true);
     try {
       await postFriendRequest(targetUserId);
-      setToast({ type: "success", message: "?? gï¿½i lï¿½i m?i kï¿½t b?n" });
+      setToast({ type: "success", message: "Đã gửi lời mời kết bạn" });
       await Promise.all([
         loadFriendDiscovery(friendQuery),
         loadFriendRequests(),
@@ -518,7 +506,7 @@ export default function ChatPage() {
     setFriendLoading(true);
     try {
       await postBlockFriend(targetUserId);
-      setToast({ type: "success", message: "?? chï¿½n ngu?i dï¿½ng" });
+      setToast({ type: "success", message: "Đã chặn người dùng" });
       await Promise.all([
         loadContacts(),
         loadFriendDirectory(),
@@ -538,7 +526,7 @@ export default function ChatPage() {
     setFriendLoading(true);
     try {
       await postGroupInvites(roomId, memberIds);
-      setToast({ type: "success", message: "?? gï¿½i lï¿½i m?i v?o nh?m" });
+      setToast({ type: "success", message: "Đã gửi lời mời vào nhóm" });
       await Promise.all([loadRooms(), loadGroupInvites()]);
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
@@ -553,7 +541,7 @@ export default function ChatPage() {
       await postGroupInviteResponse(roomId, action);
       setToast({
         type: "success",
-        message: action === "accept" ? "?? tham gia nh?m" : "?? t? ch?'i lï¿½i m?i nh?m"
+        message: action === "accept" ? "Đã tham gia nhóm" : "Đã từ chối lời mời nhóm"
       });
       await Promise.all([loadRooms(), loadGroupInvites()]);
     } catch (err) {
@@ -567,7 +555,7 @@ export default function ChatPage() {
     setFriendLoading(true);
     try {
       await postUnblockFriend(targetUserId);
-      setToast({ type: "success", message: "?? b? chï¿½n ngu?i dï¿½ng" });
+      setToast({ type: "success", message: "Đã bỏ chặn người dùng" });
       await Promise.all([loadBlockedFriends(), loadFriendDiscovery(friendQuery)]);
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
@@ -576,7 +564,7 @@ export default function ChatPage() {
     }
   }, [friendQuery, loadBlockedFriends, loadFriendDiscovery]);
 
-  // Scroll xu?'ng khi chï¿½n room m?>i
+  // Scroll xuống khi chọn room mới
   useEffect(() => {
     if (activeRoomId) setTimeout(scrollToBottom, 150);
   }, [activeRoomId, scrollToBottom]);
@@ -586,7 +574,7 @@ export default function ChatPage() {
     setTimeout(scrollToBottom, 120);
   }, [activeRoomId, activeMessagesLength, scrollToBottom]);
 
-  // ?"??"??"? Call Handlers ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+  // ─── Call Handlers ────────────────────────────────────────────────────────────
 
   const startVideoCall = useCallback(() => {
     if (isCalling || videoCallState) return;
@@ -636,7 +624,7 @@ export default function ChatPage() {
     setIncomingCall(null);
   }, [incomingCall]);
 
-  // ?"??"??"? Send message ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+  // ─── Send message ─────────────────────────────────────────────────────────────
 
   const sendRoom = async (e) => {
     e?.preventDefault();
@@ -687,7 +675,7 @@ export default function ChatPage() {
 
   const sendLocationMessage = useCallback(async () => {
     if (!navigator.geolocation) {
-      setRoomErr("Tr?nh duy??t c?a b?n khï¿½ng h?- tr? gï¿½i v?< tr?.");
+      setRoomErr("Trình duyệt của bạn không hỗ trợ gửi vị trí.");
       return;
     }
     if (!activeRoomId || roomLoading) return;
@@ -704,12 +692,12 @@ export default function ChatPage() {
       const longitude = position.coords.longitude;
       const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
       await postRoomMessage(activeRoomId, {
-        text: "V?< tr? ?'? gï¿½i",
+        text: "Vị trí đã gửi",
         location: {
           latitude,
           longitude,
           mapsUrl,
-          label: "V?< tr? hi??n tï¿½i"
+          label: "Vị trí hiện tại"
         },
         replyToMessageId: replyToMessage?.id || "",
         senderAvatar: user?.avatarUrl || user?.photoURL || user?.avatar || ""
@@ -722,13 +710,13 @@ export default function ChatPage() {
       await loadRooms();
       setTimeout(scrollToBottom, 100);
     } catch (err) {
-      setRoomErr(getApiErrorMessage(err) || "Khï¿½ng th?f l?y v?< tr? hi??n tï¿½i.");
+      setRoomErr(getApiErrorMessage(err) || "Không thể lấy vị trí hiện tại.");
     } finally {
       setRoomLoading(false);
     }
   }, [activeRoomId, loadRooms, replyToMessage, roomLoading, scrollToBottom, user]);
 
-  // ?"??"??"? Group and Message Actions ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+  // ─── Group and Message Actions ────────────────────────────────────────────────
 
   const performGroupAction = useCallback(async (action, memberId) => {
     if (!activeRoomId) return;
@@ -738,34 +726,32 @@ export default function ChatPage() {
         case "add":
           if (!memberId) return;
           await addGroupMember(activeRoomId, memberId);
-          setToast({ type: "success", message: "?? th?m thï¿½nh vi?n v?o nh?m" });
+          setToast({ type: "success", message: "Đã thêm thành viên vào nhóm" });
           break;
         case "remove":
           if (!memberId) return;
           await removeGroupMember(activeRoomId, memberId);
-          setToast({ type: "success", message: "?? x?a thï¿½nh vi?n kh?i nh?m" });
+          setToast({ type: "success", message: "Đã xóa thành viên khỏi nhóm" });
           break;
         case "leave":
           if (!user?.id) return;
           await removeGroupMember(activeRoomId, user.id);
-          setToast({ type: "success", message: "B?n ?'? r?i kh?i nh?m" });
+          setToast({ type: "success", message: "Bạn đã rời khỏi nhóm" });
           setActiveRoomId(null);
           break;
         case "promote":
           if (!memberId) return;
           await assignGroupDeputy(activeRoomId, memberId);
-          setToast({ type: "success", message: "?? phong ph? nh?m" });
+          setToast({ type: "success", message: "Đã phong phó nhóm" });
           break;
         case "demote":
           if (!memberId) return;
           await removeGroupDeputy(activeRoomId, memberId);
-          setToast({ type: "success", message: "?? h? ch?c ph? nh?m" });
+          setToast({ type: "success", message: "Đã hạ chức phó nhóm" });
           break;
         case "dissolve":
-          {
-            const { data } = await dissolveGroup(activeRoomId);
-            setToast({ type: "success", message: data?.message || "Giải tán nhóm thành công" });
-          }
+          await dissolveGroup(activeRoomId);
+          setToast({ type: "success", message: "Đã giải tán nhóm" });
           setActiveRoomId(null);
           break;
         default:
@@ -779,20 +765,6 @@ export default function ChatPage() {
       setFriendLoading(false);
     }
   }, [activeRoomId, loadRooms, user?.id]);
-
-  const clearDirectHistory = useCallback(async () => {
-    if (!activeRoomId) return;
-    setRoomLoading(true);
-    try {
-      await clearDirectChatHistory(activeRoomId);
-      await loadRooms();
-      setToast({ type: "success", message: "Đã xóa lịch sử cuộc trò chuyện" });
-    } catch (err) {
-      setRoomErr(getApiErrorMessage(err));
-    } finally {
-      setRoomLoading(false);
-    }
-  }, [activeRoomId, loadRooms]);
 
   const doMessageAction = useCallback(async (action, messageId) => {
     if (!activeRoomId || !messageId) return;
@@ -812,14 +784,14 @@ export default function ChatPage() {
           const target = room?.messages?.find((m) => m.id === messageId);
           const wasPinned = Boolean(target?.isPinned ?? target?.pinned);
           if (!wasPinned && !canPinMore(room?.messages || [], messageId)) {
-            setRoomErr(`Ch?? ghim t?'i ?'a ${MAX_PINNED_MESSAGES} tin nhï¿½n`);
+            setRoomErr(`Chỉ ghim tối đa ${MAX_PINNED_MESSAGES} tin nhắn`);
             break;
           }
           await togglePinRoomMessage(activeRoomId, messageId);
           await loadRooms();
           setToast({
             type: "success",
-            message: wasPinned ? "?? b? ghim tin nhï¿½n" : "?? ghim tin nhï¿½n",
+            message: wasPinned ? "Đã bỏ ghim tin nhắn" : "Đã ghim tin nhắn",
           });
           break;
         }
@@ -837,7 +809,7 @@ export default function ChatPage() {
 
   const createGroup = useCallback(async () => {
     if (!groupName.trim() || groupMemberIds.length === 0) {
-      setRoomErr("Vui l?ng nhï¿½p t?n nh?m v? chï¿½n thï¿½nh vi?n");
+      setRoomErr("Vui lòng nhập tên nhóm và chọn thành viên");
       return;
     }
     setRoomLoading(true);
@@ -847,7 +819,7 @@ export default function ChatPage() {
         avatar: groupAvatar,
         memberIds: groupMemberIds
       });
-      setToast({ type: "success", message: "?? t?o nh?m thï¿½nh cï¿½ng" });
+      setToast({ type: "success", message: "Đã tạo nhóm thành công" });
       setGroupName("");
       setGroupAvatar("");
       setGroupMemberIds([]);
@@ -877,7 +849,7 @@ export default function ChatPage() {
         const uploaded = await uploadToS3(avatarFile);
         const url = uploaded?.publicUrl || uploaded?.url || "";
         if (!/^https?:\/\//i.test(url)) {
-          throw new Error("?nh nh?m ph?i ?'u?c luu tr?n server (c?u hï¿½nh S3). Khï¿½ng dï¿½ng link t?m.");
+          throw new Error("Ảnh nhóm phải được lưu trên server (cấu hình S3). Không dùng link tạm.");
         }
         payload.avatarUrl = url;
       }
@@ -886,7 +858,7 @@ export default function ChatPage() {
 
       await updateGroupRoom(activeRoomId, payload);
       await loadRooms();
-      setToast({ type: "success", message: "?? luu thï¿½ng tin nh?m" });
+      setToast({ type: "success", message: "Đã lưu thông tin nhóm" });
     } catch (err) {
       setRoomErr(getApiErrorMessage(err));
     } finally {
@@ -899,7 +871,7 @@ export default function ChatPage() {
     setRoomLoading(true);
     try {
       await forwardRoomMessage(activeRoomId, forwardingMessageId, targetRoomId);
-      setToast({ type: "success", message: "?? chuy?fn ti?p tin nhï¿½n" });
+      setToast({ type: "success", message: "Đã chuyển tiếp tin nhắn" });
       await loadRooms();
       setForwardingMessageId(null);
     } catch (err) {
@@ -933,12 +905,14 @@ export default function ChatPage() {
 
       <main className="mx-auto flex w-full max-w-[96rem] min-h-0 flex-1 flex-col overflow-hidden px-3 pt-3 sm:px-4">
         <div className="mb-2 flex w-full shrink-0 items-center gap-2">
-          <BackToDashboardButton
-            variant="ghost"
-            label="Quay lï¿½i"
-            showBackIcon
-            className="px-3 py-1.5 text-xs"
-          />
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Quay lại
+          </button>
 
           <div className="flex min-w-0 flex-1 gap-1 rounded-lg bg-slate-100 p-0.5">
             <button
@@ -947,7 +921,7 @@ export default function ChatPage() {
               className={`flex h-7 flex-1 items-center justify-center rounded-md px-2 text-xs font-bold transition-all sm:text-sm
                 ${tabState === "multi" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/70"}`}
             >
-              Chat & Nh?m
+              Chat & Nhóm
             </button>
             <button
               type="button"
@@ -955,7 +929,7 @@ export default function ChatPage() {
               className={`relative flex h-7 flex-1 items-center justify-center rounded-md px-2 text-xs font-bold transition-all sm:text-sm
                 ${tabState === "staff" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/70"}`}
             >
-              C?n b?T
+              Cán bộ
               {staffUnread > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white">!</span>
               )}
@@ -973,17 +947,17 @@ export default function ChatPage() {
                     onClick={() => setMobileRoomOpen(false)}
                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
                   >
-                    Quay lï¿½i danh s?ch
+                    Quay lại danh sách
                   </button>
                 ) : null}
               </div>
 
-              {/* Container ngo?i: danh s?ch tr?i + khung chat ph?i */}
+              {/* Container ngoài: danh sách trái + khung chat phải */}
               <div
                 id="chat-room-shell"
                 className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
               >
-                {/* Sidebar danh s?ch ??" r?Tng hon cho d?. ?'?c */}
+                {/* Sidebar danh sách — rộng hơn cho dễ đọc */}
                 <div
                   className={`${
                     mobileRoomOpen ? "hidden" : "flex"
@@ -1012,7 +986,7 @@ export default function ChatPage() {
                   />
                 </div>
 
-                {/* Chat ??" chi?m phï¿½n c?n lï¿½i */}
+                {/* Chat — chiếm phần còn lại */}
                 <div
                   className={`${
                     mobileRoomOpen ? "flex" : "hidden"
@@ -1048,7 +1022,6 @@ export default function ChatPage() {
                     clearReply={() => setReplyToMessage(null)}
                     chatEndRef={chatEndRef}
                     onUpdateGroupMeta={onUpdateGroupMeta}
-                    onClearDirectHistory={clearDirectHistory}
                     groupActionBusy={friendLoading}
                   />
                 </div>
@@ -1062,8 +1035,8 @@ export default function ChatPage() {
               >
                 {/* Header */}
                 <div className="shrink-0 border-b border-slate-200 bg-[#003366] p-4 text-white">
-                  <h2 className="font-bold text-sm">?Y'? C?n b?T h?- tr?</h2>
-                  <p className="text-xs text-emerald-400 mt-1">H?- tr? tr?c tuy?n</p>
+                  <h2 className="font-bold text-sm">👤 Cán bộ hỗ trợ</h2>
+                  <p className="text-xs text-emerald-400 mt-1">Hỗ trợ trực tuyến</p>
                 </div>
 
                 {/* Messages */}
@@ -1087,7 +1060,7 @@ export default function ChatPage() {
                           from={isMine ? "user" : "staff"}
                           text={m.content || m.text}
                           isMine={isMine}
-                          label={isMine ? user.fullName : "C?n b?T"}
+                          label={isMine ? user.fullName : "Cán bộ"}
                           createdAt={m.createdAt}
                         />
                       );
@@ -1107,7 +1080,7 @@ export default function ChatPage() {
                     <input
                       value={staffInput}
                       onChange={(e) => setStaffInput(e.target.value)}
-                      placeholder="Nhï¿½n tin cho c?n b?T..."
+                      placeholder="Nhắn tin cho cán bộ..."
                       disabled={staffLoading}
                       className="flex-1 text-sm p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-[#003366]"
                     />
@@ -1203,17 +1176,17 @@ export default function ChatPage() {
       {forwardingMessageId && (
         <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-4">
-            <div className="text-sm font-bold mb-2">Chï¿½n noi chuy?fn ti?p</div>
+            <div className="text-sm font-bold mb-2">Chọn nơi chuyển tiếp</div>
             <div className="space-y-1 max-h-52 overflow-y-auto">
               {rooms
                 .filter((r) => r.id !== activeRoomId)
                 .map((r) => (
                   <button key={r.id} type="button" onClick={() => doForward(r.id)} className="block w-full text-left rounded-lg px-2 py-1.5 hover:bg-slate-100 text-sm">
-                    {r.type === "group" ? r.name || "Nh?m" : r.members?.find((m) => m.id !== user?.id)?.fullName || "H?Ti tho?i"}
+                    {r.type === "group" ? r.name || "Nhóm" : r.members?.find((m) => m.id !== user?.id)?.fullName || "Hội thoại"}
                   </button>
                 ))}
             </div>
-            <button type="button" onClick={() => setForwardingMessageId(null)} className="mt-3 text-xs text-slate-500">??ng</button>
+            <button type="button" onClick={() => setForwardingMessageId(null)} className="mt-3 text-xs text-slate-500">Đóng</button>
           </div>
         </div>
       )}
@@ -1243,11 +1216,9 @@ export default function ChatPage() {
         <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] animate-in slide-in-from-right-10 flex items-center gap-3">
           <div className="bg-white/20 p-1.5 rounded-full"><X size={16} /></div>
           <span className="text-sm font-bold">{roomErr}</span>
-          <button onClick={() => setRoomErr(null)} className="ml-4 text-xs underline opacity-80">??ng</button>
+          <button onClick={() => setRoomErr(null)} className="ml-4 text-xs underline opacity-80">Đóng</button>
         </div>
       )}
     </div>
   );
 }
-
-

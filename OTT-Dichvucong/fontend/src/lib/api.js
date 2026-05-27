@@ -12,7 +12,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export function getApiErrorMessage(err) { return err?.response?.data?.message || err?.message || "Lỗi không xác định"; }
+export function getApiErrorMessage(err) { return err?.response?.data?.message || err?.message || "L?-i kh�ng x?c ?'?<nh"; }
 
 export async function postAiChat(payload) { return api.post("/chat/ai", payload); }
 export async function getMe() { return api.get("/me"); }
@@ -48,7 +48,6 @@ export async function ensureDirectRoom(contactId) { return api.post("/chat/direc
 export async function createGroupRoom(payload) { return api.post("/chat/groups", { name: payload?.name, avatarUrl: payload?.avatarUrl || payload?.avatar || "", memberIds: payload?.memberIds || [] }); }
 export async function postRoomMessage(roomId, payload) { return api.post(`/chat/rooms/${roomId}/messages`, payload); }
 export async function deleteRoomMessageForMe(roomId, messageId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/delete`); }
-export async function clearDirectChatHistory(roomId) { return api.post(`/chat/rooms/${roomId}/clear-history`); }
 export async function unsendRoomMessage(roomId, messageId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/unsend`); }
 export async function togglePinRoomMessage(roomId, messageId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/pin`); }
 export async function forwardRoomMessage(roomId, messageId, targetRoomId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/forward`, { targetRoomId }); }

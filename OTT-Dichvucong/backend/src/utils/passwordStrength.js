@@ -56,10 +56,10 @@ function getPasswordStrength(value) {
 
 function validateRegisterPassword(value) {
   if (!value || typeof value !== "string") {
-    return { ok: false, message: "Mật khẩu phải có ít nhất 6 ký tự" };
+    return { ok: false, message: "Mật khẩu phải có ít nhất 6 kí tự" };
   }
   if (value.length < 6) {
-    return { ok: false, message: "Mật khẩu phải có ít nhất 6 ký tự" };
+    return { ok: false, message: "Mật khẩu phải có ít nhất 6 kí tự" };
   }
   if (getPasswordStrength(value) === "weak") {
     return {
