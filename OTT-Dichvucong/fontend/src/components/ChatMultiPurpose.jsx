@@ -3,7 +3,9 @@ import {
   Calendar,
   CheckSquare,
   FileImage,
+  FileText,
   Heart,
+  Info,
   MapPin,
   ChevronDown,
   MessageSquare,
@@ -20,6 +22,7 @@ import {
   MapPinned,
   UserPlus,
   Video,
+  X,
 } from "lucide-react";
 import Bubble from "./Bubble.jsx";
 import GroupInfoDrawer from "./GroupInfoDrawer.jsx";
@@ -74,6 +77,269 @@ function Avatar({ src, name, className = "" }) {
   );
 }
 
+function normalizeMediaUrl(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("blob:") || raw.startsWith("data:") || /^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return raw;
+  return "";
+}
+
+function getExtension(url = "", name = "") {
+  const raw = String(url || name || "").split("?")[0].split("#")[0];
+  return String(raw.split(".").pop() || "").toLowerCase();
+}
+
+function extractRoomAttachments(messages = [], members = []) {
+  const memberMap = new Map((members || []).map((m) => [m.id, m]));
+  const images = [];
+  const files = [];
+
+  for (const message of messages) {
+    if (!message?.id || message.unsentForAll) continue;
+    const media = message.media || {};
+    const url = normalizeMediaUrl(media.url || media.fileUrl || message.fileUrl);
+    if (!url) continue;
+
+    const ext = getExtension(url, media.name || message.fileName || message.name);
+    const sender = memberMap.get(message.senderId) || message.sender || {};
+    const base = {
+      id: message.id,
+      url,
+      senderName: sender.fullName || message.senderName || "Người dùng",
+      createdAt: message.createdAt
+    };
+
+    const isImage =
+      media.type === "image" ||
+      media.type === "video" ||
+      ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "mp4", "webm"].includes(ext);
+    const isFile =
+      media.type === "file" ||
+      media.type === "document" ||
+      message.messageType === "file" ||
+      ["pdf", "doc", "docx"].includes(ext);
+
+    if (isImage && !isFile) {
+      images.push({ ...base, type: media.type === "video" ? "video" : "image" });
+    } else if (isFile) {
+      files.push({
+        ...base,
+        name: media.name || message.fileName || message.name || "Tập tin đính kèm",
+        ext
+      });
+    }
+  }
+
+  return { images: images.reverse(), files: files.reverse() };
+}
+
+function formatWhen(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return "";
+  }
+}
+
+function DirectInfoDrawer({ open, onClose, activeRoom, partner, onClearHistory, busy = false }) {
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const { images, files } = useMemo(
+    () => extractRoomAttachments(activeRoom?.messages || [], activeRoom?.members || []),
+    [activeRoom?.messages, activeRoom?.members]
+  );
+
+  if (!open || activeRoom?.type !== "direct") return null;
+
+  const clearHistory = async () => {
+    if (busy) return;
+    await onClearHistory?.();
+    setShowClearConfirm(false);
+    onClose?.();
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Đóng thông tin hội thoại"
+        className="fixed inset-0 z-64 bg-slate-900/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <aside className="fixed inset-y-0 right-0 z-65 flex w-full max-w-md flex-col border-l border-slate-200/80 bg-white shadow-2xl">
+        <div className="border-b border-slate-100 px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#003366]/70">
+                Chat cá nhân
+              </p>
+              <h2 className="text-lg font-bold text-slate-900">Thông tin hội thoại</h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100">
+            <Avatar
+              src={getAvatarUrl(partner)}
+              name={partner?.fullName}
+              className="h-12 w-12 rounded-full border border-slate-200 object-cover"
+            />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold text-slate-900">{partner?.fullName || "Hội thoại"}</div>
+              <div className="text-xs text-slate-500">{images.length} ảnh/video • {files.length} tệp tin</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <section>
+            <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-700">
+              <FileImage className="h-4 w-4 text-[#003366]" />
+              Ảnh & video ({images.length})
+            </div>
+            {images.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-xs text-slate-400">
+                Chưa có ảnh hoặc video trong hội thoại
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((item) => (
+                  <div key={item.id} className="group overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewUrl(item.url)}
+                      className="aspect-square w-full overflow-hidden bg-slate-100"
+                    >
+                      <img src={item.url} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
+                    </button>
+                    <div className="px-2 py-2">
+                      <p className="truncate text-[10px] text-slate-500">{item.senderName} • {formatWhen(item.createdAt)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="mt-5">
+            <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-700">
+              <FileText className="h-4 w-4 text-[#003366]" />
+              Tệp đính kèm ({files.length})
+            </div>
+            {files.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-xs text-slate-400">
+                Chưa có tệp tin trong hội thoại
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {files.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+                    <a href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 hover:text-[#003366]">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#003366]/10 text-xs font-bold text-[#003366]">
+                        {item.ext === "pdf" ? "PDF" : item.ext === "doc" || item.ext === "docx" ? "DOC" : "FILE"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-800">{item.name}</p>
+                        <p className="text-[10px] text-slate-500">{item.senderName} • {formatWhen(item.createdAt)}</p>
+                      </div>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="border-t border-slate-100 bg-white p-4">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setShowClearConfirm(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            {busy ? "Đang xóa..." : "Xóa lịch sử cuộc trò chuyện"}
+          </button>
+        </div>
+      </aside>
+
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-72 flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-bold text-slate-900">Xác nhận</h3>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setShowClearConfirm(false)}
+                className="rounded p-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                aria-label="Đóng"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="px-5 py-6 text-base leading-7 text-slate-900">
+              <p>Toàn bộ nội dung trò chuyện sẽ bị xóa vĩnh viễn.</p>
+              <p>Bạn có chắc chắn muốn xóa?</p>
+            </div>
+            <div className="flex justify-end gap-5 px-5 pb-5">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setShowClearConfirm(false)}
+                className="rounded bg-slate-200 px-5 py-3 text-base font-bold text-slate-900 hover:bg-slate-300 disabled:opacity-50"
+              >
+                Không
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={clearHistory}
+                className="rounded bg-red-600 px-6 py-3 text-base font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-70 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewUrl("")}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white"
+            onClick={() => setPreviewUrl("")}
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={previewUrl}
+            alt="Xem trước"
+            className="max-h-[90vh] max-w-full rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
 function ChatMultiPurpose({
   activeRoom,
   user,
@@ -99,6 +365,7 @@ function ChatMultiPurpose({
   onReplyMessage,
   chatEndRef,
   onUpdateGroupMeta,
+  onClearDirectHistory,
   setForwardingMessageId,
   groupActionBusy = false,
 }) {
@@ -106,6 +373,7 @@ function ChatMultiPurpose({
   const [hoverMessageId, setHoverMessageId] = useState(null);
   const [reactionHoverId, setReactionHoverId] = useState(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [showDirectInfo, setShowDirectInfo] = useState(false);
   const [groupInfoInitialTab, setGroupInfoInitialTab] = useState("overview");
 
   const canEditGroup = canManageGroupRoom(activeRoom, user?.id);
@@ -249,6 +517,16 @@ function ChatMultiPurpose({
                 Th�ng tin nh?m
               </button>
             </>
+          )}
+          {activeRoom.type === "direct" && (
+            <button
+              type="button"
+              onClick={() => setShowDirectInfo(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <Info className="h-3.5 w-3.5" />
+              Thông tin
+            </button>
           )}
         </div>
       </div>
@@ -432,7 +710,7 @@ function ChatMultiPurpose({
                     {isMine && (
                       <button onClick={() => doMessageAction("unsend", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Undo2 className="h-3.5 w-3.5"/> Thu h?"i</button>
                     )}
-                    <button onClick={() => doMessageAction("delete", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-500 hover:bg-slate-50"><Trash2 className="h-3.5 w-3.5"/> X?a</button>
+                    <button onClick={() => doMessageAction("delete", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-500 hover:bg-slate-50"><Trash2 className="h-3.5 w-3.5"/> Xóa tin nhắn</button>
                   </div>
                 )}
               </div>
@@ -501,6 +779,14 @@ function ChatMultiPurpose({
         performGroupAction={performGroupAction}
         onUpdateGroupMeta={onUpdateGroupMeta}
         busy={groupActionBusy}
+      />
+      <DirectInfoDrawer
+        open={showDirectInfo}
+        onClose={() => setShowDirectInfo(false)}
+        activeRoom={activeRoom}
+        partner={partner}
+        onClearHistory={onClearDirectHistory}
+        busy={roomLoading}
       />
     </div>
   );

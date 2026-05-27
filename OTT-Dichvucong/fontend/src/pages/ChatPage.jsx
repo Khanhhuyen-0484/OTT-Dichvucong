@@ -22,6 +22,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
   assignGroupDeputy,
+  clearDirectChatHistory,
   createGroupRoom,
   deleteFriend,
   deleteFriendRequest,
@@ -364,12 +365,24 @@ export default function ChatPage() {
       }
     };
 
+    const handleGroupDissolved = async (data) => {
+      const roomId = data?.roomId;
+      const message = data?.message || "Nhóm đã được giải tán";
+      setToast({ type: "success", message });
+      if (roomId && activeRoomIdRef.current === roomId) {
+        setActiveRoomId(null);
+      }
+      await loadRoomsRef.current();
+    };
+
     socket.on("new-message",   handleNewMessage);
     socket.on("incoming-call", handleIncomingCall);
+    socket.on("group-dissolved", handleGroupDissolved);
 
     return () => {
       socket.off("new-message",   handleNewMessage);
       socket.off("incoming-call", handleIncomingCall);
+      socket.off("group-dissolved", handleGroupDissolved);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, user]); // ??? ch?? [ready, user], m?i th? kh?c ?'?c qua ref
@@ -749,8 +762,10 @@ export default function ChatPage() {
           setToast({ type: "success", message: "?? h? ch?c ph? nh?m" });
           break;
         case "dissolve":
-          await dissolveGroup(activeRoomId);
-          setToast({ type: "success", message: "?? gi?i t?n nh?m" });
+          {
+            const { data } = await dissolveGroup(activeRoomId);
+            setToast({ type: "success", message: data?.message || "Giải tán nhóm thành công" });
+          }
           setActiveRoomId(null);
           break;
         default:
@@ -764,6 +779,20 @@ export default function ChatPage() {
       setFriendLoading(false);
     }
   }, [activeRoomId, loadRooms, user?.id]);
+
+  const clearDirectHistory = useCallback(async () => {
+    if (!activeRoomId) return;
+    setRoomLoading(true);
+    try {
+      await clearDirectChatHistory(activeRoomId);
+      await loadRooms();
+      setToast({ type: "success", message: "Đã xóa lịch sử cuộc trò chuyện" });
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [activeRoomId, loadRooms]);
 
   const doMessageAction = useCallback(async (action, messageId) => {
     if (!activeRoomId || !messageId) return;
@@ -1019,6 +1048,7 @@ export default function ChatPage() {
                     clearReply={() => setReplyToMessage(null)}
                     chatEndRef={chatEndRef}
                     onUpdateGroupMeta={onUpdateGroupMeta}
+                    onClearDirectHistory={clearDirectHistory}
                     groupActionBusy={friendLoading}
                   />
                 </div>
