@@ -1,16 +1,19 @@
-# TODO: Fix Profile Page - User Feedback Round 2
+# TODO - Sửa lỗi font/encoding tiếng Việt
 
-**Feedback**: Profile chỉ show email (empty data). "xóa form cập nhật, bấm mới hiện"
+## Bước 1
+- [x] Kiểm tra entry charset và rà soát file có chuỗi bị lỗi `?`/`�`.
 
-## [ ] 1. Fix UI: Toggle edit form (Profile.jsx)
-- Add `showEditForm` state = false
-- "Cập nhật thông tin" button → toggle form visibility
-- Hide form initially
+## Bước 2
+- [x] Sửa chuỗi tiếng Việt bị hỏng trong frontend:
+  - [x] `fontend/src/components/GroupCreator.jsx`
+  - [x] `fontend/src/components/AddFriendModal.jsx`
 
-## [ ] 2. Fix empty data demo
-- Update users.json sample user with fullName/phone/address
-- Test register full flow
 
-## [ ] 3. Test & Complete
+## Bước 3
+- [ ] Sửa chuỗi tiếng Việt bị hỏng trong backend:
+  - [ ] `backend/src/controllers/paymentController.js`
+  - [ ] `backend/src/store/userStore.js`
 
-**Current Status**: Backend perfect, frontend needs UI toggle per request
+## Bước 4
+- [ ] Chạy `npm run dev` và kiểm tra lại UI trang “quản lí dịch vụ công” và các luồng có thông báo lỗi.
+

@@ -29,11 +29,13 @@ const {
   sendRoomMessage,
   unsendRoomMessage,
   deleteRoomMessageForMe,
+  togglePinRoomMessage,
   forwardRoomMessage,
   addGroupMember,
   removeGroupMember,
   assignDeputy,
   removeDeputy,
+  updateGroupChat,
   dissolveGroup
 } = require("../controllers/chatController");
 
@@ -62,15 +64,21 @@ router.post("/media/presign", authMiddleware, presignChatMediaUpload);
 router.post("/rooms/:roomId/messages", authMiddleware, sendRoomMessage);
 router.post("/rooms/:roomId/messages/:messageId/unsend", authMiddleware, unsendRoomMessage);
 router.post("/rooms/:roomId/messages/:messageId/delete", authMiddleware, deleteRoomMessageForMe);
+router.post("/rooms/:roomId/messages/:messageId/pin", authMiddleware, togglePinRoomMessage);
+router.post("/rooms/:roomId/messages/:messageId/unpin", authMiddleware, togglePinRoomMessage);
 router.post("/rooms/:roomId/messages/:messageId/forward", authMiddleware, forwardRoomMessage);
 router.post("/groups/:roomId/members", authMiddleware, addGroupMember);
 router.delete("/groups/:roomId/members/:memberId", authMiddleware, removeGroupMember);
 router.post("/groups/:roomId/deputies/:memberId", authMiddleware, assignDeputy);
 router.delete("/groups/:roomId/deputies/:memberId", authMiddleware, removeDeputy);
+router.patch("/groups/:roomId", authMiddleware, updateGroupChat);
 router.delete("/groups/:roomId", authMiddleware, dissolveGroup);
 
 // Media upload with multer
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }
+});
 router.post("/media/upload", authMiddleware, upload.single("file"), uploadChatMedia);
 
 module.exports = router;

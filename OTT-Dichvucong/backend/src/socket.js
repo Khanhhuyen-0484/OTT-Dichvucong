@@ -1,6 +1,11 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const multiChatStore = require("./store/multiChatStore");
+const {
+  AI_ASSISTANT_ID,
+  buildAiMessage,
+  generateAiReply,
+} = require("./services/aiService");
  
 let io = null;
  
@@ -80,6 +85,39 @@ function initSocket(server) {
     const userRoom = `user_${user.id}`;
     socket.join(userRoom);
     console.log(`[SOCKET] ✅ Online: ${user.fullName} | room=${userRoom} | socketId=${socket.id}`);
+
+    socket.on("send-message", async (data = {}) => {
+      const isAiChat =
+        data.receiverId === AI_ASSISTANT_ID ||
+        data.chatType === "AI" ||
+        data.roomId === AI_ASSISTANT_ID;
+      if (!isAiChat) return;
+
+      try {
+        const text = String(data.text || data.message || "").trim();
+        const result = await generateAiReply({
+          userId: user.id,
+          message: text,
+          messages: data.messages || [],
+        });
+        io.to(userRoom).emit("new-message", {
+          roomId: AI_ASSISTANT_ID,
+          chatType: "AI",
+          message: buildAiMessage(result.reply, {
+            mode: result.mode,
+            action: result.action || "",
+          }),
+        });
+      } catch (error) {
+        io.to(userRoom).emit("new-message", {
+          roomId: AI_ASSISTANT_ID,
+          chatType: "AI",
+          message: buildAiMessage("Trợ lý AI hiện đang bận, vui lòng thử lại sau.", {
+            mode: "error",
+          }),
+        });
+      }
+    });
  
     io.in(userRoom).fetchSockets().then((sockets) => {
       console.log(`[SOCKET] 📋 Room ${userRoom} hiện có ${sockets.length} socket(s)`);

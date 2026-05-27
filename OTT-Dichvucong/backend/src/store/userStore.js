@@ -1,7 +1,15 @@
 const { GetCommand, PutCommand, DeleteCommand, ScanCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
-const { dynamo } = require("../config/dynamoClient");
+const { getDynamoClient } = require("../config/dynamoClient");
 
 const USERS_TABLE = process.env.USERS_TABLE || process.env.DYNAMODB_USERS_TABLE || "Users";
+
+function getClient() {
+  try {
+    return getDynamoClient();
+  } catch {
+    return null;
+  }
+}
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
@@ -9,40 +17,33 @@ function normalizeEmail(email) {
 
 async function findByEmail(email) {
   try {
-    console.log("[DEBUG] Email nhận vào:", email);
     const norm = String(email || "").trim().toLowerCase();
     if (!norm) return null;
+
+    const client = getClient();
+    if (!client) return null;
 
     const params = {
       TableName: USERS_TABLE,
       FilterExpression: "#emailLower = :email",
       ExpressionAttributeNames: {
-        "#emailLower": "email"
+        "#emailLower": "email",
       },
       ExpressionAttributeValues: {
-        ":email": norm
+        ":email": norm,
       },
-      Limit: 1
+      Limit: 1,
     };
 
-    console.log("Params scan:", params);
-    const result = await dynamo.send(new ScanCommand(params));
-    console.log("[LOGIN DEBUG] User tìm thấy trong DB:", result.Items?.[0]);
-    console.log("Items tìm thấy:", result.Items);
-
+    const result = await client.send(new ScanCommand(params));
     if (result.Items?.[0]) return result.Items[0];
 
-    const fallbackResult = await dynamo.send(
-      new ScanCommand({
-        TableName: USERS_TABLE
-      })
-    );
+    const fallbackResult = await client.send(new ScanCommand({ TableName: USERS_TABLE }));
     const fallbackItem = (fallbackResult.Items || []).find((item) => {
       const emailLower = String(item?.email || "").trim().toLowerCase();
       const emailUpper = String(item?.Email || "").trim().toLowerCase();
       return emailLower === norm || emailUpper === norm;
     });
-    console.log("[LOGIN DEBUG] User fallback scan:", fallbackItem);
     return fallbackItem || null;
   } catch (error) {
     console.error("[userStore.findByEmail] DynamoDB error:", error?.name, error?.message, error);
@@ -53,16 +54,18 @@ async function findByEmail(email) {
 async function findById(id) {
   try {
     if (!id) return null;
-    const result = await dynamo.send(
+    const client = getClient();
+    if (!client) return null;
+    const result = await client.send(
       new GetCommand({
         TableName: USERS_TABLE,
-        Key: { id }
+        Key: { id },
       })
     );
     return result.Item || null;
   } catch (error) {
     console.error("[userStore.findById] DynamoDB error:", error?.name, error?.message, error);
-    throw error;
+    return null;
   }
 }
 
@@ -77,7 +80,7 @@ function withFriendFields(user) {
     friendIds: uniqueIds(user.friendIds),
     incomingFriendRequestIds: uniqueIds(user.incomingFriendRequestIds),
     outgoingFriendRequestIds: uniqueIds(user.outgoingFriendRequestIds),
-    blockedUserIds: uniqueIds(user.blockedUserIds)
+    blockedUserIds: uniqueIds(user.blockedUserIds),
   };
 }
 
@@ -86,7 +89,7 @@ function sanitizePublicUser(user) {
   if (!safe) return null;
   return {
     id: safe.id,
-    fullName: safe.fullName || "Người dùng",
+    fullName: safe.fullName || "Ngu?i d?ng",
     email: safe.email || "",
     phone: safe.phone || "",
     avatarUrl:
@@ -95,7 +98,7 @@ function sanitizePublicUser(user) {
     friendIds: safe.friendIds,
     incomingFriendRequestIds: safe.incomingFriendRequestIds,
     outgoingFriendRequestIds: safe.outgoingFriendRequestIds,
-    blockedUserIds: safe.blockedUserIds
+    blockedUserIds: safe.blockedUserIds,
   };
 }
 
@@ -114,20 +117,24 @@ function detectFriendLookupMode(keyword = "") {
 
 async function listUsers() {
   try {
-    const result = await dynamo.send(new ScanCommand({ TableName: USERS_TABLE }));
+    const client = getClient();
+    if (!client) return [];
+    const result = await client.send(new ScanCommand({ TableName: USERS_TABLE }));
     return (result.Items || []).map(withFriendFields);
   } catch (error) {
     console.error("[userStore.listUsers] DynamoDB error:", error?.name, error?.message, error);
-    throw error;
+    return [];
   }
 }
 
 async function saveUserRecord(user) {
+  const client = getClient();
+  if (!client) throw new Error("Chua c?u h?nh DynamoDB");
   const next = withFriendFields(user);
-  await dynamo.send(
+  await client.send(
     new PutCommand({
       TableName: USERS_TABLE,
-      Item: next
+      Item: next,
     })
   );
   return next;
@@ -158,7 +165,7 @@ async function searchUsersForFriendAdd(currentUserId, keyword = "") {
 
     return {
       ...sanitizePublicUser(item),
-      status
+      status,
     };
   });
 }
@@ -214,20 +221,26 @@ async function listSuggestedFriends(userId, limit = 5) {
     .map((item) => ({ ...sanitizePublicUser(item), status: "none" }));
 }
 
+async function listBlockedUsers(userId) {
+  const current = withFriendFields(await findById(userId));
+  if (!current) return [];
+  const users = await Promise.all(current.blockedUserIds.map((id) => findById(id).catch(() => null)));
+  return users.map(sanitizePublicUser).filter(Boolean);
+}
+
 async function sendFriendRequest(senderId, targetId) {
   const sender = withFriendFields(await findById(senderId));
   const target = withFriendFields(await findById(targetId));
-  if (!sender || !target) throw new Error("Không tìm thấy người dùng");
-  if (sender.id === target.id) throw new Error("Không thể kết bạn với chính mình");
+  if (!sender || !target) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
+  if (sender.id === target.id) throw new Error("Kh?ng th?f k?t b?n v?>i ch?nh m?nh");
   if (sender.blockedUserIds.includes(target.id) || target.blockedUserIds.includes(sender.id)) {
-    throw new Error("Không thể kết bạn với người dùng này");
+    throw new Error("Kh?ng th?f k?t b?n v?>i ngu?i d?ng n?y");
   }
 
   if (sender.friendIds.includes(target.id)) {
     return { status: "friend", user: { ...sanitizePublicUser(target), status: "friend" } };
   }
 
-  // Nếu đối phương đã gửi lời mời trước đó thì tự động chấp nhận.
   if (sender.incomingFriendRequestIds.includes(target.id) || target.outgoingFriendRequestIds.includes(sender.id)) {
     return await respondToFriendRequest(sender.id, target.id, "accept");
   }
@@ -276,13 +289,13 @@ async function revokeFriendRequest(senderId, targetUserId) {
 async function removeFriend(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
   const target = withFriendFields(await findById(targetUserId));
-  if (!current || !target) throw new Error("Không tìm thấy người dùng");
+  if (!current || !target) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
 
   current.friendIds = current.friendIds.filter((id) => id !== target.id);
   target.friendIds = target.friendIds.filter((id) => id !== current.id);
   current.incomingFriendRequestIds = current.incomingFriendRequestIds.filter((id) => id !== target.id);
   current.outgoingFriendRequestIds = current.outgoingFriendRequestIds.filter((id) => id !== target.id);
-  target.incomingFriendRequestIds = target.incomingFriendRequestIds.filter((id) => id !== current.id);
+  target.incomingFriendRequestIds = target.incomingFriendRequestIds.filter((id) => id !== target.id);
   target.outgoingFriendRequestIds = target.outgoingFriendRequestIds.filter((id) => id !== current.id);
 
   await Promise.all([saveUserRecord(current), saveUserRecord(target)]);
@@ -293,7 +306,7 @@ async function blockUser(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
   const target = withFriendFields(await findById(targetUserId));
   if (!current || !target) throw new Error("Không tìm thấy người dùng");
-  if (current.id === target.id) throw new Error("Không thể chặn chính mình");
+  if (current.id === target.id) throw new Error("Không thể chọn chính mình");
 
   current.blockedUserIds = uniqueIds([...current.blockedUserIds, target.id]);
   current.friendIds = current.friendIds.filter((id) => id !== target.id);
@@ -307,28 +320,15 @@ async function blockUser(userId, targetUserId) {
   return { ok: true };
 }
 
-async function listBlockedUsers(userId) {
-  const current = withFriendFields(await findById(userId));
-  if (!current) return [];
-  const users = await Promise.all(current.blockedUserIds.map((id) => findById(id).catch(() => null)));
-  return users.map(sanitizePublicUser).filter(Boolean);
-}
-
 async function unblockUser(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
-  if (!current) throw new Error("Không tìm thấy người dùng");
+  if (!current) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
   current.blockedUserIds = current.blockedUserIds.filter((id) => id !== String(targetUserId || "").trim());
   await saveUserRecord(current);
   return { ok: true };
 }
 
-async function createUser({
-  email,
-  passwordHash,
-  fullName,
-  phone,
-  address
-}) {
+async function createUser({ email, passwordHash, fullName, phone, address }) {
   try {
     const norm = normalizeEmail(email);
     const existing = await findByEmail(norm);
@@ -337,6 +337,8 @@ async function createUser({
       err.code = "EMAIL_EXISTS";
       throw err;
     }
+    const client = getClient();
+    if (!client) throw new Error("Chua c?u h?nh DynamoDB");
     const user = {
       id: `u_${Date.now()}`,
       email: norm,
@@ -346,12 +348,16 @@ async function createUser({
       role: "citizen",
       avatarUrl: "",
       passwordHash,
-      createdAt: new Date().toISOString()
+      friendIds: [],
+      incomingFriendRequestIds: [],
+      outgoingFriendRequestIds: [],
+      blockedUserIds: [],
+      createdAt: new Date().toISOString(),
     };
-    await dynamo.send(
+    await client.send(
       new PutCommand({
         TableName: USERS_TABLE,
-        Item: user
+        Item: user,
       })
     );
     return user;
@@ -365,6 +371,8 @@ const PATCHABLE = new Set(["fullName", "phone", "address", "avatarUrl"]);
 
 async function updateUserById(id, patch) {
   try {
+    const client = getClient();
+    if (!client) return null;
     const updates = {};
     for (const [k, v] of Object.entries(patch || {})) {
       if (!PATCHABLE.has(k) || v === undefined) continue;
@@ -389,45 +397,56 @@ async function updateUserById(id, patch) {
       values[`:v${i}`] = updates[key];
     });
 
-    const result = await dynamo.send(
+    const result = await client.send(
       new UpdateCommand({
         TableName: USERS_TABLE,
         Key: { id },
-        UpdateExpression: `SET ${setExpr}`,
+        UpdateExpression: `SET ${setExpr}, updatedAt = :updatedAt`,
         ExpressionAttributeNames: names,
-        ExpressionAttributeValues: values,
+        ExpressionAttributeValues: {
+          ...values,
+          ":updatedAt": new Date().toISOString(),
+        },
         ConditionExpression: "attribute_exists(id)",
-        ReturnValues: "ALL_NEW"
+        ReturnValues: "ALL_NEW",
       })
     );
     return result.Attributes || null;
   } catch (error) {
     console.error("[userStore.updateUserById] DynamoDB error:", error?.name, error?.message, error);
-    throw error;
+    return null;
   }
+}
+
+async function updateUserAvatar(userId, avatarUrl) {
+  return updateUserById(userId, { avatarUrl });
 }
 
 async function deleteUserById(id) {
   try {
     if (!id) return false;
+    const client = getClient();
+    if (!client) return false;
     const existing = await findById(id);
     if (!existing) return false;
-    await dynamo.send(
+    await client.send(
       new DeleteCommand({
         TableName: USERS_TABLE,
-        Key: { id }
+        Key: { id },
       })
     );
     return Boolean(existing);
   } catch (error) {
     console.error("[userStore.deleteUserById] DynamoDB error:", error?.name, error?.message, error);
-    throw error;
+    return false;
   }
 }
 
 async function updateUserRole(id, role) {
   try {
     if (!id) return null;
+    const client = getClient();
+    if (!client) return null;
     const validRoles = ["citizen", "admin"];
     if (!validRoles.includes(role)) {
       const err = new Error("Invalid role");
@@ -435,52 +454,51 @@ async function updateUserRole(id, role) {
       throw err;
     }
 
-    const result = await dynamo.send(
+    const result = await client.send(
       new UpdateCommand({
         TableName: USERS_TABLE,
         Key: { id },
-        UpdateExpression: "SET #role = :role",
+        UpdateExpression: "SET #role = :role, updatedAt = :updatedAt",
         ExpressionAttributeNames: {
-          "#role": "role"
+          "#role": "role",
         },
         ExpressionAttributeValues: {
-          ":role": role
+          ":role": role,
+          ":updatedAt": new Date().toISOString(),
         },
         ConditionExpression: "attribute_exists(id)",
-        ReturnValues: "ALL_NEW"
+        ReturnValues: "ALL_NEW",
       })
     );
     return result.Attributes || null;
   } catch (error) {
     console.error("[userStore.updateUserRole] DynamoDB error:", error?.name, error?.message, error);
-    throw error;
+    return null;
   }
 }
 
 async function updatePasswordHashById(id, passwordHash) {
   try {
     if (!id || !passwordHash) return null;
-    const result = await dynamo.send(
+    const client = getClient();
+    if (!client) return null;
+    const result = await client.send(
       new UpdateCommand({
         TableName: USERS_TABLE,
         Key: { id },
-        UpdateExpression: "SET passwordHash = :password_hash",
+        UpdateExpression: "SET passwordHash = :password_hash, updatedAt = :updatedAt",
         ExpressionAttributeValues: {
-          ":password_hash": String(passwordHash)
+          ":password_hash": String(passwordHash),
+          ":updatedAt": new Date().toISOString(),
         },
         ConditionExpression: "attribute_exists(id)",
-        ReturnValues: "ALL_NEW"
+        ReturnValues: "ALL_NEW",
       })
     );
     return result.Attributes || null;
   } catch (error) {
-    console.error(
-      "[userStore.updatePasswordHashById] DynamoDB error:",
-      error?.name,
-      error?.message,
-      error
-    );
-    throw error;
+    console.error("[userStore.updatePasswordHashById] DynamoDB error:", error?.name, error?.message, error);
+    return null;
   }
 }
 
@@ -503,7 +521,10 @@ module.exports = {
   createUser,
   normalizeEmail,
   updateUserById,
+  updateUserAvatar,
   updateUserRole,
   deleteUserById,
-  updatePasswordHashById
+  updatePasswordHashById,
+  sanitizePublicUser,
+  detectFriendLookupMode,
 };

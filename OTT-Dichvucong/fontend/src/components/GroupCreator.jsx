@@ -42,7 +42,7 @@ export default function GroupCreator({
   groupMemberIds,
   setGroupMemberIds,
   contacts,
-  createGroup
+  createGroup,
 }) {
   const [memberQuery, setMemberQuery] = useState("");
 
@@ -51,7 +51,9 @@ export default function GroupCreator({
     const sorted = [...(contacts || [])].sort((a, b) =>
       String(a.fullName || "").localeCompare(String(b.fullName || ""), "vi")
     );
+
     if (!q) return sorted;
+
     return sorted.filter((item) => {
       const phone = normalizePhone(item.phone);
       return [item.fullName, item.email, item.phone]
@@ -109,6 +111,7 @@ export default function GroupCreator({
                 <Camera className="h-10 w-10 text-slate-500" />
               )}
             </button>
+
             <div className="flex-1 border-b-2 border-[#0d5bd7] pb-3">
               <input
                 value={groupName}
@@ -133,7 +136,7 @@ export default function GroupCreator({
             {[
               { key: "all", label: "Tất cả" },
               { key: "friends", label: "Bạn bè" },
-              { key: "recent", label: "Trò chuyện gần đây" }
+              { key: "recent", label: "Trò chuyện gần đây" },
             ].map((chip, index) => (
               <span
                 key={chip.key}
@@ -160,7 +163,7 @@ export default function GroupCreator({
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
-                  Chưa có bạn bè phù hợp để thêm vào nhóm.
+                  Chưa có bạn bè trong hệ thống để thêm vào nhóm.
                 </div>
               )}
             </div>
@@ -206,3 +209,4 @@ export default function GroupCreator({
     </div>
   );
 }
+

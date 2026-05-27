@@ -22,25 +22,80 @@ function normalizeRole(role) {
   return "member";
 }
 
-function normalizeMember(member) {
-  if (!member?.id) return null;
-  return {
-    id: String(member.id),
-    role: normalizeRole(member.role)
-  };
+function normalizeMember(member, createdBy = "") {
+  if (typeof member === "string" || typeof member === "number") {
+    const id = String(member).trim();
+    if (!id) return null;
+    const role = id === String(createdBy || "").trim() ? "owner" : "member";
+    return { id, role: normalizeRole(role) };
+  }
+  const id = String(member?.id || member?.userId || "").trim();
+  if (!id) return null;
+  let role = normalizeRole(member?.role);
+  if (id === String(createdBy || "").trim()) role = "owner";
+  return { id, role };
+}
+
+const ROLE_RANK = { owner: 3, deputy: 2, member: 1 };
+
+function normalizeMembersList(rawMembers = [], createdBy = "") {
+  const creatorId = String(createdBy || "").trim();
+  const map = new Map();
+
+  (Array.isArray(rawMembers) ? rawMembers : []).forEach((entry) => {
+    const normalized = normalizeMember(entry, creatorId);
+    if (!normalized) return;
+    const prev = map.get(normalized.id);
+    if (!prev || (ROLE_RANK[normalized.role] || 0) > (ROLE_RANK[prev.role] || 0)) {
+      map.set(normalized.id, normalized);
+    }
+  });
+
+  if (creatorId && !map.has(creatorId)) {
+    map.set(creatorId, { id: creatorId, role: "owner" });
+  } else if (creatorId && map.has(creatorId)) {
+    map.set(creatorId, { ...map.get(creatorId), role: "owner" });
+  }
+
+  return Array.from(map.values());
 }
 
 function isRoomMember(room, userId) {
-  return Boolean(room?.members?.some((m) => m.id === userId));
+  const uid = String(userId || "").trim();
+  if (!uid || !room) return false;
+  const createdBy = String(room.createdBy || "").trim();
+  if (createdBy && createdBy === uid) return true;
+  return Boolean(
+    room.members?.some((m) => String(m?.id || "").trim() === uid)
+  );
 }
 
 function getMemberRole(room, userId) {
-  return room?.members?.find((m) => m.id === userId)?.role || null;
+  const uid = String(userId || "").trim();
+  if (!uid || !room) return null;
+  const member = room.members?.find((m) => m.id === uid);
+  if (member?.role === "owner" || member?.role === "deputy") return member.role;
+  if (String(room.createdBy || "").trim() === uid) return "owner";
+  return member?.role || null;
 }
 
+/** Tru?Yng/ph? nh?m ??" x?a th?nh vi?n, phong ph? nh?m, gi?i t?n. */
 function canManageGroup(room, userId) {
   const role = getMemberRole(room, userId);
   return role === "owner" || role === "deputy";
+}
+
+/** M?i th?nh vi?n trong nh?m (gi?'ng Zalo): ?'?.i t?n, ?'?.i ?nh, th?m b?n. */
+function canEditGroupSettings(room, userId) {
+  return isRoomMember(room, userId);
+}
+
+
+function normalizePublicUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return raw;
 }
 
 function sanitizeMedia(media) {
@@ -50,18 +105,41 @@ function sanitizeMedia(media) {
       ? "video"
       : media.type === "image"
         ? "image"
-        : media.type === "file" || media.type === "document"
-          ? "document"
-          : null;
-  const url = String(media.url || "").trim();
-  if (!type || !url) return null;
+        : media.type === "location"
+          ? "location"
+          : media.type === "file" || media.type === "document"
+            ? "document"
+            : null;
+  const url = normalizePublicUrl(media.url || media.fileUrl || media.image || media.attachmentUrl || "");
+  const hasLocation = media.latitude != null && media.longitude != null;
+  if (!type && !hasLocation) return null;
+  if ((type === "image" || type === "video" || type === "document") && !url) return null;
   return {
-    type,
+    type: type || "location",
     url: url.slice(0, 2000000),
-    name: String(media.name || "").slice(0, 120),
-    fileUrl: String(media.fileUrl || media.url || "").slice(0, 2000000),
+    name: String(media.name || media.label || "").slice(0, 120),
+    fileUrl: String(media.fileUrl || media.url || media.image || "").slice(0, 2000000),
     fileType: String(media.fileType || "").slice(0, 20),
-    fileSize: Number(media.fileSize || media.size || 0) || 0
+    fileSize: Number(media.fileSize || media.size || 0) || 0,
+    latitude: hasLocation ? Number(media.latitude) : undefined,
+    longitude: hasLocation ? Number(media.longitude) : undefined,
+    mapsUrl: String(media.mapsUrl || "").slice(0, 500),
+    address: String(media.address || "").slice(0, 240),
+    label: String(media.label || "").slice(0, 160)
+  };
+}
+
+function sanitizeLocation(location) {
+  if (!location || typeof location !== "object") return null;
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    latitude,
+    longitude,
+    label: String(location.label || "").slice(0, 160),
+    address: String(location.address || "").slice(0, 240),
+    mapsUrl: String(location.mapsUrl || `https://www.google.com/maps?q=${latitude},${longitude}`).slice(0, 500)
   };
 }
 
@@ -69,12 +147,14 @@ function sanitizeMessage(message) {
   const deletedFor = Array.isArray(message?.deletedFor)
     ? Array.from(new Set(message.deletedFor.map(String)))
     : [];
+  const media = sanitizeMedia(message?.media);
   return {
     id: String(message?.id || makeId("msg")),
     senderId: String(message?.senderId || ""),
-    messageType: String(message?.messageType || "text"),
+    messageType: String(message?.messageType || (message?.location ? "location" : "text")),
     text: String(message?.text || "").slice(0, 4000),
-    media: sanitizeMedia(message?.media),
+    media,
+    location: sanitizeLocation(message?.location),
     callLog: message?.callLog && typeof message.callLog === "object"
       ? {
           status: String(message.callLog.status || "").slice(0, 32),
@@ -88,14 +168,17 @@ function sanitizeMessage(message) {
     replyToMessageId: String(message?.replyToMessageId || "").trim(),
     createdAt: message?.createdAt || nowIso(),
     unsentForAll: Boolean(message?.unsentForAll),
+    isPinned: Boolean(message?.isPinned || message?.pinned),
+    pinned: Boolean(message?.isPinned || message?.pinned),
+    pinnedAt: message?.pinnedAt || null,
+    pinnedBy: String(message?.pinnedBy || "").trim(),
     deletedFor
   };
 }
 
 function sanitizeRoom(room) {
-  const members = Array.isArray(room?.members)
-    ? room.members.map(normalizeMember).filter(Boolean)
-    : [];
+  const createdBy = String(room?.createdBy || "").trim();
+  const members = normalizeMembersList(room?.members, createdBy);
   const messages = Array.isArray(room?.messages) ? room.messages.map(sanitizeMessage) : [];
   const pendingInvites = Array.isArray(room?.pendingInvites)
     ? room.pendingInvites
@@ -110,8 +193,11 @@ function sanitizeRoom(room) {
     id: String(room?.id || makeId("room")),
     type: room?.type === "group" ? "group" : "direct",
     name: String(room?.name || ""),
-    avatarUrl: String(room?.avatarUrl || ""),
-    createdBy: String(room?.createdBy || ""),
+    avatarUrl: (() => {
+      const raw = String(room?.avatarUrl || room?.avatar || "").trim();
+      return /^https?:\/\//i.test(raw) ? raw.slice(0, 500) : "";
+    })(),
+    createdBy,
     members,
     pendingInvites,
     messages,
@@ -148,16 +234,21 @@ async function getRoomById(roomId) {
 async function listRoomsForUser(userId) {
   const uid = String(userId || "").trim();
   if (!uid) return [];
-  const rs = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
-  const rooms = (rs.Items || []).map(sanitizeRoom).filter((room) => isRoomMember(room, uid));
-  return rooms.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  try {
+    const rs = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
+    const rooms = (rs.Items || []).map(sanitizeRoom).filter((room) => isRoomMember(room, uid));
+    return rooms.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  } catch (error) {
+    console.error("[multiChatStore.listRoomsForUser]", error?.name, error?.message, error);
+    throw error;
+  }
 }
 
 async function ensureDirectRoom(userA, userB) {
   const a = String(userA || "").trim();
   const b = String(userB || "").trim();
   if (!a || !b || a === b) {
-    throw new Error("Không thể tạo hội thoại với người dùng này");
+    throw new Error("Kh?ng th?f t?o h?Ti tho?i v?>i ngu?i d?ng n?y");
   }
   const existing = await listRoomsForUser(a);
   const found = existing.find((room) => {
@@ -186,7 +277,7 @@ async function createGroupRoom({ ownerId, name, avatarUrl, memberIds }) {
   const owner = String(ownerId || "").trim();
   const groupName = String(name || "").trim();
   const ids = Array.from(new Set((memberIds || []).map(String).filter(Boolean)));
-  if (!owner || !groupName) throw new Error("Thiếu thông tin tạo nhóm");
+  if (!owner || !groupName) throw new Error("Thi?u th?ng tin t?o nh?m");
   const finalIds = Array.from(new Set([owner, ...ids]));
   const members = finalIds.map((id) => ({
     id,
@@ -206,26 +297,30 @@ async function createGroupRoom({ ownerId, name, avatarUrl, memberIds }) {
   return saveRoom(room);
 }
 
-async function appendMessage({ roomId, senderId, text, media, replyToMessageId }) {
+async function appendMessage({ roomId, senderId, text, media, location, replyToMessageId }) {
   const room = await getRoomById(roomId);
   if (!room) throw new Error("Không tìm thấy phòng chat");
   const sid = String(senderId || "").trim();
-  if (!isRoomMember(room, sid)) throw new Error("Bạn không phải thành viên của phòng chat");
+  if (!isRoomMember(room, sid)) throw new Error("Bạn không phải là thành viên của phòng chat");
   const replyId = String(replyToMessageId || "").trim();
   if (replyId) {
     const target = room.messages.find((m) => m.id === replyId);
-    if (!target) throw new Error("Tin nhắn trả lời không tồn tại");
+    if (!target) throw new Error("Không tìm thấy tin nhắn để trả lời");
   }
 
   const message = sanitizeMessage({
     id: makeId("msg"),
     senderId: sid,
-    messageType: "text",
+    messageType: location ? "location" : "text",
     text,
     media,
+    location,
     replyToMessageId: replyId,
     createdAt: nowIso(),
     unsentForAll: false,
+    pinned: false,
+    pinnedAt: null,
+    pinnedBy: "",
     deletedFor: []
   });
   const next = {
@@ -248,9 +343,9 @@ async function appendCallLogMessage({
   endedBy = ""
 }) {
   const room = await getRoomById(roomId);
-  if (!room) throw new Error("Không tìm thấy phòng chat");
+  if (!room) throw new Error("Kh?ng t?m th?y ph?ng chat");
   const sid = String(actorUserId || "").trim();
-  if (!sid || !isRoomMember(room, sid)) throw new Error("Bạn không phải thành viên của phòng chat");
+  if (!sid || !isRoomMember(room, sid)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a ph?ng chat");
 
   const message = sanitizeMessage({
     id: makeId("msg"),
@@ -282,10 +377,10 @@ async function appendCallLogMessage({
 
 async function inviteMembersToGroup({ roomId, requesterId, memberIds }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền mời vào nhóm");
+  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
+  if (!canEditGroupSettings(room, requesterId)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a nh?m");
   const ids = uniqueIds(memberIds);
-  if (!ids.length) throw new Error("Chưa chọn bạn bè để mời");
+  if (!ids.length) throw new Error("Chua ch?n b?n b? ?'?f m?i");
 
   const existingMemberIds = room.members.map((member) => member.id);
   const pendingMap = new Map((room.pendingInvites || []).map((invite) => [invite.userId, invite]));
@@ -318,9 +413,9 @@ async function listGroupInvitesForUser(userId) {
 
 async function respondToGroupInvite({ roomId, userId, action }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
   const invite = (room.pendingInvites || []).find((item) => item.userId === userId);
-  if (!invite) throw new Error("Không tìm thấy lời mời vào nhóm");
+  if (!invite) throw new Error("Kh?ng t?m th?y l?i m?i v?o nh?m");
 
   const next = {
     ...room,
@@ -335,18 +430,22 @@ async function respondToGroupInvite({ roomId, userId, action }) {
 
 async function unsendMessage({ roomId, messageId, requesterId }) {
   const room = await getRoomById(roomId);
-  if (!room) throw new Error("Không tìm thấy phòng chat");
+  if (!room) throw new Error("Kh?ng t?m th?y ph?ng chat");
   const rid = String(requesterId || "").trim();
   const nextMessages = room.messages.map((m) => {
     if (m.id !== messageId) return m;
     if (m.senderId !== rid) {
-      throw new Error("Bạn chỉ có thể thu hồi tin nhắn của mình");
+      throw new Error("Bạn chỉ có thể thu hồi tin nhắn của chính mình ");
     }
     return {
       ...m,
       text: "",
       media: null,
-      unsentForAll: true
+      location: null,
+      unsentForAll: true,
+      pinned: false,
+      pinnedAt: null,
+      pinnedBy: ""
     };
   });
   const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
@@ -356,14 +455,61 @@ async function unsendMessage({ roomId, messageId, requesterId }) {
 
 async function deleteMessageForUser({ roomId, messageId, userId }) {
   const room = await getRoomById(roomId);
-  if (!room) throw new Error("Không tìm thấy phòng chat");
+  if (!room) throw new Error("Kh?ng t?m th?y ph?ng chat");
   const uid = String(userId || "").trim();
-  if (!isRoomMember(room, uid)) throw new Error("Bạn không phải thành viên của phòng chat");
+  if (!isRoomMember(room, uid)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a ph?ng chat");
+  const target = room.messages.find((m) => m.id === messageId);
+  if (!target) throw new Error("Kh?ng t?m th?y tin nh?n");
   const nextMessages = room.messages.map((m) => {
     if (m.id !== messageId) return m;
     const deletedFor = Array.from(new Set([...(m.deletedFor || []), uid]));
-    return { ...m, deletedFor };
+    return {
+      ...m,
+      deletedFor,
+      pinned: false,
+      isPinned: false,
+      pinnedAt: null,
+      pinnedBy: ""
+    };
   });
+  const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
+  next.lastMessage = next.messages[next.messages.length - 1] || null;
+  return saveRoom(next);
+}
+
+const MAX_PINNED_MESSAGES = 3;
+
+async function togglePinMessage({ roomId, messageId, requesterId }) {
+  const room = await getRoomById(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng chat");
+  const rid = String(requesterId || "").trim();
+  if (!isRoomMember(room, rid)) throw new Error("Bạn không phải là thành viên của phòng chat");
+
+  const target = room.messages.find((m) => m.id === messageId);
+  if (!target) throw new Error("Kh?ng t?m th?y tin nh?n");
+  if (target.unsentForAll) throw new Error("Không thể ghim tin nhắn đã thu hồi");
+
+  const isCurrentlyPinned = Boolean(target.pinned || target.isPinned);
+  const nextPinnedState = !isCurrentlyPinned;
+  const pinnedCount = room.messages.filter((m) => m.pinned || m.isPinned).length;
+
+  if (nextPinnedState && pinnedCount >= MAX_PINNED_MESSAGES) {
+    throw new Error(`Ch?? ghim t?'i ?'a ${MAX_PINNED_MESSAGES} tin nh?n`);
+  }
+
+  const nextMessages = room.messages.map((m) => {
+    if (m.id === messageId) {
+      return {
+        ...m,
+        pinned: nextPinnedState,
+        isPinned: nextPinnedState,
+        pinnedAt: nextPinnedState ? nowIso() : null,
+        pinnedBy: nextPinnedState ? rid : ""
+      };
+    }
+    return m;
+  });
+
   const next = { ...room, messages: nextMessages, updatedAt: nowIso() };
   next.lastMessage = next.messages[next.messages.length - 1] || null;
   return saveRoom(next);
@@ -379,16 +525,17 @@ async function forwardMessage({ sourceRoomId, messageId, targetRoomId, senderId 
     roomId: targetRoomId,
     senderId,
     text: msg.text,
-    media: msg.media
+    media: msg.media,
+    location: msg.location
   });
 }
 
 async function addGroupMember({ roomId, requesterId, memberId }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền thêm thành viên");
+  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
+  if (!canEditGroupSettings(room, requesterId)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a nh?m");
   const uid = String(memberId || "").trim();
-  if (!uid) throw new Error("Thành viên không hợp lệ");
+  if (!uid) throw new Error("Th?nh vi?n kh?ng h?p l??");
   if (room.members.some((m) => m.id === uid)) return room;
   const next = {
     ...room,
@@ -401,8 +548,14 @@ async function addGroupMember({ roomId, requesterId, memberId }) {
 async function removeGroupMember({ roomId, requesterId, memberId }) {
   const room = await getRoomById(roomId);
   if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
-  if (!canManageGroup(room, requesterId)) throw new Error("Bạn không có quyền xóa thành viên");
   const targetId = String(memberId || "").trim();
+  const requester = String(requesterId || "").trim();
+  const isSelfLeave = targetId && targetId === requester;
+  if (isSelfLeave) {
+    if (!isRoomMember(room, requester)) throw new Error("Bạn không phải thành viên của nhóm");
+  } else if (!canManageGroup(room, requesterId)) {
+    throw new Error("Bạn không có quyền xóa thành viên");
+  }
   const target = room.members.find((m) => m.id === targetId);
   if (!target) return room;
   if (target.role === "owner") throw new Error("Không thể xóa trưởng nhóm");
@@ -416,9 +569,9 @@ async function removeGroupMember({ roomId, requesterId, memberId }) {
 
 async function assignDeputy({ roomId, requesterId, memberId, enabled }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
   const ownerRole = getMemberRole(room, requesterId);
-  if (ownerRole !== "owner") throw new Error("Chỉ trưởng nhóm có thể gán phó nhóm");
+  if (ownerRole !== "owner") throw new Error("Ch?? tru?Yng nh?m c? th?f g?n ph? nh?m");
   const targetId = String(memberId || "").trim();
   const nextMembers = room.members.map((m) => {
     if (m.id !== targetId) return m;
@@ -429,11 +582,31 @@ async function assignDeputy({ roomId, requesterId, memberId, enabled }) {
   return saveRoom(next);
 }
 
+async function updateGroupRoom({ roomId, requesterId, name, avatarUrl }) {
+  const room = await getRoomById(roomId);
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (!canEditGroupSettings(room, requesterId)) {
+    throw new Error("Bạn không phải là thành viên của nhóm");
+  }
+
+  const nextName = name !== undefined ? String(name || "").trim() : room.name;
+  if (!nextName) throw new Error("Tên nhóm không được để trống");
+
+  const next = {
+    ...room,
+    name: nextName.slice(0, 120),
+    avatarUrl:
+      avatarUrl !== undefined ? String(avatarUrl || "").slice(0, 500) : room.avatarUrl,
+    updatedAt: nowIso()
+  };
+  return saveRoom(next);
+}
+
 async function dissolveGroup({ roomId, requesterId }) {
   const room = await getRoomById(roomId);
   if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
   if (getMemberRole(room, requesterId) !== "owner") {
-    throw new Error("Chỉ trưởng nhóm được giải tán nhóm");
+    throw new Error("Chỉ trưởng nhóm được phép giải tán nhóm");
   }
   const next = {
     ...room,
@@ -469,7 +642,7 @@ async function hydrateRoomForUser(room, currentUserId) {
     const user = userMap[m.id];
     return {
       ...m,
-      fullName: user?.fullName || "Người dùng",
+      fullName: user?.fullName || "Ngu?i d?ng",
       avatarUrl:
         user?.avatarUrl ||
         `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || "Nguoi dung")}&size=128`
@@ -481,7 +654,7 @@ async function hydrateRoomForUser(room, currentUserId) {
       ...m,
       sender: members.find((x) => x.id === m.senderId) || {
         id: m.senderId,
-        fullName: "Người dùng",
+        fullName: "Ngu?i d?ng",
         avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent("Nguoi dung")}&size=128`
       }
     }));
@@ -496,7 +669,7 @@ async function hydrateRoomForUser(room, currentUserId) {
             text: replied.text,
             media: replied.media,
             senderId: replied.senderId,
-            senderName: replied.sender?.fullName || "Người dùng",
+            senderName: replied.sender?.fullName || "Ngu?i d?ng",
             unsentForAll: Boolean(replied.unsentForAll)
           }
         : null
@@ -518,10 +691,12 @@ module.exports = {
   appendCallLogMessage,
   unsendMessage,
   deleteMessageForUser,
+  togglePinMessage,
   forwardMessage,
   addGroupMember,
   removeGroupMember,
   assignDeputy,
+  updateGroupRoom,
   dissolveGroup,
   inviteMembersToGroup,
   listGroupInvitesForUser,

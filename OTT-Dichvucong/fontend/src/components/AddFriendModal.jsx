@@ -21,7 +21,7 @@ function FriendRow({ item, subtitle, actionSlot }) {
 function buildResultSubtitle(item) {
   if (item.phone) return item.phone.startsWith("(+84)") ? item.phone : `(+84) ${item.phone}`;
   if (item.email) return item.email;
-  return "Người dùng hệ thống";
+  return "Người dùng hở hệ thống";
 }
 
 function SectionTitle({ icon: Icon, title, note }) {
@@ -51,7 +51,7 @@ export default function AddFriendModal({
   onAccept,
   onDecline,
   loading,
-  searchNotice
+  searchNotice,
 }) {
   const [searchMode, setSearchMode] = useState("phone");
   const visibleSuggestions = useMemo(() => (users.length ? [] : suggestions || []), [suggestions, users.length]);
@@ -74,9 +74,7 @@ export default function AddFriendModal({
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <div className="text-[20px] font-bold tracking-tight text-slate-900">Thêm bạn</div>
-            <div className="mt-1 text-[13px] text-slate-500">
-              Ưu tiên tìm bằng số điện thoại để định danh chính xác hơn.
-            </div>
+            <div className="mt-1 text-[13px] text-slate-500">Ưu tiên tìm bằng số điện thoại để định danh chính xác hơn.</div>
           </div>
           <button
             type="button"
@@ -90,9 +88,7 @@ export default function AddFriendModal({
         <div className="px-6 pb-4 pt-5">
           <div className="rounded-[20px] border border-slate-200 bg-white px-5 py-4">
             <div className="mb-3 flex items-center justify-between">
-              <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                Tìm theo
-              </div>
+              <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-slate-400">Tìm theo</div>
               <button
                 type="button"
                 onClick={() => {
@@ -109,7 +105,7 @@ export default function AddFriendModal({
             {searchMode === "phone" ? (
               <div className="flex items-end gap-4 border-b-2 border-[#0d5bd7] pb-2">
                 <button type="button" className="flex items-center gap-3 pb-1 text-slate-800">
-                  <span className="text-[26px] leading-none">🇻🇳</span>
+                  <span className="text-[26px] leading-none">+84</span>
                   <span className="text-[18px] font-semibold">(+84)</span>
                   <ChevronDown className="h-5 w-5 text-slate-500" />
                 </button>
@@ -167,15 +163,11 @@ export default function AddFriendModal({
 
                 if (status === "friend") {
                   actionSlot = (
-                    <span className="rounded-xl bg-emerald-50 px-3 py-2 text-[13px] font-bold text-emerald-700">
-                      Bạn bè
-                    </span>
+                    <span className="rounded-xl bg-emerald-50 px-3 py-2 text-[13px] font-bold text-emerald-700">Bạn bè</span>
                   );
                 } else if (status === "outgoing") {
                   actionSlot = (
-                    <span className="rounded-xl bg-slate-100 px-3 py-2 text-[13px] font-bold text-slate-600">
-                      Đã gửi
-                    </span>
+                    <span className="rounded-xl bg-slate-100 px-3 py-2 text-[13px] font-bold text-slate-600">Đã gửi</span>
                   );
                 } else if (status === "incoming") {
                   actionSlot = (
@@ -233,7 +225,7 @@ export default function AddFriendModal({
                 <SectionTitle
                   icon={UserRoundPlus}
                   title="Có thể bạn quen"
-                  note="Gợi ý dựa trên kết nối gần đây và tài khoản thường xuất hiện."
+                  note="Gợi ý dựa trên kết nối gần đây và tài khoản thường xuyên xuất hiện."
                 />
               </div>
 
@@ -242,13 +234,13 @@ export default function AddFriendModal({
                   <FriendRow
                     key={`suggest-${item.id}`}
                     item={item}
-                    subtitle="Từ gợi ý kết bạn"
+                    subtitle="Gợi ý kết bạn"
                     actionSlot={
                       <button
-                      type="button"
-                      disabled={loading}
-                      onClick={() => onAdd(item.id)}
-                      className="min-w-[102px] rounded-[10px] border border-[#0d5bd7] px-4 py-2 text-[13px] font-bold text-[#0d5bd7] hover:bg-[#0d5bd7]/5 disabled:opacity-60"
+                        type="button"
+                        disabled={loading}
+                        onClick={() => onAdd(item.id)}
+                        className="min-w-[102px] rounded-[10px] border border-[#0d5bd7] px-4 py-2 text-[13px] font-bold text-[#0d5bd7] hover:bg-[#0d5bd7]/5 disabled:opacity-60"
                       >
                         Kết bạn
                       </button>
@@ -274,7 +266,7 @@ export default function AddFriendModal({
                   <FriendRow
                     key={`req-${item.id}`}
                     item={item}
-                    subtitle="Đã gửi lời mời kết bạn cho bạn"
+                    subtitle="đã gửi lời mời kết bạn cho bạn"
                     actionSlot={
                       <div className="flex items-center gap-2">
                         <button
@@ -304,7 +296,6 @@ export default function AddFriendModal({
               </div>
             )}
           </div>
-
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
@@ -327,3 +318,4 @@ export default function AddFriendModal({
     </div>
   );
 }
+
