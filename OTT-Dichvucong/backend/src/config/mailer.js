@@ -2,10 +2,10 @@ const nodemailer = require("nodemailer");
 const dns = require("dns");
 const { loadEnv } = require("./loadEnv");
 
-// Đảm bảo .env được nạp trước khi đọc EMAIL_* (kể cả khi mailer được require sớm).
+// ??m b?o .env ?'u?c n?p tru?>c khi ?'?c EMAIL_* (k?f c? khi mailer ?'u?c require s?>m).
 loadEnv();
 
-// Một số mạng/Windows ưu tiên IPv6 tới smtp.gmail.com nhưng tuyến IPv6 lỗi → gửi mail fail dù verify đôi khi vẫn OK
+// M?Tt s?' m?ng/Windows uu ti?n IPv6 t?>i smtp.gmail.com nhung tuy?n IPv6 l?-i ??' g?i mail fail d? verify ?'?i khi v?n OK
 if (typeof dns.setDefaultResultOrder === "function") {
   dns.setDefaultResultOrder("ipv4first");
 }
@@ -23,7 +23,7 @@ function gmailAuth() {
   return { user, pass };
 }
 
-/** Hai cấu hình Gmail hay dùng: 465 SSL và 587 STARTTLS (fallback). */
+/** Hai c?u h?nh Gmail hay d?ng: 465 SSL v? 587 STARTTLS (fallback). */
 function gmailTransports() {
   const auth = gmailAuth();
   return [
@@ -50,7 +50,7 @@ function gmailTransports() {
 }
 
 /**
- * Chuẩn hóa lỗi SMTP để JSON response không bị lỗi serialize
+ * Chu?n h?a l?-i SMTP ?'?f JSON response kh?ng b?< l?-i serialize
  */
 function serializeSmtpError(err) {
   if (!err) return undefined;
@@ -104,7 +104,7 @@ async function sendMail({ to, subject, html, text }) {
       return;
     } catch (err) {
       lastErr = err;
-      console.warn(`[mailer] Gửi thất bại (${name}):`, err.message);
+      console.warn(`[mailer] G?i th?t b?i (${name}):`, err.message);
     }
   }
   throw lastErr;
@@ -116,13 +116,13 @@ async function verifyTransport() {
     const transport = nodemailer.createTransport(config);
     try {
       await transport.verify();
-      console.log(`SMTP verify OK ✅ (${name})`);
+      console.log(`SMTP verify OK. (${name})`);
       return;
     } catch (err) {
       console.warn(`[mailer] verify thất bại (${name}):`, err.message);
     }
   }
-  console.error("SMTP verify FAILED ❌ — mọi cổng đều không kết nối/xác thực được");
+  console.error("SMTP verify FAIL. Vui lòng kiểm tra EMAIL_USER và EMAIL_PASS.");
 }
 
 module.exports = { sendMail, verifyTransport, serializeSmtpError };

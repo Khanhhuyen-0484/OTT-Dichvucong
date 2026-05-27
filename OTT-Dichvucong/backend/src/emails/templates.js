@@ -105,4 +105,3 @@ function escapeAttr(input) {
 }
 
 module.exports = { otpEmail, resetPasswordEmail };
-

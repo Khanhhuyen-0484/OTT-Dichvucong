@@ -11,6 +11,8 @@ const {
   getAiRules,
   updateAiRules
 } = require("../store/adminStore");
+const { getAdminStatistics } = require("../store/statisticsStore");
+const { updateApplicationStatus } = require("./serviceController");
 const { sendMessage } = require("../store/supportConversationsStore");
 const { findById, updateUserRole } = require("../store/userStore");
 const { getIo } = require("../socket");
@@ -48,7 +50,8 @@ exports.dossierDecision = async (req, res) => {
   try {
     const action = String(req.body?.action || "");
     const note = String(req.body?.note || "").trim();
-    if (!["approve", "request_more", "reject"].includes(action)) {
+    const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", reject: "REJECTED", complete: "COMPLETED" };
+    if (!Object.prototype.hasOwnProperty.call(actionMap, action)) {
       return res.status(400).json({ message: "Hành động không hợp lệ" });
     }
     if ((action === "request_more" || action === "reject") && note.length < 5) {
@@ -68,9 +71,18 @@ exports.dossierDecision = async (req, res) => {
   }
 };
 
+exports.updateDossierStatus = async (req, res) => {
+  try {
+    return await updateApplicationStatus(req, res);
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi cập nhật trạng thái hồ sơ" });
+  }
+};
+
 exports.openDossierChat = async (req, res) => {
   try {
     const conversation = await getOrCreateConversationByDossier(req.params.id);
+    const normalizedMessages = Array.isArray(conversation?.messages) ? conversation.messages : [];
     return res.json({
       conversation: {
         ...conversation,
@@ -118,7 +130,12 @@ exports.supportConversationDetail = async (req, res) => {
           };
         })
       : [];
-    return res.json({ conversation });
+    return res.json({
+      conversation: {
+        ...conversation,
+        messages: normalizedMessages
+      }
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi lấy chi tiết hội thoại" });
   }
@@ -206,6 +223,15 @@ exports.aiRulesUpdate = async (req, res) => {
     return res.json({ message: "Cập nhật bộ quy tắc thành công", rulesText: saved });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi cập nhật bộ quy tắc AI" });
+  }
+};
+
+exports.getStatistics = async (req, res) => {
+  try {
+    const stats = await getAdminStatistics({ fromDate: req.query.fromDate, toDate: req.query.toDate });
+    return res.json(stats);
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy thống kê" });
   }
 };
 

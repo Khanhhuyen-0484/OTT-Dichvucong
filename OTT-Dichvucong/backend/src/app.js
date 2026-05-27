@@ -1,78 +1,115 @@
+﻿// backend/app.js
 const { loadEnv } = require("./config/loadEnv");
 loadEnv();
+
 console.log(
   "[env] EMAIL_USER:",
-  process.env.EMAIL_USER ? "đã set" : "THIẾU — kiểm tra backend/.env và restart server"
+  process.env.EMAIL_USER ? "set" : "MISSING. Check backend/.env and restart server"
 );
+
 const http = require("http");
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { initSocket } = require("./socket");
-const app = express();
 const authMiddleware = require("./middleware/authMiddleware");
 const { verifyTransport } = require("./config/mailer");
-const authRoutes = require("./routes/public");
+const { seedServicesToDynamo } = require("./store/serviceCatalogStore");
 
+const app = express();
+
+// CORS middleware configuration for API
 app.use(
   cors({
     origin: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    credentials: true
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use((req, res, next) => {
-  console.log("🔥 [BACKEND RECEIVE]:", req.method, req.url, req.body);
-  next();
-});
 
-/** Kiểm tra nhanh: process đang chạy có nạp đúng .env không (không lộ giá trị). */
-app.get("/api/health", (req, res) => {
+// Body parser to accept JSON and form-urlencoded payloads
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+if (process.env.NODE_ENV !== "production") {
+  app.use((req, _res, next) => {
+    console.log(`[DEV] [${req.method}] ${req.url}`, req.body);
+    next();
+  });
+}
+
+app.get("/", (_req, res) => res.send("API OK"));
+
+app.get("/api/health", (_req, res) => {
   const bucket = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET;
   const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+  const userStore = require("./store/userStore");
+  const { dynamo } = require("./config/dynamoClient");
   res.json({
     ok: true,
     hasEmailUser: Boolean(process.env.EMAIL_USER),
     hasEmailPass: Boolean(process.env.EMAIL_PASS),
     hasJwtSecret: Boolean(process.env.JWT_SECRET),
     hasS3: Boolean(bucket && region),
-    api: "ott-dichvucong-backend"
+    api: "ott-dichvucong-backend",
+    chatStoreReady:
+      typeof userStore.listFriends === "function" && typeof dynamo?.send === "function",
   });
 });
 
 app.get("/api/test", authMiddleware, (req, res) => {
-  res.json({
-    message: "Bạn đã đăng nhập",
-    user: req.user
-  });
+  res.json({ message: "You are logged in", user: req.user });
 });
 
+// API routes
 app.use("/api/chat", require("./routes/chat"));
+app.use("/api/ai", require("./routes/ai"));
 app.use("/api/admin", require("./routes/admin"));
-
-/** OTP, đăng ký, đăng nhập, /me, PATCH /me — tất cả dưới /api */
-app.use("/api", authRoutes);
-
-// Existing routes (kept for compatibility)
 app.use("/api/auth", require("./routes/auth"));
+app.use("/api/upload", require("./routes/upload"));
+app.use("/api/services", require("./routes/service"));
+app.use("/api/payments", require("./routes/payments"));
+app.use("/api", require("./routes/public"));
+
 app.use("/api", (req, res) => {
   res.status(404).json({
-    message: `API endpoint không tồn tại: ${req.method} ${req.originalUrl}`
+    message: `API endpoint not found: ${req.method} ${req.originalUrl}`,
   });
 });
-// API test
-app.get("/", (req, res) => {
-  res.send("API OK 🚀");
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, _next) => {
+  console.error("[ERROR]", err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    message: err.message || "Internal server error",
+    ...(process.env.NODE_ENV !== "production" && { stack: err.stack }),
+  });
 });
 
 const server = http.createServer(app);
 initSocket(server);
 
-server.listen(3000, () => {
-  console.log("Server chạy http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, async () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
   console.log(
-    "[API] Có GET/PATCH /api/me, POST /api/me/avatar/presign, /api/login, /api/chat/… — nếu không thấy dòng này, đang chạy sai file hoặc chưa restart."
+    "[API] Routes: /api/auth, /api/chat, /api/admin, /api/upload, /api/services, /api/payments, /api/me, /api/login"
   );
+  try {
+    const result = await seedServicesToDynamo();
+    console.log(`[seed] Public services seeded: ${result.seeded}`);
+  } catch (error) {
+    console.error("[seed] Failed to seed services:", error.message);
+  }
   verifyTransport();
 });
