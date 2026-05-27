@@ -41,11 +41,19 @@ function normalizeItem(item) {
     description: String(item.description || "").trim(),
     categoryId: String(item.categoryId || "").trim(),
     categoryName: String(item.categoryName || item.category || "Khác").trim(),
-    processingTime: String(item.processingTime || "Đang cập nhật"),
+    processingTime: String(item.processingTime || "Không xác định"),
     fee: Number(item.fee || 0),
     documents: Array.isArray(item.documents) ? item.documents : [],
-    timeline: Array.isArray(item.timeline) && item.timeline.length ? item.timeline : ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"],
-    faq: Array.isArray(item.faq) ? item.faq : []
+    timeline: Array.isArray(item.timeline) && item.timeline.length
+  ? item.timeline
+  : [
+      "Tiếp nhận hồ sơ",
+      "Kiểm tra tính hợp lệ",
+      "Xử lý chuyên viên",
+      "Phê duyệt / bổ sung",
+      "Trả kết quả"
+    ],
+faq: Array.isArray(item.faq) ? item.faq : []
   };
 }
 

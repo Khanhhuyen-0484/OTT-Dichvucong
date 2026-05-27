@@ -29,7 +29,7 @@ function getLocationData(message) {
     media.label ||
     media.name ||
     message?.text ||
-    "Vị trí đã chia sẻ";
+    "V?< tr? ?'? chia s?";
   const mapsUrl =
     location.mapsUrl ||
     media.mapsUrl ||

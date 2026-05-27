@@ -129,7 +129,7 @@ exports.verifyPaymentStatus = async (req, res) => {
       });
       return res.json({
         ...buildPaymentResponse({ ...application, paymentStatus: PAYMENT_STATUS.EXPIRED }, dossierId),
-        message: "Hết thời gian thanh toán (60 phút). Hồ sơ đã bị hủy."
+        message: "Hết thời gian thanh toán (60 phút). Hồ sơ sẽ bị hủy."
       });
     }
 
@@ -213,7 +213,7 @@ exports.mockPaymentComplete = async (req, res) => {
     const updated = await updateByCode(dossierId, {
       paymentStatus: PAYMENT_STATUS.COMPLETED,
       paymentCompletedAt: new Date().toISOString(),
-      status: "Đã tiếp nhận"
+      status: "PENDING"
     });
 
     res.json({

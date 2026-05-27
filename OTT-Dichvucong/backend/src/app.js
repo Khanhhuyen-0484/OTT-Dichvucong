@@ -1,10 +1,10 @@
-// backend/app.js
+﻿// backend/app.js
 const { loadEnv } = require("./config/loadEnv");
 loadEnv();
 
 console.log(
   "[env] EMAIL_USER:",
-  process.env.EMAIL_USER ? "đã set" : "THIẾU — kiểm tra backend/.env và restart server"
+  process.env.EMAIL_USER ? "set" : "MISSING. Check backend/.env and restart server"
 );
 
 const http = require("http");
@@ -18,7 +18,7 @@ const { seedServicesToDynamo } = require("./store/serviceCatalogStore");
 
 const app = express();
 
-// ─── CORS ────────────────────────────────────────────────────────────────────
+// CORS middleware configuration for API
 app.use(
   cors({
     origin: true,
@@ -28,7 +28,7 @@ app.use(
   })
 );
 
-// ─── Body parsers ─────────────────────────────────────────────────────────────
+// Body parser to accept JSON and form-urlencoded payloads
 app.use(
   express.json({
     limit: "10mb",
@@ -42,13 +42,12 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 if (process.env.NODE_ENV !== "production") {
   app.use((req, _res, next) => {
-    const hasBody = req.body && Object.keys(req.body).length > 0;
-    console.log(`🔥 [${req.method}] ${req.url}${hasBody ? ` ${JSON.stringify(req.body)}` : ""}`);
+    console.log(`[DEV] [${req.method}] ${req.url}`, req.body);
     next();
   });
 }
 
-app.get("/", (_req, res) => res.send("API OK 🚀"));
+app.get("/", (_req, res) => res.send("API OK"));
 
 app.get("/api/health", (_req, res) => {
   const bucket = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET;
@@ -68,10 +67,10 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/test", authMiddleware, (req, res) => {
-  res.json({ message: "Bạn đã đăng nhập", user: req.user });
+  res.json({ message: "You are logged in", user: req.user });
 });
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+// API routes
 app.use("/api/chat", require("./routes/chat"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/auth", require("./routes/auth"));
@@ -82,7 +81,7 @@ app.use("/api", require("./routes/public"));
 
 app.use("/api", (req, res) => {
   res.status(404).json({
-    message: `API endpoint không tồn tại: ${req.method} ${req.originalUrl}`,
+    message: `API endpoint not found: ${req.method} ${req.originalUrl}`,
   });
 });
 
@@ -91,7 +90,7 @@ app.use((err, req, res, _next) => {
   console.error("[ERROR]", err);
   const status = err.status || err.statusCode || 500;
   res.status(status).json({
-    message: err.message || "Lỗi server nội bộ",
+    message: err.message || "Internal server error",
     ...(process.env.NODE_ENV !== "production" && { stack: err.stack }),
   });
 });
@@ -101,19 +100,15 @@ initSocket(server);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
-  console.log(`✅ Server chạy http://localhost:${PORT}`);
-  console.log("[API] Routes: /api/auth, /api/chat, /api/admin, /api/upload, /api/services, /api/payments, /api/me, /api/login …");
-
-  if (process.env.SEED_SERVICES_ON_STARTUP === "true") {
-    try {
-      const result = await seedServicesToDynamo();
-      console.log(`[seed] Public services seeded: ${result.seeded}`);
-    } catch (error) {
-      console.warn("[seed] Bỏ qua seed dịch vụ khi khởi động:", error.message);
-    }
-  } else {
-    console.log("[seed] Bỏ qua seed dịch vụ khi khởi động. Đặt SEED_SERVICES_ON_STARTUP=true nếu cần seed DynamoDB.");
+  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(
+    "[API] Routes: /api/auth, /api/chat, /api/admin, /api/upload, /api/services, /api/payments, /api/me, /api/login"
+  );
+  try {
+    const result = await seedServicesToDynamo();
+    console.log(`[seed] Public services seeded: ${result.seeded}`);
+  } catch (error) {
+    console.error("[seed] Failed to seed services:", error.message);
   }
-
   verifyTransport();
 });

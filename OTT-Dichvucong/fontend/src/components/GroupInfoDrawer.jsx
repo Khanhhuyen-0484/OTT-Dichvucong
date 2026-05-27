@@ -120,7 +120,7 @@ function extractSharedAttachments(messages = [], members = []) {
     } else if (isFile) {
       files.push({
         ...base,
-        name: media.name || message.fileName || message.name || "Tệp đính kèm",
+        name: media.name || message.fileName || message.name || "Tập tin đính kèm",
         ext,
       });
     }
@@ -219,7 +219,7 @@ export default function GroupInfoDrawer({
   const tabs = [
     { id: "overview", label: "Tổng quan" },
     { id: "members", label: `Thành viên (${members.length})` },
-    { id: "media", label: `Ảnh & File (${images.length + files.length})` },
+    { id: "media", label: `Hình ảnh & File (${images.length + files.length})` },
   ];
 
   return (
@@ -307,7 +307,7 @@ export default function GroupInfoDrawer({
                   <h3 className="truncate text-base font-bold text-slate-900">{groupName}</h3>
                 )}
                 <p className="mt-1 text-xs text-slate-500">
-                  {members.length} thành viên · {images.length} ảnh · {files.length} tệp
+                  {members.length} thành viên • {images.length} ảnh • {files.length} tệp tin
                 </p>
                 {activeRoom?.createdAt && (
                   <p className="mt-0.5 text-[11px] text-slate-400">
@@ -387,7 +387,7 @@ export default function GroupInfoDrawer({
               {images.length > 0 && (
                 <section className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700">Ảnh gần đây</span>
+                      <span className="text-xs font-bold text-slate-700">Ảnh gần đây</span>
                     <button
                       type="button"
                       onClick={() => setTab("media")}
@@ -425,7 +425,7 @@ export default function GroupInfoDrawer({
                         <div className="truncate text-sm font-medium text-slate-800">
                           {m.fullName}
                           {m.id === user?.id && (
-                            <span className="ml-1 text-[10px] text-slate-400">(Bạn)</span>
+                            <span className="ml-1 text-[10px] text-slate-400">(B?n)</span>
                           )}
                         </div>
                         <div className="text-[10px] text-slate-500">{ROLE_LABELS[m.role] || m.role}</div>
@@ -440,7 +440,7 @@ export default function GroupInfoDrawer({
                     onClick={() => setTab("members")}
                     className="mt-2 w-full text-center text-[11px] font-semibold text-[#003366]"
                   >
-                    Xem đủ {members.length} thành viên
+                    Xem tất cả {members.length} thành viên
                   </button>
                 )}
               </section>
@@ -453,7 +453,7 @@ export default function GroupInfoDrawer({
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3">
                   <div className="mb-2 flex items-center gap-2 text-xs font-bold text-emerald-800">
                     <UserPlus className="h-4 w-4" />
-                    Thêm thành viên
+                      Thêm thành viên
                   </div>
                   <div className="flex gap-2">
                     <select
@@ -514,7 +514,7 @@ export default function GroupInfoDrawer({
                           </span>
                           {isSelf && (
                             <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
-                              Bạn
+                              B?n
                             </span>
                           )}
                         </div>
@@ -556,7 +556,7 @@ export default function GroupInfoDrawer({
                         {canRemove && (
                           <button
                             type="button"
-                            title="Xóa khỏi nhóm"
+                            title="X?a kh?i nh?m"
                             disabled={busy}
                             onClick={() => performGroupAction("remove", m.id)}
                             className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100"
@@ -631,7 +631,7 @@ export default function GroupInfoDrawer({
                         className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:border-[#003366]/30 hover:bg-slate-50"
                       >
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#003366]/10 text-lg">
-                          {item.ext === "pdf" ? "📕" : item.ext === "doc" || item.ext === "docx" ? "📘" : "📄"}
+                          {item.ext === "pdf" ? "PDF" : item.ext === "doc" || item.ext === "docx" ? "DOC" : "FILE"}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-800">{item.name}</p>

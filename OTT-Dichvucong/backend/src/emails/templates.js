@@ -43,14 +43,14 @@ function layout({ title, preheader, bodyHtml }) {
     <div class="container">
       <div class="card">
         <div class="topbar">
-          <div class="brand">Cổng Dịch vụ công — Thông báo hệ thống</div>
+          <div class="brand">C?.ng D?<ch v? c?ng ??" Th?ng b?o h?? th?'ng</div>
         </div>
         <div class="content">
           ${bodyHtml}
         </div>
         <div class="footer">
-          <p class="muted"><span class="flag"></span>Vui lòng không chia sẻ mã/đường dẫn này cho bất kỳ ai. Nếu bạn không thực hiện yêu cầu, hãy bỏ qua email này.</p>
-          <p class="muted">© ${new Date().getFullYear()} Cổng Dịch vụ công</p>
+          <p class="muted"><span class="flag"></span>Vui l?ng kh?ng chia s? m?/?'u?ng d?n n?y cho b?t k? ai. N?u b?n kh?ng th?c hi??n y?u c?u, h?y b? qua email n?y.</p>
+          <p class="muted">? ${new Date().getFullYear()} C?.ng D?<ch v? c?ng</p>
         </div>
       </div>
     </div>
@@ -59,33 +59,33 @@ function layout({ title, preheader, bodyHtml }) {
 }
 
 function otpEmail({ otp, minutes = 5 }) {
-  const title = "Mã OTP xác minh đăng ký";
+  const title = "M? OTP x?c minh ?'?fng k?";
   return layout({
     title,
-    preheader: `Mã OTP của bạn có hiệu lực ${minutes} phút`,
+    preheader: `M? OTP c?a b?n c? hi??u l?c ${minutes} ph?t`,
     bodyHtml: `
       <h1>${escapeHtml(title)}</h1>
-      <p>Chúng tôi đã nhận được yêu cầu xác minh email cho tài khoản của bạn.</p>
-      <p class="muted">Mã OTP (hiệu lực ${escapeHtml(String(minutes))} phút):</p>
+      <p>Ch?ng t?i ?'? nh?n ?'u?c y?u c?u x?c minh email cho t?i kho?n c?a b?n.</p>
+      <p class="muted">M? OTP (hi??u l?c ${escapeHtml(String(minutes))} ph?t):</p>
       <div class="otp">${escapeHtml(String(otp))}</div>
-      <p class="muted" style="margin-top:12px;">Nếu bạn không yêu cầu mã OTP, vui lòng bỏ qua email này.</p>
+      <p class="muted" style="margin-top:12px;">N?u b?n kh?ng y?u c?u m? OTP, vui l?ng b? qua email n?y.</p>
     `
   });
 }
 
 function resetPasswordEmail({ resetUrl }) {
-  const title = "Yêu cầu đặt lại mật khẩu";
+  const title = "Y?u c?u ?'?t l?i m?t kh?u";
   return layout({
     title,
-    preheader: "Nhấn nút để đặt lại mật khẩu",
+    preheader: "Nh?n n?t ?'?f ?'?t l?i m?t kh?u",
     bodyHtml: `
       <h1>${escapeHtml(title)}</h1>
-      <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
-      <p>Nhấn nút bên dưới để tiếp tục:</p>
+      <p>Ch?ng t?i nh?n ?'u?c y?u c?u ?'?t l?i m?t kh?u cho t?i kho?n c?a b?n.</p>
+      <p>Nh?n n?t b?n du?>i ?'?f ti?p t?c:</p>
       <p style="margin:16px 0 18px 0;">
-        <a class="btn" href="${escapeAttr(resetUrl)}" target="_blank" rel="noreferrer">Đặt lại mật khẩu</a>
+        <a class="btn" href="${escapeAttr(resetUrl)}" target="_blank" rel="noreferrer">??t l?i m?t kh?u</a>
       </p>
-      <p class="muted">Nếu nút không hoạt động, hãy sao chép và dán đường dẫn sau vào trình duyệt:</p>
+      <p class="muted">N?u n?t kh?ng ho?t ?'?Tng, h?y sao ch?p v? d?n ?'u?ng d?n sau v?o tr?nh duy??t:</p>
       <p class="muted" style="word-break:break-all;">${escapeHtml(resetUrl)}</p>
     `
   });

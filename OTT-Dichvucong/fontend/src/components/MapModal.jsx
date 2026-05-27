@@ -36,7 +36,7 @@ export default function MapModal({ open, lat, lng, label, onClose }) {
 
         <div className="relative aspect-[16/10] w-full bg-slate-100 sm:aspect-[16/9]">
           <iframe
-            title={label || "Bản đồ vị trí"}
+            title={label || "Bản đồ"}
             src={embedSrc}
             className="h-full w-full border-0"
             loading="lazy"

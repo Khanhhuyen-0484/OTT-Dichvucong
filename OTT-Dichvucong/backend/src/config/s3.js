@@ -2,8 +2,11 @@ const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/clien
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 function getConfig() {
-  const bucket = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET || "";
-  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "";
+  const bucket =
+    process.env.S3_BUCKET || process.env.AWS_S3_BUCKET || "";
+  const region =
+    process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "";
+  // Allow disabling S3 with DISABLE_S3=true
   if (process.env.DISABLE_S3 === "true") return null;
   if (!bucket || !region) return null;
   return { bucket, region };
@@ -13,26 +16,10 @@ function isS3Configured() {
   return Boolean(getConfig());
 }
 
-function getS3Client() {
-  const cfg = getConfig();
-  if (!cfg) {
-    const err = new Error("S3_NOT_CONFIGURED");
-    err.code = "S3_NOT_CONFIGURED";
-    throw err;
-  }
-
-  return new S3Client({
-    region: cfg.region,
-    credentials:
-      process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
-        ? {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-          }
-        : undefined
-  });
-}
-
+/**
+ * @param {{ key: string, contentType: string, expiresSec?: number }} opts
+ * @returns {Promise<{ uploadUrl: string, publicUrl: string, key: string }>}
+ */
 async function createPresignedPut(opts) {
   const cfg = getConfig();
   if (!cfg) {
@@ -41,20 +28,33 @@ async function createPresignedPut(opts) {
     throw err;
   }
 
-  const client = getS3Client();
+  const { bucket, region } = cfg;
+  const client = new S3Client({
+    region,
+    credentials:
+      process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+          }
+        : undefined
+  });
+
   const command = new PutObjectCommand({
-    Bucket: cfg.bucket,
+    Bucket: bucket,
     Key: opts.key,
     ContentType: opts.contentType
   });
 
   const expiresSec = opts.expiresSec ?? 300;
   const uploadUrl = await getSignedUrl(client, command, { expiresIn: expiresSec });
+
+  // Generate GET URL for reading the uploaded file
   const getCommand = new GetObjectCommand({
-    Bucket: cfg.bucket,
+    Bucket: bucket,
     Key: opts.key
   });
-  const publicUrl = await getSignedUrl(client, getCommand, { expiresIn: 3600 * 24 * 7 });
+  const publicUrl = await getSignedUrl(client, getCommand, { expiresIn: 3600 * 24 * 7 }); // 7 days
 
   return { uploadUrl, publicUrl, key: opts.key };
 }
@@ -69,6 +69,9 @@ function buildPublicObjectUrl(key) {
   return `https://${cfg.bucket}.s3.${cfg.region}.amazonaws.com/${encodedKey}`;
 }
 
+/**
+ * Upload t? server ??" tr?nh CORS khi browser PUT th?ng l?n S3.
+ */
 async function uploadBuffer({ key, buffer, contentType }) {
   const cfg = getConfig();
   if (!cfg) {
@@ -77,7 +80,17 @@ async function uploadBuffer({ key, buffer, contentType }) {
     throw err;
   }
 
-  const client = getS3Client();
+  const client = new S3Client({
+    region: cfg.region,
+    credentials:
+      process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+          }
+        : undefined
+  });
+
   await client.send(
     new PutObjectCommand({
       Bucket: cfg.bucket,
@@ -91,28 +104,10 @@ async function uploadBuffer({ key, buffer, contentType }) {
   return { key, publicUrl, url: publicUrl, contentType: contentType || "application/octet-stream" };
 }
 
-async function getObjectStream(key) {
-  const cfg = getConfig();
-  const client = getS3Client();
-  const result = await client.send(
-    new GetObjectCommand({
-      Bucket: cfg.bucket,
-      Key: key
-    })
-  );
-
-  return {
-    body: result.Body,
-    contentType: result.ContentType || "application/octet-stream",
-    contentLength: result.ContentLength
-  };
-}
-
 module.exports = {
   getConfig,
   isS3Configured,
   createPresignedPut,
   buildPublicObjectUrl,
-  uploadBuffer,
-  getObjectStream
+  uploadBuffer
 };

@@ -30,7 +30,7 @@ function startPaymentExpiryScheduler() {
 
           updateByCode(dossierId, {
             paymentStatus: PAYMENT_STATUS.EXPIRED,
-            status: "Hủy (Hết hạn thanh toán)"
+            status: "H?y (H?t h?n thanh to?n)"
           });
 
           expiredCount++;

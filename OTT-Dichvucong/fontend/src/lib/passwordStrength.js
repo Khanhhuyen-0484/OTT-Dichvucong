@@ -18,7 +18,7 @@ export function passwordHasSpecial(value) {
   return SPECIAL_RE.test(value);
 }
 
-/** Chỉ gồm chữ thường và/hoặc số (không hoa, không ký tự đặc biệt). */
+/** Ch?? g?"m ch? thu?ng v?/ho?c s?' (kh�ng hoa, kh�ng k? t? ?'?c bi??t). */
 export function isOnlyLowercaseAndNumbers(value) {
   if (!value) return false;
   return /^[a-z0-9]+$/.test(value);
@@ -34,9 +34,9 @@ export function countPasswordFactors(value) {
 }
 
 /**
- * - Yếu: < 6 ký tự HOẶC chỉ chữ thường/số
- * - Mạnh: ≥ 8 ký tự, đủ hoa + thường + số + ký tự đặc biệt
- * - Trung bình: ≥ 6 ký tự, ≥ 2 trong 4 yếu tố (và không đạt Mạnh)
+ * - Y?u: < 6 k? t? HO?C ch?? ch? thu?ng/s?'
+ * - M?nh: ??? 8 k? t?, ?'? hoa + thu?ng + s?' + k? t? ?'?c bi??t
+ * - Trung b?nh: ??? 6 k? t?, ??? 2 trong 4 y?u t?' (v? kh�ng ?'?t M?nh)
  * @param {string} value
  * @returns {PasswordStrengthLevel | null}
  */
@@ -66,19 +66,19 @@ export function getPasswordStrength(value) {
 
 export const PASSWORD_STRENGTH_META = {
   weak: {
-    label: "Yếu",
+    label: "Y?u",
     barClass: "bg-red-500",
     textClass: "text-red-700",
     width: "33%"
   },
   medium: {
-    label: "Trung bình",
+    label: "Trung b?nh",
     barClass: "bg-orange-500",
     textClass: "text-orange-700",
     width: "66%"
   },
   strong: {
-    label: "Mạnh",
+    label: "M?nh",
     barClass: "bg-green-500",
     textClass: "text-green-700",
     width: "100%"
@@ -90,9 +90,9 @@ export function getRegisterPasswordError(value) {
   const strength = getPasswordStrength(value);
   if (strength !== "weak") return null;
   if (value.length < 6) {
-    return "Mật khẩu phải có ít nhất 6 ký tự";
+    return "M�t kh�u ph?i c? ?t nh?t 6 k? t?";
   }
-  return "Mật khẩu quá yếu. Cần kết hợp ít nhất 2 loại: chữ hoa, chữ thường, số, ký tự đặc biệt.";
+  return "M�t kh�u qu? y?u. C?n k�t h�p ?t nh?t 2 lo?i: ch? hoa, ch? thu?ng, s?', k? t? ?'?c bi??t.";
 }
 
 /**
@@ -105,21 +105,21 @@ export function getPasswordRequirementItems(value) {
   const hasMinStrong = safe.length >= 8;
 
   let lengthLabel =
-    "Tối thiểu 6 ký tự (Trung bình) hoặc 8 ký tự (Mạnh)";
+    "T?'i thi?fu 6 k? t? (Trung b?nh) ho?c 8 k? t? (M?nh)";
   if (hasMinStrong) {
-    lengthLabel = "Tối thiểu 8 ký tự (Mạnh)";
+    lengthLabel = "T?'i thi?fu 8 k? t? (M?nh)";
   } else if (hasMinMedium) {
-    lengthLabel = "Tối thiểu 6 ký tự (Trung bình)";
+    lengthLabel = "T?'i thi?fu 6 k? t? (Trung b?nh)";
   }
 
   return [
     { id: "length", label: lengthLabel, met: hasMinMedium },
-    { id: "uppercase", label: "Có chứa chữ hoa", met: passwordHasUppercase(safe) },
-    { id: "lowercase", label: "Có chứa chữ thường", met: passwordHasLowercase(safe) },
-    { id: "digit", label: "Có chứa chữ số", met: passwordHasDigit(safe) },
+    { id: "uppercase", label: "C? ch?a ch? hoa", met: passwordHasUppercase(safe) },
+    { id: "lowercase", label: "C? ch?a ch? thu?ng", met: passwordHasLowercase(safe) },
+    { id: "digit", label: "C? ch?a ch? s?'", met: passwordHasDigit(safe) },
     {
       id: "special",
-      label: "Có chứa ít nhất 1 ký tự đặc biệt",
+      label: "C? ch?a ?t nh?t 1 k? t? ?'?c bi??t",
       met: passwordHasSpecial(safe)
     }
   ];

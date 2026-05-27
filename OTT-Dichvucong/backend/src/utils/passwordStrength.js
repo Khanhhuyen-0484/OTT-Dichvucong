@@ -56,16 +56,16 @@ function getPasswordStrength(value) {
 
 function validateRegisterPassword(value) {
   if (!value || typeof value !== "string") {
-    return { ok: false, message: "Mật khẩu phải có ít nhất 6 ký tự" };
+    return { ok: false, message: "M?t kh?u ph?i c? ?t nh?t 6 k? t?" };
   }
   if (value.length < 6) {
-    return { ok: false, message: "Mật khẩu phải có ít nhất 6 ký tự" };
+    return { ok: false, message: "M?t kh?u ph?i c? ?t nh?t 6 k? t?" };
   }
   if (getPasswordStrength(value) === "weak") {
     return {
       ok: false,
       message:
-        "Mật khẩu quá yếu. Cần kết hợp ít nhất 2 loại: chữ hoa, chữ thường, số, ký tự đặc biệt."
+        "M?t kh?u qu? y?u. C?n k?t h?p ?t nh?t 2 lo?i: ch? hoa, ch? thu?ng, s?', k? t? ?'?c bi??t."
     };
   }
   return { ok: true };

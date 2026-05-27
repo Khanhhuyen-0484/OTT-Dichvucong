@@ -89,7 +89,7 @@ function sanitizePublicUser(user) {
   if (!safe) return null;
   return {
     id: safe.id,
-    fullName: safe.fullName || "Người dùng",
+    fullName: safe.fullName || "Ngu?i d?ng",
     email: safe.email || "",
     phone: safe.phone || "",
     avatarUrl:
@@ -129,7 +129,7 @@ async function listUsers() {
 
 async function saveUserRecord(user) {
   const client = getClient();
-  if (!client) throw new Error("Chưa cấu hình DynamoDB");
+  if (!client) throw new Error("Chua c?u h?nh DynamoDB");
   const next = withFriendFields(user);
   await client.send(
     new PutCommand({
@@ -231,10 +231,10 @@ async function listBlockedUsers(userId) {
 async function sendFriendRequest(senderId, targetId) {
   const sender = withFriendFields(await findById(senderId));
   const target = withFriendFields(await findById(targetId));
-  if (!sender || !target) throw new Error("Không tìm thấy người dùng");
-  if (sender.id === target.id) throw new Error("Không thể kết bạn với chính mình");
+  if (!sender || !target) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
+  if (sender.id === target.id) throw new Error("Kh?ng th?f k?t b?n v?>i ch?nh m?nh");
   if (sender.blockedUserIds.includes(target.id) || target.blockedUserIds.includes(sender.id)) {
-    throw new Error("Không thể kết bạn với người dùng này");
+    throw new Error("Kh?ng th?f k?t b?n v?>i ngu?i d?ng n?y");
   }
 
   if (sender.friendIds.includes(target.id)) {
@@ -289,7 +289,7 @@ async function revokeFriendRequest(senderId, targetUserId) {
 async function removeFriend(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
   const target = withFriendFields(await findById(targetUserId));
-  if (!current || !target) throw new Error("Không tìm thấy người dùng");
+  if (!current || !target) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
 
   current.friendIds = current.friendIds.filter((id) => id !== target.id);
   target.friendIds = target.friendIds.filter((id) => id !== current.id);
@@ -306,7 +306,7 @@ async function blockUser(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
   const target = withFriendFields(await findById(targetUserId));
   if (!current || !target) throw new Error("Không tìm thấy người dùng");
-  if (current.id === target.id) throw new Error("Không thể chặn chính mình");
+  if (current.id === target.id) throw new Error("Không thể chọn chính mình");
 
   current.blockedUserIds = uniqueIds([...current.blockedUserIds, target.id]);
   current.friendIds = current.friendIds.filter((id) => id !== target.id);
@@ -322,7 +322,7 @@ async function blockUser(userId, targetUserId) {
 
 async function unblockUser(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
-  if (!current) throw new Error("Không tìm thấy người dùng");
+  if (!current) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
   current.blockedUserIds = current.blockedUserIds.filter((id) => id !== String(targetUserId || "").trim());
   await saveUserRecord(current);
   return { ok: true };
@@ -338,7 +338,7 @@ async function createUser({ email, passwordHash, fullName, phone, address }) {
       throw err;
     }
     const client = getClient();
-    if (!client) throw new Error("Chưa cấu hình DynamoDB");
+    if (!client) throw new Error("Chua c?u h?nh DynamoDB");
     const user = {
       id: `u_${Date.now()}`,
       email: norm,

@@ -20,7 +20,7 @@ export function isGroupMember(room, userId) {
   return dedupeMembers(room.members || []).some((m) => String(m.id || "").trim() === uid);
 }
 
-/** Suy ra quyền của user trong nhóm (xử lý dữ liệu cũ thiếu role owner). */
+/** Suy ra quy?n c?a user trong nh?m (x? l? d? li??u cu thi?u role owner). */
 export function resolveMyGroupRole(room, userId) {
   if (!room || room.type !== "group" || !userId) return null;
 
@@ -38,12 +38,12 @@ export function resolveMyGroupRole(room, userId) {
   return roles[0] || (members.some((m) => m.id === uid) ? "member" : null);
 }
 
-/** Đổi tên, đổi ảnh, thêm thành viên — mọi thành viên (giống Zalo). */
+/** ??.i t?n, ?'?.i ?nh, th?m th�nh vi?n ??" m?i th�nh vi?n (gi?'ng Zalo). */
 export function canManageGroupRoom(room, userId) {
   return isGroupMember(room, userId);
 }
 
-/** Xóa thành viên, phong/hạ phó nhóm — chỉ trưởng nhóm / phó nhóm. */
+/** X?a th�nh vi?n, phong/h? ph? nh?m ??" ch?? tru?Yng nh?m / ph? nh?m. */
 export function canAdminGroupRoom(room, userId) {
   const role = resolveMyGroupRole(room, userId);
   return role === "owner" || role === "deputy";

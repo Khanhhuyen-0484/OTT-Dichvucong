@@ -2,69 +2,56 @@ import { io } from "socket.io-client";
 
 let socket = null;
 
-export function connectSocket() {
+/**
+ * Trả về socket singleton để tạo mới chỉ khi chưa có instance nào.
+ * Không kiểm tra socket.connected để tránh tạo duplicate instance
+ * khi socket đang trong trạng thái "connecting".
+ */
+export const connectSocket = () => {
+  if (socket) return socket; // ??? FIX: tr? v? instance cu d? chua connected
+
   const token = localStorage.getItem("token");
-
-  const serverUrl = String(
-    import.meta.env.VITE_SOCKET_URL ||
-      import.meta.env.VITE_API_ORIGIN ||
-      (import.meta.env.DEV ? "http://localhost:3000" : window.location.origin),
-  ).trim();
-
-  const auth = token ? { token } : {};
-
-  // Không tạo socket mới nếu đã có instance, tránh duplicate khi đang connecting
-  if (socket) {
-    if (socket.auth?.token === auth.token) {
-      return socket;
-    }
-
-    socket.disconnect();
-    socket = null;
+  if (!token) {
+    console.warn("[SOCKET] Không tìm thấy token.");
   }
 
-  socket = io(serverUrl, {
-    auth,
+  const socketURL = import.meta.env.VITE_SOCKET_URL || "/";
+  console.log(`[SOCKET] Đang khởi tạo kết nối tới: ${socketURL}`);
+
+  socket = io(socketURL, {
+    auth: { token },
     transports: ["websocket", "polling"],
-    withCredentials: true,
     reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 10000,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
+    withCredentials: true,
   });
 
   socket.on("connect", () => {
-    console.info("[Socket] connected", socket.id);
+    console.log(`[SOCKET] Đã kết nối: ${socket.id}`);
   });
 
   socket.on("connect_error", (err) => {
-    console.warn("[Socket] connect_error", err.message);
+    console.error(`[SOCKET] Lỗi kết nối: ${err.message}`);
   });
 
   socket.on("disconnect", (reason) => {
-    console.warn("[Socket] disconnected", reason);
-
+    console.warn(`[SOCKET] Đã ngắt kết nối: ${reason}`);
     if (reason === "io server disconnect") {
       socket.connect();
     }
   });
 
-  socket.on("reconnect_attempt", (attempt) => {
-    console.info("[Socket] reconnect_attempt", attempt);
-  });
-
   return socket;
-}
+};
 
-export function disconnectSocket() {
+/**
+ * Ng?t k�t n?'i khi Logout
+ */
+export const disconnectSocket = () => {
   if (socket) {
     socket.disconnect();
     socket = null;
-    console.info("[Socket] disconnected and cleared");
+    console.log("[SOCKET] Đã xoá instance socket.");
   }
-}
-
-export function getSocket() {
-  return socket;
-}
+};

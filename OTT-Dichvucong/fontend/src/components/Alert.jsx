@@ -28,7 +28,7 @@ export default function Alert({ variant = "info", title, message, onClose }) {
             className="text-sm font-semibold underline underline-offset-2"
             onClick={onClose}
           >
-            Đóng
+            ??ng
           </button>
         ) : null}
       </div>

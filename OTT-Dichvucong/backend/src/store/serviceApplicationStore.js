@@ -6,7 +6,7 @@ const TABLE_NAME = process.env.DYNAMODB_SERVICE_APPLICATIONS_TABLE || process.en
 
 function getClient() { return getDynamoClient(); }
 
-const ALLOWED_STATUSES = new Set(["PENDING", "PROCESSING", "NEED_MORE", "COMPLETED", "REJECTED"]);
+const ALLOWED_STATUSES = new Set(["DRAFT", "PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "REJECTED"]);
 
 function normalizeTimeline(items) {
   if (!Array.isArray(items)) return [];
@@ -41,13 +41,13 @@ function normalizeApplication(application) {
     serviceId: String(application.serviceId || "").trim(),
     serviceName: String(application.serviceName || "").trim(),
     userId: String(application.userId || "").trim(),
-    status: ALLOWED_STATUSES.has(status) ? status : "PENDING",
+    status: ALLOWED_STATUSES.has(status) ? status : "DRAFT",
     paymentStatus: String(application.paymentStatus || "UNPAID").trim(),
     timeline,
     history: timeline,
     attachments: normalizeAttachments(application.attachments || []).map((item) => ({
       ...item,
-      previewUrl: item.fileUrl || item.url || item.path || item.previewUrl || item.publicUrl || "",
+      previewUrl: item.fileUrl || item.url || item.path || "",
     })),
     createdAt: application.createdAt || new Date().toISOString(),
     updatedAt: application.updatedAt || new Date().toISOString(),
@@ -80,18 +80,8 @@ async function findByCode(dossierIdOrCode) {
   const dossierId = String(dossierIdOrCode || "").trim();
   if (!dossierId) return null;
   const client = getClient();
-  try {
-    const result = await client.send(new GetCommand({ TableName: TABLE_NAME, Key: getDossierKey(dossierId) }));
-    const item = normalizeApplication(result.Item);
-    if (item) return item;
-  } catch (error) {
-    console.warn("[serviceApplicationStore.findByCode] fallback scan:", error?.message || error);
-  }
-
-  const items = await readAll();
-  return items.find((item) =>
-    [item.dossierId, item.dossierCode, item.id, item.applicationCode, item.applicationId].includes(dossierId)
-  ) || null;
+  const result = await client.send(new GetCommand({ TableName: TABLE_NAME, Key: getDossierKey(dossierId) }));
+  return normalizeApplication(result.Item);
 }
 
 async function findByUserId(userId) {

@@ -4,33 +4,34 @@ import {
   ArrowLeft,
   BadgeCheck,
   CheckCircle2,
+  CircleCheck,
+  CircleDashed,
   Clock3,
+  Copy,
+  CreditCard,
   FileText,
   Info,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   UploadCloud,
-  CircleCheck,
-  CircleDashed,
-  CreditCard,
-  Copy,
-  RefreshCw,
 } from "lucide-react";
 import {
+  createBankTransferPayment,
   getApiErrorMessage,
+  getBankTransferPaymentStatus,
   getServiceById,
   mockPaymentComplete,
+  presignAttachmentUpload,
   submitServiceApplication,
-  createBankTransferPayment,
-  getBankTransferPaymentStatus,
 } from "../lib/api";
 import { uploadToS3 } from "../lib/uploadToS3.js";
 
 const defaultTimeline = ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"];
 const defaultFaq = [
   { q: "Hồ sơ thiếu giấy tờ thì sao?", a: "Hệ thống sẽ báo rõ giấy tờ còn thiếu ngay khi bạn bấm nộp hồ sơ." },
-  { q: "Có thể thanh toán online không?", a: "Có. Bạn có thể thanh toán qua MoMo hoặc ZaloPay theo quy trình hiển thị sau khi nộp." },
-  { q: "Mất bao lâu để xử lý?", a: "Thời gian xử lý sẽ hiển thị ngay trên trang dịch vụ để bạn dễ theo dõi." },
+  { q: "Có thể thanh toán online không?", a: "Có. Bạn có thể thanh toán theo hướng dẫn sau khi nộp hồ sơ." },
+  { q: "Mất bao lâu để xử lý?", a: "Thời gian xử lý hiển thị trên trang dịch vụ để bạn theo dõi." },
 ];
 
 const demoServices = {
@@ -44,12 +45,10 @@ const demoServices = {
       { key: "idCard", label: "CCCD/CMND người nộp", required: true },
       { key: "birthCert", label: "Giấy chứng sinh", required: true },
     ],
-    timeline: defaultTimeline,
-    faq: defaultFaq,
   },
   "demo-dat-dai": {
     name: "Đăng ký biến động đất đai",
-    description: "Thực hiện tiếp nhận hồ sơ, đính kèm giấy tờ và theo dõi tiến độ xử lý.",
+    description: "Tiếp nhận hồ sơ, đính kèm giấy tờ và theo dõi tiến độ xử lý.",
     categoryName: "Đất đai",
     processingTime: "5 ngày làm việc",
     fee: 20000,
@@ -57,8 +56,6 @@ const demoServices = {
       { key: "landPaper", label: "Giấy chứng nhận quyền sử dụng đất", required: true },
       { key: "requestForm", label: "Đơn đăng ký biến động", required: true },
     ],
-    timeline: defaultTimeline,
-    faq: defaultFaq,
   },
   "demo-xay-dung": {
     name: "Xin cấp phép xây dựng",
@@ -70,8 +67,6 @@ const demoServices = {
       { key: "landPaper", label: "Giấy tờ đất", required: true },
       { key: "design", label: "Bản vẽ thiết kế", required: true },
     ],
-    timeline: defaultTimeline,
-    faq: defaultFaq,
   },
   "demo-gplx": {
     name: "Đổi giấy phép lái xe",
@@ -83,8 +78,6 @@ const demoServices = {
       { key: "oldLicense", label: "Giấy phép lái xe cũ", required: true },
       { key: "health", label: "Giấy khám sức khỏe", required: true },
     ],
-    timeline: defaultTimeline,
-    faq: defaultFaq,
   },
   "demo-ho-chieu": {
     name: "Cấp hộ chiếu phổ thông",
@@ -96,8 +89,6 @@ const demoServices = {
       { key: "photo", label: "Ảnh chân dung", required: true },
       { key: "idCard", label: "CCCD/CMND", required: true },
     ],
-    timeline: defaultTimeline,
-    faq: defaultFaq,
   },
   "demo-doanh-nghiep": {
     name: "Đăng ký thành lập doanh nghiệp",
@@ -109,8 +100,6 @@ const demoServices = {
       { key: "charter", label: "Điều lệ công ty", required: true },
       { key: "memberList", label: "Danh sách thành viên/cổ đông", required: true },
     ],
-    timeline: defaultTimeline,
-    faq: defaultFaq,
   },
 };
 
@@ -121,23 +110,6 @@ const steps = [
 ];
 
 const currency = new Intl.NumberFormat("vi-VN");
-
-function paymentStatusLabel(status) {
-  switch (status) {
-    case "PENDING":
-    case "pending":
-    case "UNPAID":
-      return "Chờ thanh toán";
-    case "PAID":
-    case "completed":
-      return "Đã thanh toán";
-    case "EXPIRED":
-    case "expired":
-      return "Hết hạn thanh toán";
-    default:
-      return status || "Chờ thanh toán";
-  }
-}
 
 export default function ServiceWizard() {
   const { serviceId } = useParams();
@@ -165,7 +137,7 @@ export default function ServiceWizard() {
         setService(data);
       } catch (e) {
         const demo = demoServices[serviceId];
-        if (demo) setService({ serviceId, id: serviceId, ...demo });
+        if (demo) setService({ serviceId, id: serviceId, timeline: defaultTimeline, faq: defaultFaq, ...demo });
         else setError(getApiErrorMessage(e) || "Không tìm thấy dịch vụ");
       } finally {
         setLoading(false);
@@ -183,8 +155,8 @@ export default function ServiceWizard() {
   const serviceTimeline = useMemo(() => (service?.timeline?.length ? service.timeline : defaultTimeline), [service]);
   const faq = useMemo(() => (service?.faq?.length ? service.faq : defaultFaq), [service]);
   const currentDossierId = paymentInfo?.dossierId || bankPayment?.dossierId || getSubmitDossierId(submitResult);
-  const isPaid = paymentStatus === "PAID";
-  const paymentStatusText = isPaid ? "Thanh toán thành công" : paymentStatusLabel(paymentStatus);
+  const isPaid = String(paymentStatus).toUpperCase() === "PAID";
+  const paymentStatusLabel = isPaid ? "Thanh toán thành công" : paymentStatus;
 
   function getSubmitDossierId(result = {}) {
     return String(
@@ -216,9 +188,9 @@ export default function ServiceWizard() {
 
   function validateForm() {
     const next = {};
-    ["fullName", "citizenId", "address", "phone"].forEach((k) => {
-      const msg = validateField(k, formData[k] || "");
-      if (msg) next[k] = msg;
+    ["fullName", "citizenId", "address", "phone"].forEach((key) => {
+      const msg = validateField(key, formData[key] || "");
+      if (msg) next[key] = msg;
     });
     if (formData.email) {
       const msg = validateField("email", formData.email);
@@ -240,22 +212,12 @@ export default function ServiceWizard() {
       setSubmitting(true);
       const uploaded = [];
       for (const [key, item] of Object.entries(fileItems)) {
-        const stored = await uploadToS3(item.file);
-        const fileUrl = stored.publicUrl || stored.url || item.previewUrl;
-        uploaded.push({
-          key,
-          fileName: item.name,
-          name: item.name,
-          mimeType: stored.contentType || item.type || "application/octet-stream",
-          fileType: stored.contentType || item.type || "application/octet-stream",
-          size: item.file.size,
-          fileUrl,
-          url: fileUrl,
-          path: fileUrl,
-          previewUrl: fileUrl,
-          s3Key: stored.key,
-          type: stored.contentType || item.type || "application/octet-stream"
-        });
+        const safeContentType = item.type || "application/octet-stream";
+        const safeKey = `chat-media/${serviceId || "service"}/${key}-${Date.now()}-${item.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        const presignRes = await presignAttachmentUpload({ key: safeKey, contentType: safeContentType, fileName: item.name, applicationId: "new", docKey: key });
+        const uploadRes = await uploadToS3(item.file);
+        const fileUrl = uploadRes?.publicUrl || presignRes.data?.publicUrl || item.previewUrl;
+        uploaded.push({ key, fileName: item.name, name: item.name, mimeType: safeContentType, fileType: safeContentType, size: item.file.size, fileUrl, url: fileUrl, path: fileUrl });
       }
 
       const payload = {
@@ -276,22 +238,22 @@ export default function ServiceWizard() {
       const dossierId = getSubmitDossierId(data);
       if (!dossierId) throw new Error("Thiếu dossierId từ phản hồi nộp hồ sơ");
 
-      const isFreeService = Number(service?.fee || 0) <= 0;
       setSubmitResult(data);
       setPaymentExpireAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
-      setPaymentStatus(isFreeService ? "PAID" : "PENDING");
-      setStep(isFreeService ? 3 : 2);
+      setPaymentStatus("PENDING");
 
-      if (isFreeService) return;
+      if (Number(service?.fee || data.application?.fee || 0) <= 0) {
+        setPaymentStatus("PAID");
+        setStep(3);
+        return;
+      }
 
-      // Tạo thanh toán chuyển khoản SePay
+      setStep(2);
       const { data: bankTransfer } = await createBankTransferPayment({ dossierId, amount: data.application?.fee || data.fee || service?.fee || 0 });
       setBankPayment(bankTransfer || null);
       setPaymentInfo(bankTransfer || null);
-      console.log("paymentInfo:", bankTransfer || null);
       setSubmitResult((prev) => ({ ...(prev || {}), dossierId, bankPayment: bankTransfer || {} }));
       setPaymentStatus(bankTransfer?.paymentStatus || bankTransfer?.status || "PENDING");
-
     } catch (e) {
       alert(getApiErrorMessage(e));
     } finally {
@@ -309,21 +271,20 @@ export default function ServiceWizard() {
   }
 
   async function checkPaymentStatus() {
-    const dossierId = paymentInfo?.dossierId || bankPayment?.dossierId || currentDossierId;
-    console.log("checking dossierId:", paymentInfo?.dossierId);
+    const dossierId = currentDossierId;
     if (!dossierId) return;
     setCheckingPayment(true);
     try {
       const { data } = await getBankTransferPaymentStatus(dossierId);
       setPaymentStatus(data.paymentStatus || "PENDING");
-      if (data.paymentStatus === "PAID") setStep(3);
+      if (String(data.paymentStatus).toUpperCase() === "PAID") setStep(3);
     } finally {
       setCheckingPayment(false);
     }
   }
 
   async function copyTransferContent() {
-    const text = bankPayment?.transferContent;
+    const text = paymentInfo?.transferContent || bankPayment?.transferContent;
     if (!text) return;
     try { await navigator.clipboard.writeText(text); } catch {}
   }
@@ -371,9 +332,9 @@ export default function ServiceWizard() {
               <div style={styles.timelineCard}>
                 <div style={styles.timelineCardTitle}>Trình tự dịch vụ</div>
                 {serviceTimeline.map((item, index) => (
-                  <div key={item} style={styles.timelineRow}>
+                  <div key={`${item}-${index}`} style={styles.timelineRow}>
                     <span style={styles.timelineIndex}>{index + 1}</span>
-                    <span>{item}</span>
+                    <span>{typeof item === "string" ? item : item.status || item.title || "Bước xử lý"}</span>
                   </div>
                 ))}
               </div>
@@ -385,13 +346,12 @@ export default function ServiceWizard() {
           <div style={styles.mainCol}>
             <div style={styles.card}>
               <SectionTitle icon={FileText} title="Hồ sơ cần nộp" />
-              <p style={styles.helperText}>Hãy chuẩn bị đủ các giấy tờ bắt buộc trước khi nộp. Những mục có nhãn <strong>Bắt buộc</strong> là điều kiện để gửi hồ sơ thành công.</p>
+              <p style={styles.helperText}>Hãy chuẩn bị đủ các giấy tờ bắt buộc trước khi nộp.</p>
               <div style={styles.requirementSummary}>
                 <SummaryChip label="Tổng giấy tờ" value={docs.length} />
                 <SummaryChip label="Bắt buộc" value={requiredDocs.length} />
                 <SummaryChip label="Đã đính kèm" value={completedCount} />
               </div>
-
               <div style={styles.docList}>
                 {docs.length ? docs.map((doc) => {
                   const attached = Boolean(fileItems[doc.key]);
@@ -428,8 +388,6 @@ export default function ServiceWizard() {
             {step === 1 && (
               <div style={styles.card}>
                 <SectionTitle icon={UploadCloud} title="Nộp hồ sơ online" />
-                <p style={styles.helperText}>Điền thông tin cá nhân và tải lên đúng các giấy tờ bắt buộc để hoàn tất hồ sơ một lần.</p>
-
                 <div style={styles.formGrid}>
                   <Input label="Họ tên" name="fullName" value={formData.fullName} onChange={onChange} error={formErrors.fullName} />
                   <Input label="CCCD/CMND" name="citizenId" value={formData.citizenId} onChange={onChange} error={formErrors.citizenId} />
@@ -466,7 +424,7 @@ export default function ServiceWizard() {
                 {formErrors.files ? <div style={styles.error}>{formErrors.files}</div> : null}
                 <div style={styles.actions}>
                   <button type="button" style={styles.primaryBtn} onClick={onSubmit} disabled={submitting}>
-                    {submitting ? "Đang xử lý..." : "Thanh toán"}
+                    {submitting ? "Đang xử lý..." : "Tiếp tục nộp hồ sơ"}
                   </button>
                 </div>
               </div>
@@ -475,28 +433,23 @@ export default function ServiceWizard() {
             {step === 2 && (
               <div style={styles.card}>
                 <SectionTitle icon={CreditCard} title="Thanh toán chuyển khoản" />
-                <p style={styles.helperText}>Quét QR hoặc chuyển khoản theo nội dung bên dưới. Sau khi thanh toán, bấm kiểm tra trạng thái để hệ thống cập nhật tự động.</p>
                 <div style={styles.paymentBox}>
-                  <div style={styles.paymentRow}><span>Mã hồ sơ đang thanh toán</span><strong>{currentDossierId || "Chưa có mã hồ sơ"}</strong></div>
+                  <div style={styles.paymentRow}><span>Mã hồ sơ</span><strong>{currentDossierId || "Chưa có mã hồ sơ"}</strong></div>
                   <div style={styles.paymentRow}><span>Số tiền</span><strong>{currency.format(paymentInfo?.amount || bankPayment?.amount || service?.fee || 0)} VNĐ</strong></div>
-                  <div style={styles.paymentRow}><span>Trạng thái payment</span><strong>{paymentStatusText}</strong></div>
+                  <div style={styles.paymentRow}><span>Trạng thái</span><strong>{paymentStatusLabel}</strong></div>
                   <div style={styles.paymentRow}><span>Số tài khoản</span><strong>{paymentInfo?.bankAccount || bankPayment?.bankAccount || "Đang cập nhật"}</strong></div>
                   <div style={styles.paymentRow}><span>Tên tài khoản</span><strong>{paymentInfo?.bankAccountName || bankPayment?.bankAccountName || "Đang cập nhật"}</strong></div>
                   <div style={styles.paymentRow}><span>Nội dung CK</span><strong style={styles.transferContent}>{paymentInfo?.transferContent || bankPayment?.transferContent || "Chưa có từ backend"}</strong></div>
                 </div>
                 <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-                  <button type="button" style={styles.secondaryBtn} onClick={copyTransferContent} disabled={!paymentInfo?.transferContent && !bankPayment?.transferContent}><Copy size={16} /> Sao chép nội dung</button>
-                  <button type="button" style={styles.secondaryBtn} onClick={checkPaymentStatus} disabled={checkingPayment}><RefreshCw size={16} /> {checkingPayment ? "Đang kiểm tra..." : "Kiểm tra trạng thái thanh toán"}</button>
+                  <button type="button" style={styles.secondaryBtn} onClick={copyTransferContent}><Copy size={16} /> Sao chép nội dung</button>
+                  <button type="button" style={styles.secondaryBtn} onClick={checkPaymentStatus} disabled={checkingPayment}><RefreshCw size={16} /> {checkingPayment ? "Đang kiểm tra..." : "Kiểm tra thanh toán"}</button>
                 </div>
-                {paymentInfo?.qrUrl || bankPayment?.qrUrl ? (
-                  <img src={paymentInfo?.qrUrl || bankPayment?.qrUrl} alt="payment qr" style={styles.qr} />
-                ) : (
-                  <div style={{ marginTop: 12, color: "#64748b" }}>Chưa có QR từ backend.</div>
-                )}
+                {paymentInfo?.qrUrl || bankPayment?.qrUrl ? <img src={paymentInfo?.qrUrl || bankPayment?.qrUrl} alt="payment qr" style={styles.qr} /> : <div style={{ marginTop: 12, color: "#64748b" }}>Chưa có QR từ backend.</div>}
+                {paymentExpireAt ? <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>Hết hạn: {new Date(paymentExpireAt).toLocaleString("vi-VN")}</div> : null}
                 <div style={styles.actions}>
                   <button type="button" style={styles.secondaryBtn} onClick={() => setStep(1)}>Quay lại sửa hồ sơ</button>
                   <button type="button" style={styles.primaryBtn} onClick={checkPaymentStatus} disabled={checkingPayment}>Kiểm tra trạng thái thanh toán</button>
-                  <Link to="/my-applications" style={styles.exitBtn}>Thoát</Link>
                 </div>
                 <button type="button" onClick={onMockPaid} style={{ ...styles.mockBtn, opacity: isPaid ? 0.6 : 1, cursor: isPaid ? "not-allowed" : "pointer" }} disabled={isPaid}>Đánh dấu thanh toán thành công (demo)</button>
               </div>
@@ -506,12 +459,13 @@ export default function ServiceWizard() {
               <div style={styles.card}>
                 <SectionTitle icon={CheckCircle2} title="Hồ sơ đã sẵn sàng xử lý" />
                 <div style={styles.successBox}>
-                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{paymentStatusText}</div>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{paymentStatusLabel}</div>
                   <div>Mã hồ sơ: {currentDossierId || getSubmitDossierId(submitResult) || submitResult?.applicationCode}</div>
                   <div style={{ marginTop: 8, color: "#475569" }}>Hồ sơ đã được ghi nhận. Bạn có thể dùng mã này để tra cứu trạng thái về sau.</div>
                 </div>
                 <div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
                   <Link to="/services" style={styles.linkBtn}>Danh sách dịch vụ</Link>
+                  <Link to="/my-applications" style={styles.linkBtn}>Xem hồ sơ đã nộp</Link>
                   <Link to="/" style={styles.linkBtnSecondary}>Trang chủ</Link>
                 </div>
               </div>
@@ -524,40 +478,19 @@ export default function ServiceWizard() {
 }
 
 function PageShell({ children }) {
-  return (
-    <div style={styles.page}>
-      <div style={{ maxWidth: 960, margin: "0 auto", background: "#fff", padding: 24, borderRadius: 16, border: "1px solid #e2e8f0" }}>
-        {children}
-      </div>
-    </div>
-  );
+  return <div style={styles.page}><div style={{ maxWidth: 960, margin: "0 auto", background: "#fff", padding: 24, borderRadius: 16, border: "1px solid #e2e8f0" }}>{children}</div></div>;
 }
 
 function SectionTitle({ icon: Icon, title }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-      <Icon size={18} color="#1d4ed8" />
-      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: "#0f172a" }}>{title}</h2>
-    </div>
-  );
+  return <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}><Icon size={18} color="#1d4ed8" /><h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: "#0f172a" }}>{title}</h2></div>;
 }
 
 function Meta({ icon: Icon, label }) {
-  return (
-    <div style={styles.meta}>
-      <Icon size={14} />
-      <span>{label}</span>
-    </div>
-  );
+  return <div style={styles.meta}><Icon size={14} /><span>{label}</span></div>;
 }
 
 function SummaryChip({ label, value }) {
-  return (
-    <div style={styles.summaryChip}>
-      <span style={styles.summaryLabel}>{label}</span>
-      <strong style={styles.summaryValue}>{value}</strong>
-    </div>
-  );
+  return <div style={styles.summaryChip}><span style={styles.summaryLabel}>{label}</span><strong style={styles.summaryValue}>{value}</strong></div>;
 }
 
 function Input({ label, name, value, onChange, error, fullWidth = false }) {
@@ -571,12 +504,7 @@ function Input({ label, name, value, onChange, error, fullWidth = false }) {
 }
 
 function Textarea({ label, name, value, onChange }) {
-  return (
-    <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
-      <span style={styles.label}>{label}</span>
-      <textarea name={name} value={value} onChange={onChange} rows={4} style={styles.textarea} />
-    </label>
-  );
+  return <label style={{ ...styles.field, gridColumn: "1 / -1" }}><span style={styles.label}>{label}</span><textarea name={name} value={value} onChange={onChange} rows={4} style={styles.textarea} /></label>;
 }
 
 const styles = {
@@ -641,13 +569,11 @@ const styles = {
   error: { color: "#dc2626", fontSize: 13, fontWeight: 700, marginTop: 6 },
   actions: { display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" },
   primaryBtn: { background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
-  secondaryBtn: { background: "#e2e8f0", color: "#0f172a", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
-  exitBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#fff", color: "#334155", border: "1px solid #cbd5e1", borderRadius: 14, padding: "12px 18px", fontWeight: 800, textDecoration: "none" },
+  secondaryBtn: { background: "#e2e8f0", color: "#0f172a", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 },
   mockBtn: { marginTop: 12, background: "#0f172a", color: "#fff", border: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800, cursor: "pointer" },
   paymentBox: { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 18, padding: 14 },
   paymentRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 0", color: "#334155", alignItems: "flex-start" },
   transferContent: { textAlign: "right", wordBreak: "break-word", maxWidth: 260 },
-  select: { width: "100%", height: 46, borderRadius: 14, border: "1px solid #dbe3ee", padding: "0 14px", marginTop: 8, background: "#fff" },
   qr: { width: "100%", maxWidth: 360, display: "block", margin: "16px auto 0", borderRadius: 20, border: "1px solid #e2e8f0", background: "#fff" },
   successBox: { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", borderRadius: 18, padding: 16, lineHeight: 1.7 },
   linkBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#1d4ed8", color: "#fff", textDecoration: "none", borderRadius: 14, padding: "12px 18px", fontWeight: 800 },

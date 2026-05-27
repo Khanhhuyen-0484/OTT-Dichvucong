@@ -1,124 +1,124 @@
 import React, { useState } from "react";
-import { trackApplication, getApplicationByCode, getApiErrorMessage } from "../lib/api";
-import { Search, FileClock, BadgeCheck, BellRing, Clock3 } from "lucide-react";
+import { Search } from "lucide-react";
+import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
+import GovHeader from "../components/GovHeader.jsx";
+import { getApiErrorMessage, trackApplication } from "../lib/api";
+
+const STATUS_LABELS = {
+  DRAFT: "Lưu nháp",
+  PENDING: "Chờ tiếp nhận",
+  PROCESSING: "Đang xử lý",
+  NEED_MORE: "Yêu cầu bổ sung",
+  SUPPLEMENTED: "Đã bổ sung",
+  COMPLETED: "Đã hoàn thành",
+  REJECTED: "Đã từ chối",
+};
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString("vi-VN") : "-";
+}
 
 export default function TrackApplication() {
   const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
-  const onTrack = async (e) => {
-    e.preventDefault();
+  async function onTrack(event) {
+    event.preventDefault();
     if (!code.trim()) return;
     setLoading(true);
-    setError("");
+    setErr("");
+    setResult(null);
     try {
-      const res = await trackApplication(code.trim());
-      setResult(res.data);
-    } catch (e1) {
-      try {
-        const res = await getApplicationByCode(code.trim());
-        setResult(res.data);
-      } catch (e2) {
-        setError(getApiErrorMessage(e2));
-        setResult(null);
-      }
+      const { data } = await trackApplication(code.trim());
+      setResult(data);
+    } catch (error) {
+      setErr(getApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  const application = result?.application;
+  const timeline = result?.timeline || application?.timeline || application?.history || [];
 
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <div style={styles.hero}>
-          <div style={styles.badge}><FileClock size={14} /> Tra cứu hồ sơ</div>
-          <h1 style={styles.title}>Theo dõi hồ sơ theo mã thật</h1>
-          <p style={styles.desc}>Nhập mã hồ sơ để xem trạng thái xử lý, thanh toán và lịch sử cập nhật.</p>
-          <form onSubmit={onTrack} style={styles.form}>
-            <div style={styles.searchBox}>
-              <Search size={18} color="#64748b" />
-              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ví dụ: HS-20260508-ABC123" style={styles.input} />
+    <div className="min-h-screen bg-slate-50">
+      <GovHeader />
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <BackToDashboardButton variant="soft" className="mb-5" />
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h1 className="text-3xl font-black text-slate-900">Theo dõi hồ sơ</h1>
+          <p className="mt-2 text-sm text-slate-600">Nhập mã hồ sơ để xem trạng thái xử lý, thanh toán và lịch sử cập nhật.</p>
+          <form onSubmit={onTrack} className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ví dụ: HS-20260527-ABCD" className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-4 outline-none focus:border-[#003366]" />
             </div>
-            <button type="submit" disabled={loading} style={styles.button}>{loading ? "Đang tra cứu..." : "Tra cứu"}</button>
+            <button disabled={loading} className="rounded-xl bg-[#003366] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              {loading ? "Đang tra cứu..." : "Tra cứu"}
+            </button>
           </form>
-          {error ? <div style={styles.error}>{error}</div> : null}
-        </div>
+        </section>
 
-        {result ? (
-          <div style={styles.resultGrid}>
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>Thông tin hồ sơ</h2>
-              <InfoRow label="Mã hồ sơ" value={result.application?.applicationCode || code} />
-              <InfoRow label="Dịch vụ" value={result.application?.serviceName || result.application?.serviceId || "-"} />
-              <InfoRow label="Trạng thái" value={result.application?.status || "-"} />
-              <InfoRow label="Thanh toán" value={result.application?.paymentStatus || "-"} />
-              <InfoRow label="Phí" value={new Intl.NumberFormat("vi-VN").format(result.application?.fee || 0) + " VNĐ"} />
-            </div>
+        {err ? <div className="mt-6 rounded-2xl bg-red-50 p-5 text-red-700 ring-1 ring-red-200">{err}</div> : null}
 
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>Tiến trình xử lý</h2>
-              {(result.timeline || []).length ? (result.timeline || []).map((item, idx) => (
-                <div key={idx} style={styles.timelineItem}>
-                  <div style={styles.timelineDot}>{idx + 1}</div>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>{item.status || item.note || "Cập nhật"}</div>
-                    <div style={{ color: "#64748b", fontSize: 13 }}>{item.at ? new Date(item.at).toLocaleString("vi-VN") : ""}</div>
-                  </div>
-                </div>
-              )) : <div style={{ color: "#64748b" }}>Chưa có tiến trình.</div>}
-            </div>
-
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>Thanh toán / Thông báo</h2>
-              <div style={styles.stack}>
-                {(result.payments || []).map((p) => (
-                  <div key={p.paymentId || p.transactionId} style={styles.subCard}>
-                    <div style={{ fontWeight: 800 }}>{p.paymentMethod || "-"}</div>
-                    <div style={{ color: "#64748b", fontSize: 13 }}>{p.transactionId || p.paymentId}</div>
-                    <div style={{ marginTop: 4, fontWeight: 700 }}>{new Intl.NumberFormat("vi-VN").format(p.amount || 0)} VNĐ</div>
-                  </div>
-                ))}
-                {(result.notifications || []).map((n) => (
-                  <div key={n.notificationId} style={styles.subCard}>
-                    <div style={{ fontWeight: 800 }}>{n.title || "Thông báo"}</div>
-                    <div style={{ color: "#64748b", fontSize: 13 }}>{n.message}</div>
-                  </div>
-                ))}
+        {application ? (
+          <div className="mt-6 grid gap-6">
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-black text-slate-900">Thông tin hồ sơ</h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Info label="Mã hồ sơ" value={application.applicationCode || application.dossierCode || application.dossierId || application.id} />
+                <Info label="Dịch vụ" value={application.serviceName} />
+                <Info label="Trạng thái" value={STATUS_LABELS[application.status] || application.status} />
+                <Info label="Ngày nộp" value={formatDate(application.createdAt)} />
+                <Info label="Thanh toán" value={application.paymentStatus || "-"} />
+                <Info label="Lệ phí" value={`${new Intl.NumberFormat("vi-VN").format(application.fee || 0)} VNĐ`} />
               </div>
-            </div>
+            </section>
+
+            {Array.isArray(result.notifications) && result.notifications.length ? (
+              <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6">
+                <h2 className="text-lg font-black text-amber-900">Thông báo</h2>
+                <div className="mt-3 grid gap-3">
+                  {result.notifications.map((item) => (
+                    <div key={item.notificationId || item.id} className="rounded-xl bg-white p-4 text-sm ring-1 ring-amber-100">
+                      <div className="font-bold text-amber-900">{item.title}</div>
+                      <div className="mt-1 text-amber-800">{item.message}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-black text-slate-900">Timeline xử lý</h2>
+              <div className="mt-4 space-y-3">
+                {timeline.length ? timeline.map((item, idx) => (
+                  <div key={`${item.createdAt || idx}`} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="rounded-full bg-slate-100 px-2 py-1 font-bold">{STATUS_LABELS[item.status] || item.status}</span>
+                      <span className="font-semibold">{item.action || "Cập nhật"}</span>
+                      <span className="text-slate-500">{formatDate(item.createdAt)}</span>
+                    </div>
+                    <div className="mt-2 text-sm text-slate-700">{item.note || "-"}</div>
+                  </div>
+                )) : <div className="text-sm text-slate-500">Chưa có lịch sử xử lý.</div>}
+              </div>
+            </section>
           </div>
         ) : null}
-      </div>
+      </main>
     </div>
   );
 }
 
-function InfoRow({ label, value }) {
-  return <div style={styles.infoRow}><span style={styles.infoLabel}>{label}</span><span style={styles.infoValue}>{value}</span></div>;
+function Info({ label, value }) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100">
+      <div className="text-xs font-bold uppercase text-slate-500">{label}</div>
+      <div className="mt-1 font-semibold text-slate-900">{value || "-"}</div>
+    </div>
+  );
 }
-
-const styles = {
-  page: { minHeight: "100vh", background: "linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%)", padding: 24 },
-  container: { maxWidth: 1100, margin: "0 auto" },
-  hero: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 24, padding: 24, boxShadow: "0 10px 30px rgba(15,23,42,.05)", marginBottom: 16 },
-  badge: { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 800 },
-  title: { margin: "12px 0 8px", fontSize: 32, fontWeight: 900, color: "#0f172a" },
-  desc: { margin: 0, color: "#475569" },
-  form: { display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginTop: 16 },
-  searchBox: { display: "flex", alignItems: "center", gap: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 16, padding: "0 14px" },
-  input: { width: "100%", height: 52, border: "none", outline: "none", background: "transparent", fontSize: 14 },
-  button: { border: "none", borderRadius: 16, padding: "0 18px", background: "#1d4ed8", color: "#fff", fontWeight: 800, cursor: "pointer" },
-  error: { marginTop: 12, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 14, fontWeight: 700 },
-  resultGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 },
-  card: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 24, padding: 20, boxShadow: "0 8px 24px rgba(15,23,42,.04)" },
-  cardTitle: { marginTop: 0, marginBottom: 16, fontSize: 18, fontWeight: 900, color: "#0f172a" },
-  infoRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: "1px solid #eef2f7" },
-  infoLabel: { color: "#64748b", fontWeight: 700 },
-  infoValue: { color: "#0f172a", fontWeight: 800, textAlign: "right" },
-  timelineItem: { display: "flex", gap: 10, marginBottom: 12, alignItems: "flex-start" },
-  timelineDot: { width: 26, height: 26, borderRadius: 999, background: "#1d4ed8", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 },
-  stack: { display: "grid", gap: 12 },
-  subCard: { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 16, padding: 14 }
-};

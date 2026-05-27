@@ -2,125 +2,125 @@
   {
     "serviceId": "ho-tich-khai-sinh",
     "id": "ho-tich-khai-sinh",
-    "name": "Đăng ký khai sinh",
-    "description": "Tiếp nhận, xử lý và trả kết quả đăng ký khai sinh trực tuyến cho công dân.",
+    "name": "??fng k? khai sinh",
+    "description": "Ti?p nh?n, x? l? v? tr? k?t qu? ?'?fng k? khai sinh tr?c tuy?n cho c?ng d?n.",
     "categoryId": "ho-tich",
-    "categoryName": "Hộ tịch",
-    "processingTime": "3 ngày làm việc",
+    "categoryName": "H?T t?<ch",
+    "processingTime": "3 ng?y l?m vi??c",
     "fee": 0,
     "documents": [
-      { "key": "birthCert", "label": "Giấy chứng sinh", "required": true },
-      { "key": "idCard", "label": "CCCD/CMND người nộp", "required": true },
-      { "key": "marriageCert", "label": "Giấy đăng ký kết hôn (nếu có)", "required": false }
+      { "key": "birthCert", "label": "Gi?y ch?ng sinh", "required": true },
+      { "key": "idCard", "label": "CCCD/CMND ngu?i n?Tp", "required": true },
+      { "key": "marriageCert", "label": "Gi?y ?'?fng k? k?t h?n (n?u c?)", "required": false }
     ],
-    "timeline": ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"],
+    "timeline": ["Ti?p nh?n h?" so", "Ki?fm tra t?nh h?p l??", "X? l? chuy?n vi?n", "Ph? duy??t / b?. sung", "Tr? k?t qu?"],
     "faq": [
-      { "q": "Có thể nộp online không?", "a": "Có, bạn có thể kê khai và đính kèm hồ sơ ngay trên cổng." },
-      { "q": "Hồ sơ thiếu giấy tờ thì sao?", "a": "Hệ thống sẽ yêu cầu bổ sung ngay trong bước kiểm tra." }
+      { "q": "C? th?f n?Tp online kh?ng?", "a": "C?, b?n c? th?f k? khai v? ?'?nh k?m h?" so ngay tr?n c?.ng." },
+      { "q": "H?" so thi?u gi?y t? th? sao?", "a": "H?? th?'ng s? y?u c?u b?. sung ngay trong bu?>c ki?fm tra." }
     ],
     "active": true
   },
   {
     "serviceId": "dat-dai-bien-dong",
     "id": "dat-dai-bien-dong",
-    "name": "Đăng ký biến động đất đai",
-    "description": "Tiếp nhận hồ sơ thay đổi, sang tên hoặc cập nhật thông tin quyền sử dụng đất.",
+    "name": "??fng k? bi?n ?'?Tng ?'?t ?'ai",
+    "description": "Ti?p nh?n h?" so thay ?'?.i, sang t?n ho?c c?p nh?t th?ng tin quy?n s? d?ng ?'?t.",
     "categoryId": "dat-dai",
-    "categoryName": "Đất đai",
-    "processingTime": "5 ngày làm việc",
+    "categoryName": "??t ?'ai",
+    "processingTime": "5 ng?y l?m vi??c",
     "fee": 20000,
     "documents": [
-      { "key": "landCert", "label": "Giấy chứng nhận quyền sử dụng đất", "required": true },
-      { "key": "mutationForm", "label": "Đơn đăng ký biến động", "required": true },
+      { "key": "landCert", "label": "Gi?y ch?ng nh?n quy?n s? d?ng ?'?t", "required": true },
+      { "key": "mutationForm", "label": "?on ?'?fng k? bi?n ?'?Tng", "required": true },
       { "key": "idCard", "label": "CCCD/CMND", "required": true }
     ],
-    "timeline": ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"],
+    "timeline": ["Ti?p nh?n h?" so", "Ki?fm tra t?nh h?p l??", "X? l? chuy?n vi?n", "Ph? duy??t / b?. sung", "Tr? k?t qu?"],
     "faq": [
-      { "q": "Cần bản gốc hay bản sao?", "a": "Tùy thủ tục cụ thể, hệ thống sẽ hiển thị yêu cầu khi nộp." },
-      { "q": "Có theo dõi tiến độ không?", "a": "Có, bạn tra cứu bằng mã hồ sơ đã được cấp." }
+      { "q": "C?n b?n g?'c hay b?n sao?", "a": "T?y th? t?c c? th?f, h?? th?'ng s? hi?fn th?< y?u c?u khi n?Tp." },
+      { "q": "C? theo d?i ti?n ?'?T kh?ng?", "a": "C?, b?n tra c?u b?ng m? h?" so ?'? ?'u?c c?p." }
     ],
     "active": true
   },
   {
     "serviceId": "xay-dung-cap-phep",
     "id": "xay-dung-cap-phep",
-    "name": "Xin cấp phép xây dựng",
-    "description": "Nộp hồ sơ đề nghị cấp phép xây dựng và theo dõi trạng thái xử lý.",
+    "name": "Xin c?p ph?p x?y d?ng",
+    "description": "N?Tp h?" so ?'? ngh?< c?p ph?p x?y d?ng v? theo d?i tr?ng th?i x? l?.",
     "categoryId": "xay-dung",
-    "categoryName": "Xây dựng",
-    "processingTime": "7 ngày làm việc",
+    "categoryName": "X?y d?ng",
+    "processingTime": "7 ng?y l?m vi??c",
     "fee": 50000,
     "documents": [
-      { "key": "landCert", "label": "Giấy tờ quyền sử dụng đất", "required": true },
-      { "key": "design", "label": "Bản vẽ thiết kế", "required": true },
+      { "key": "landCert", "label": "Gi?y t? quy?n s? d?ng ?'?t", "required": true },
+      { "key": "design", "label": "B?n v? thi?t k?", "required": true },
       { "key": "idCard", "label": "CCCD/CMND", "required": true }
     ],
-    "timeline": ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"],
+    "timeline": ["Ti?p nh?n h?" so", "Ki?fm tra t?nh h?p l??", "X? l? chuy?n vi?n", "Ph? duy??t / b?. sung", "Tr? k?t qu?"],
     "faq": [
-      { "q": "Có cần bản vẽ kỹ thuật không?", "a": "Có, đây là tài liệu bắt buộc trong hồ sơ." },
-      { "q": "Thanh toán ở đâu?", "a": "Bạn thanh toán trực tuyến ngay trong quy trình nộp hồ sơ." }
+      { "q": "C? c?n b?n v? k? thu?t kh?ng?", "a": "C?, ?'?y l? t?i li??u b?t bu?Tc trong h?" so." },
+      { "q": "Thanh to?n ?Y ?'?u?", "a": "B?n thanh to?n tr?c tuy?n ngay trong quy tr?nh n?Tp h?" so." }
     ],
     "active": true
   },
   {
     "serviceId": "gplx-doi",
     "id": "gplx-doi",
-    "name": "Đổi giấy phép lái xe",
-    "description": "Tiếp nhận hồ sơ đổi giấy phép lái xe theo quy trình điện tử.",
+    "name": "??.i gi?y ph?p l?i xe",
+    "description": "Ti?p nh?n h?" so ?'?.i gi?y ph?p l?i xe theo quy tr?nh ?'i??n t?.",
     "categoryId": "giao-thong",
-    "categoryName": "Giao thông",
-    "processingTime": "4 ngày làm việc",
+    "categoryName": "Giao th?ng",
+    "processingTime": "4 ng?y l?m vi??c",
     "fee": 150000,
     "documents": [
-      { "key": "oldLicense", "label": "Giấy phép lái xe cũ", "required": true },
-      { "key": "health", "label": "Giấy khám sức khỏe", "required": true },
+      { "key": "oldLicense", "label": "Gi?y ph?p l?i xe cu", "required": true },
+      { "key": "health", "label": "Gi?y kh?m s?c kh?e", "required": true },
       { "key": "idCard", "label": "CCCD/CMND", "required": true }
     ],
-    "timeline": ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"],
+    "timeline": ["Ti?p nh?n h?" so", "Ki?fm tra t?nh h?p l??", "X? l? chuy?n vi?n", "Ph? duy??t / b?. sung", "Tr? k?t qu?"],
     "faq": [
-      { "q": "Có nộp online được không?", "a": "Có, bạn có thể tạo hồ sơ, tải file và theo dõi trực tuyến." },
-      { "q": "Phải khám sức khỏe ở đâu?", "a": "Theo quy định của cơ quan có thẩm quyền." }
+      { "q": "C? n?Tp online ?'u?c kh?ng?", "a": "C?, b?n c? th?f t?o h?" so, t?i file v? theo d?i tr?c tuy?n." },
+      { "q": "Ph?i kh?m s?c kh?e ?Y ?'?u?", "a": "Theo quy ?'?<nh c?a co quan c? th?m quy?n." }
     ],
     "active": true
   },
   {
     "serviceId": "ho-chieu-pho-thong",
     "id": "ho-chieu-pho-thong",
-    "name": "Cấp hộ chiếu phổ thông",
-    "description": "Tiếp nhận hồ sơ cấp hộ chiếu phổ thông cho công dân đủ điều kiện.",
+    "name": "C?p h?T chi?u ph?. th?ng",
+    "description": "Ti?p nh?n h?" so c?p h?T chi?u ph?. th?ng cho c?ng d?n ?'? ?'i?u ki??n.",
     "categoryId": "ho-chieu",
-    "categoryName": "Hộ chiếu",
-    "processingTime": "8 ngày làm việc",
+    "categoryName": "H?T chi?u",
+    "processingTime": "8 ng?y l?m vi??c",
     "fee": 200000,
     "documents": [
-      { "key": "photo", "label": "Ảnh chân dung", "required": true },
+      { "key": "photo", "label": "?nh ch?n dung", "required": true },
       { "key": "idCard", "label": "CCCD/CMND", "required": true }
     ],
-    "timeline": ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"],
+    "timeline": ["Ti?p nh?n h?" so", "Ki?fm tra t?nh h?p l??", "X? l? chuy?n vi?n", "Ph? duy??t / b?. sung", "Tr? k?t qu?"],
     "faq": [
-      { "q": "Có thể nhận hộ chiếu qua bưu điện không?", "a": "Tùy phương án xử lý của cơ quan tiếp nhận." },
-      { "q": "Mất bao lâu có kết quả?", "a": "Theo thời gian giải quyết được công bố cho từng hồ sơ." }
+      { "q": "C? th?f nh?n h?T chi?u qua buu ?'i??n kh?ng?", "a": "T?y phuong ?n x? l? c?a co quan ti?p nh?n." },
+      { "q": "M?t bao l?u c? k?t qu??", "a": "Theo th?i gian gi?i quy?t ?'u?c c?ng b?' cho t?ng h?" so." }
     ],
     "active": true
   },
   {
     "serviceId": "doanh-nghiep-thanh-lap",
     "id": "doanh-nghiep-thanh-lap",
-    "name": "Đăng ký thành lập doanh nghiệp",
-    "description": "Nộp hồ sơ đăng ký doanh nghiệp và theo dõi tiến trình xử lý.",
+    "name": "??fng k? th?nh l?p doanh nghi??p",
+    "description": "N?Tp h?" so ?'?fng k? doanh nghi??p v? theo d?i ti?n tr?nh x? l?.",
     "categoryId": "doanh-nghiep",
-    "categoryName": "Doanh nghiệp",
-    "processingTime": "3-5 ngày làm việc",
+    "categoryName": "Doanh nghi??p",
+    "processingTime": "3-5 ng?y l?m vi??c",
     "fee": 100000,
     "documents": [
-      { "key": "charter", "label": "Điều lệ công ty", "required": true },
-      { "key": "memberList", "label": "Danh sách thành viên/cổ đông", "required": true },
-      { "key": "idCard", "label": "CCCD/CMND người đại diện", "required": true }
+      { "key": "charter", "label": "?i?u l?? c?ng ty", "required": true },
+      { "key": "memberList", "label": "Danh s?ch th?nh vi?n/c?. ?'?ng", "required": true },
+      { "key": "idCard", "label": "CCCD/CMND ngu?i ?'?i di??n", "required": true }
     ],
-    "timeline": ["Tiếp nhận hồ sơ", "Kiểm tra tính hợp lệ", "Xử lý chuyên viên", "Phê duyệt / bổ sung", "Trả kết quả"],
+    "timeline": ["Ti?p nh?n h?" so", "Ki?fm tra t?nh h?p l??", "X? l? chuy?n vi?n", "Ph? duy??t / b?. sung", "Tr? k?t qu?"],
     "faq": [
-      { "q": "Có thể đăng ký online không?", "a": "Có, toàn bộ quy trình được thực hiện trên cổng." },
-      { "q": "Sau bao lâu có mã hồ sơ?", "a": "Ngay sau khi nộp thành công hệ thống sẽ cấp mã hồ sơ." }
+      { "q": "C? th?f ?'?fng k? online kh?ng?", "a": "C?, to?n b?T quy tr?nh ?'u?c th?c hi??n tr?n c?.ng." },
+      { "q": "Sau bao l?u c? m? h?" so?", "a": "Ngay sau khi n?Tp th?nh c?ng h?? th?'ng s? c?p m? h?" so." }
     ],
     "active": true
   }

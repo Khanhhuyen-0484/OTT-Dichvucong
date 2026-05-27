@@ -4,12 +4,12 @@ const { getDynamoClient } = require("../config/dynamoClient");
 const TABLE_NAME = process.env.DYNAMODB_SERVICE_CATEGORIES_TABLE || process.env.SERVICE_CATEGORIES_TABLE || "ServiceCategories";
 
 const DEFAULT_CATEGORY_NAMES = [
-  "Hộ tịch",
-  "Đất đai",
-  "Xây dựng",
-  "Doanh nghiệp",
-  "Giao thông vận tải",
-  "Giáo dục",
+  "Hộ Tịch",
+  "Đất Đai",
+  "Xây Dựng",
+  "Doanh Nghiệp",
+  "Giao Thông Vận Tải",
+  "Giáo Dục",
   "Y tế",
   "Lao động - Thương binh và Xã hội",
   "Thuế - Tài chính",

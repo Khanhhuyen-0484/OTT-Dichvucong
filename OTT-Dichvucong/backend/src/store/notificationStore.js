@@ -25,7 +25,7 @@ function normalizeNotification(item) {
 async function createNotification(item) {
   const client = getDynamoClient();
   const next = normalizeNotification(item);
-  if (!next) throw new Error("Thông báo không hợp lệ");
+  if (!next) throw new Error("Th?ng b?o kh?ng h?p l??");
   await client.send(new PutCommand({ TableName: tableName, Item: next }));
   return next;
 }

@@ -20,7 +20,7 @@ const MENU_ITEMS = [
   { id: "friends", label: "Danh sách bạn bè", icon: ContactRound },
   { id: "groups", label: "Danh sách nhóm và cộng đồng", icon: Users },
   { id: "requests", label: "Lời mời kết bạn", icon: UserRoundPlus },
-  { id: "groupInvites", label: "Lời mời vào nhóm và cộng đồng", icon: BadgePlus }
+  { id: "groupInvites", label: "Lời mời vào nhóm", icon: BadgePlus }
 ];
 
 function Avatar({ item, size = "h-14 w-14" }) {
@@ -46,7 +46,7 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
   const isIncoming = type === "incoming";
   const badgeLabel = isIncoming ? "Lời mời mới" : "Đã gửi";
   const helperText = isIncoming
-    ? "Họ đang chờ phản hồi để bắt đầu trò chuyện với bạn."
+    ? "Họ đang chờ phản hồi từ bạn để bắt đầu trò chuyện." 
     : "Bạn có thể thu hồi lời mời nếu chưa muốn kết nối lúc này.";
 
   return (
@@ -64,12 +64,12 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
               {badgeLabel}
             </span>
           </div>
-          <div className="mt-1 truncate text-sm text-slate-500">{item.phone || item.email || "Người dùng hệ thống"}</div>
+          <div className="mt-1 truncate text-sm text-slate-500">{item.phone || item.email || "Ngu?i d�ng h?? th?'ng"}</div>
         </div>
       </div>
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-700">
         {isIncoming
-          ? `Xin chào, ${item.fullName} muốn kết bạn và trao đổi cùng bạn.`
+          ? `Xin chào, ${item.fullName} muốn kết bạn và trò chuyện với bạn.`
           : `Bạn đã gửi lời mời kết bạn tới ${item.fullName}.`}
       </div>
       <div className="mt-3 text-sm text-slate-500">{helperText}</div>
@@ -80,7 +80,7 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
             disabled={loading}
             onClick={() => onDecline(item.id)}
             className="rounded-2xl bg-slate-100 px-4 py-3 text-base font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
-          >
+            >
             Từ chối
           </button>
           <button
@@ -88,8 +88,8 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
             disabled={loading}
             onClick={() => onAccept(item.id)}
             className="rounded-2xl bg-[#dceaff] px-4 py-3 text-base font-bold text-[#0d5bd7] hover:bg-[#cfe1ff] disabled:opacity-60"
-          >
-            Đồng ý
+            >
+            Chấp nhận
           </button>
         </div>
       ) : (
@@ -108,7 +108,7 @@ function RequestCard({ item, type, loading, onAccept, onDecline, onRevoke }) {
 
 function SuggestionCard({ item, loading, onAdd, onDismiss }) {
   const helperText = item.phone
-    ? "Có số điện thoại để bạn xác minh nhanh."
+    ? "Có số điện thoại để bạn xác minh nhanh." 
     : item.email
       ? "Có email để bạn dễ nhận diện tài khoản."
       : "Tài khoản đang hoạt động trên hệ thống.";
@@ -119,7 +119,7 @@ function SuggestionCard({ item, loading, onAdd, onDismiss }) {
         <div className="min-w-0 flex-1">
           <div className="truncate text-2xl font-black tracking-tight text-slate-900">{item.fullName}</div>
           <div className="mt-1 truncate text-sm text-slate-500">
-            {item.phone || item.email || "Tài khoản đang hoạt động trên hệ thống"}
+            {item.phone || item.email || "T�i kho?n ?'ang ho?t ?'?Tng tr?n h?? th?'ng"}
           </div>
         </div>
       </div>
@@ -134,7 +134,7 @@ function SuggestionCard({ item, loading, onAdd, onDismiss }) {
           onClick={() => onDismiss(item.id)}
           className="rounded-2xl bg-slate-100 px-4 py-3 text-lg font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
         >
-          Bỏ qua
+          B? qua
         </button>
         <button
           type="button"
@@ -142,7 +142,7 @@ function SuggestionCard({ item, loading, onAdd, onDismiss }) {
           onClick={() => onAdd(item.id)}
           className="rounded-2xl bg-[#dceaff] px-4 py-3 text-lg font-bold text-[#0d5bd7] hover:bg-[#cfe1ff] disabled:opacity-60"
         >
-          Kết bạn
+          K?t b?n
         </button>
       </div>
     </div>
@@ -198,11 +198,11 @@ function ProfileModal({ item, onClose, onOpenChat }) {
           <div className="min-w-0">
             <div className="truncate text-2xl font-black tracking-tight text-slate-900">{item.fullName}</div>
             <div className="mt-1 text-sm text-slate-500">{item.phone || "Chưa cập nhật số điện thoại"}</div>
-            <div className="text-sm text-slate-500">{item.email || "Chưa cập nhật email"}</div>
+            <div className="text-sm text-slate-500">{item.email || "Chua c?p nh?t email"}</div>
           </div>
         </div>
         <div className="mt-6 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-          <div>Vai trò: Công dân / người dùng hệ thống</div>
+          <div>Vai trò: Công dân / Người dùng hệ thống</div>
           <div>Kênh liên hệ ưu tiên: {item.phone ? "Số điện thoại" : item.email ? "Email" : "Chưa có"}</div>
         </div>
         <button
@@ -210,7 +210,7 @@ function ProfileModal({ item, onClose, onOpenChat }) {
           onClick={() => onOpenChat(item.id)}
           className="mt-6 w-full rounded-2xl bg-[#0d5bd7] px-4 py-3 text-base font-bold text-white hover:bg-[#0a4db8]"
         >
-          Nhắn tin
+          Nh�n tin
         </button>
       </div>
     </div>
@@ -253,8 +253,8 @@ function BlockedFriendsModal({ open, users, loading, onClose, onUnblock }) {
       <div className="flex h-[min(80vh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.25)]">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <div className="text-3xl font-black tracking-tight text-slate-900">Danh sách đã chặn</div>
-            <div className="mt-1 text-sm text-slate-500">Quản lý những người dùng bạn không muốn nhận liên hệ.</div>
+            <div className="text-3xl font-black tracking-tight text-slate-900">Danh s?ch ?'? ch�n</div>
+            <div className="mt-1 text-sm text-slate-500">Qu?n l? nh�ng ngu?i d�ng b?n kh�ng mu?'n nh�n li�n h??.</div>
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
             <X className="h-6 w-6" />
@@ -268,7 +268,7 @@ function BlockedFriendsModal({ open, users, loading, onClose, onUnblock }) {
                   <Avatar item={user} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-lg font-bold text-slate-900">{user.fullName}</div>
-                    <div className="truncate text-sm text-slate-500">{user.phone || user.email || "Người dùng hệ thống"}</div>
+                    <div className="truncate text-sm text-slate-500">{user.phone || user.email || "Ngu?i d�ng h?? th?'ng"}</div>
                   </div>
                   <button
                     type="button"
@@ -276,13 +276,13 @@ function BlockedFriendsModal({ open, users, loading, onClose, onUnblock }) {
                     onClick={() => onUnblock(user.id)}
                     className="rounded-2xl bg-[#eef4ff] px-4 py-2.5 text-sm font-bold text-[#0d5bd7] hover:bg-[#e0ecff] disabled:opacity-60"
                   >
-                    Bỏ chặn
+                    B? ch�n
                   </button>
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyPanel title="Chưa chặn ai" description="Khi bạn chặn một người dùng, họ sẽ xuất hiện ở đây để bạn có thể bỏ chặn sau." />
+            <EmptyPanel title="Chua ch�n ai" description="Khi b?n ch�n m?Tt ngu?i d�ng, h? s? xu?t hi??n ?Y ?'?y ?'?f b?n c? th?f b? ch�n sau." />
           )}
         </div>
       </div>
@@ -307,8 +307,8 @@ function InviteMembersModal({ open, room, friends, loading, onClose, onSubmit })
       <div className="flex h-[min(82vh,780px)] w-full max-w-2xl flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.25)]">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <div className="text-3xl font-black tracking-tight text-slate-900">Mời vào nhóm</div>
-            <div className="mt-1 text-sm text-slate-500">{room.name || "Nhóm chat"}</div>
+            <div className="text-3xl font-black tracking-tight text-slate-900">M?i v?o nh?m</div>
+            <div className="mt-1 text-sm text-slate-500">{room.name || "Nh?m chat"}</div>
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
             <X className="h-6 w-6" />
@@ -350,8 +350,8 @@ function InviteMembersModal({ open, room, friends, loading, onClose, onSubmit })
             </div>
           ) : (
             <EmptyPanel
-              title="Không còn ai để mời"
-              description="Tất cả bạn bè phù hợp đã ở trong nhóm hoặc đang chờ phản hồi lời mời."
+              title="Không có ai để mời"
+              description="Tất cả bạn bè phù hợp đều đã có trong nhóm hoặc đang chờ phản hồi lời mời." 
             />
           )}
         </div>
@@ -383,14 +383,14 @@ function GroupInviteCard({ room, currentUserId, loading, onAccept, onDecline }) 
           {(room.name || "N").slice(0, 2).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-2xl font-black tracking-tight text-slate-900">{room.name || "Nhóm chat"}</div>
+          <div className="truncate text-2xl font-black tracking-tight text-slate-900">{room.name || "Nh?m chat"}</div>
           <div className="mt-1 text-sm text-slate-500">
-            {inviter ? `Mời bởi ${inviter.fullName}` : "Lời mời vào nhóm"} • {room.members?.length || 0} thành viên
+            {inviter ? `M?i b?Yi ${inviter.fullName}` : "L?i m?i v?o nh?m"} ??? {room.members?.length || 0} th�nh vi?n
           </div>
         </div>
       </div>
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-700">
-        Bạn vừa được mời tham gia nhóm/cộng đồng này. Hãy đồng ý để bắt đầu trò chuyện cùng mọi người.
+        B?n v?a ?'u?c m?i tham gia nh?m/c?Tng ?'?"ng n?y. H?y ?'?"ng ? ?'?f b?t ?'?u tr? chuy??n c�ng m?i ngu?i.
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button
@@ -399,7 +399,7 @@ function GroupInviteCard({ room, currentUserId, loading, onAccept, onDecline }) 
           onClick={() => onDecline(room.id)}
           className="rounded-2xl bg-slate-100 px-4 py-3 text-lg font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
         >
-          Từ chối
+          T? ch?'i
         </button>
         <button
           type="button"
@@ -407,7 +407,7 @@ function GroupInviteCard({ room, currentUserId, loading, onAccept, onDecline }) 
           onClick={() => onAccept(room.id)}
           className="rounded-2xl bg-[#dceaff] px-4 py-3 text-lg font-bold text-[#0d5bd7] hover:bg-[#cfe1ff] disabled:opacity-60"
         >
-          Đồng ý
+          ??"ng ?
         </button>
       </div>
     </div>
@@ -520,7 +520,7 @@ export default function FriendHubModal({
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Tìm kiếm"
+                    placeholder="T?m ki?m"
                     className="w-full bg-transparent text-base outline-none placeholder:text-slate-400"
                   />
                 </div>
@@ -529,7 +529,7 @@ export default function FriendHubModal({
                 type="button"
                 onClick={onOpenAddFriend}
                 className="rounded-2xl p-3 text-[#0d5bd7] transition hover:bg-[#eef4ff]"
-                title="Thêm bạn"
+                title="Th?m b?n"
               >
                 <UserPlus className="h-7 w-7" />
               </button>
@@ -537,7 +537,7 @@ export default function FriendHubModal({
                 type="button"
                 onClick={onClose}
                 className="rounded-2xl p-3 text-slate-500 transition hover:bg-slate-100"
-                title="Đóng"
+                title="??ng"
               >
                 <X className="h-7 w-7" />
               </button>
@@ -579,19 +579,19 @@ export default function FriendHubModal({
             {activeMenu === "friends" ? (
               <div>
                 <div className="border-b border-slate-200 bg-white px-8 py-7">
-                  <div className="text-4xl font-black tracking-tight text-slate-900">Danh sách bạn bè</div>
+                  <div className="text-4xl font-black tracking-tight text-slate-900">Danh s?ch b?n b?</div>
                 </div>
                 <div className="px-8 py-6">
                   <div className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/80">
                     <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="text-2xl font-black tracking-tight text-slate-900">Bạn bè ({friends.length})</div>
+                      <div className="text-2xl font-black tracking-tight text-slate-900">B?n b? ({friends.length})</div>
                       <div className="flex flex-col gap-3 lg:flex-row">
                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
                           <Search className="h-5 w-5 text-slate-400" />
                           <input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Tìm bạn"
+                            placeholder="T?m b?n"
                             className="w-full min-w-[220px] bg-transparent text-base outline-none placeholder:text-slate-400"
                           />
                         </div>
@@ -601,7 +601,7 @@ export default function FriendHubModal({
                           className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-700"
                         >
                           <ArrowUpDown className="h-5 w-5" />
-                          {sortMode === "az" ? "Tên (A-Z)" : "Tên (Z-A)"}
+                          {sortMode === "az" ? "T?n (A-Z)" : "T?n (Z-A)"}
                         </button>
                         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-700">
                           <Filter className="h-5 w-5" />
@@ -612,7 +612,7 @@ export default function FriendHubModal({
                           >
                             {availableLetters.map((letter) => (
                               <option key={letter} value={letter}>
-                                {letter === "all" ? "Tất cả" : letter}
+                                {letter === "all" ? "T?t c?" : letter}
                               </option>
                             ))}
                           </select>
@@ -622,7 +622,7 @@ export default function FriendHubModal({
                           onClick={() => setShowBlockedModal(true)}
                           className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-700"
                         >
-                          Đã chặn ({blockedFriends.length})
+                          ?? ch�n ({blockedFriends.length})
                         </button>
                       </div>
                     </div>
@@ -645,7 +645,7 @@ export default function FriendHubModal({
                                         {item.fullName}
                                       </div>
                                       <div className="truncate text-sm text-slate-500">
-                                        {item.phone || item.email || "Bạn bè trong hệ thống"}
+                                        {item.phone || item.email || "B?n b? trong h?? th?'ng"}
                                       </div>
                                     </div>
                                   </div>
@@ -655,7 +655,7 @@ export default function FriendHubModal({
                                       onClick={() => onOpenChat(item.id)}
                                       className="rounded-xl bg-[#0d5bd7] px-3 py-2 text-xs font-bold text-white hover:bg-[#0a4db8]"
                                     >
-                                      Nhắn tin
+                                      Nh�n tin
                                     </button>
                                     <div className="relative">
                                       <button
@@ -675,9 +675,9 @@ export default function FriendHubModal({
                                           onRemove={() => {
                                             setOpenMenuId(null);
                                             setConfirmState({
-                                              title: "Xóa bạn",
-                                              description: `Bạn có chắc muốn xóa ${item.fullName} khỏi danh sách bạn bè không?`,
-                                              confirmLabel: "Xóa bạn",
+                                              title: "X?a b?n",
+                                              description: `B?n c? ch?c mu?'n x?a ${item.fullName} kh?i danh s?ch b?n b? kh�ng?`,
+                                              confirmLabel: "X?a b?n",
                                               tone: "danger",
                                               onConfirm: async () => {
                                                 await onRemoveFriend(item.id);
@@ -688,9 +688,9 @@ export default function FriendHubModal({
                                           onBlock={() => {
                                             setOpenMenuId(null);
                                             setConfirmState({
-                                              title: "Chặn người dùng",
-                                              description: `Sau khi chặn, ${item.fullName} sẽ bị gỡ khỏi danh bạ và không thể kết bạn lại cho tới khi bạn bỏ chặn.`,
-                                              confirmLabel: "Chặn",
+                                              title: "Ch�n ngu?i d�ng",
+                                              description: `Sau khi ch�n, ${item.fullName} s? b?< g? kh?i danh b? v? kh�ng th?f k�t b?n l�i cho t?>i khi b?n b? ch�n.`,
+                                              confirmLabel: "Ch�n",
                                               tone: "danger",
                                               onConfirm: async () => {
                                                 await onBlockFriend(item.id);
@@ -709,8 +709,8 @@ export default function FriendHubModal({
                         ))
                       ) : (
                         <EmptyPanel
-                          title="Chưa có bạn phù hợp"
-                          description="Hãy thử đổi từ khóa tìm kiếm hoặc kết bạn thêm để danh sách phong phú hơn."
+                          title="Chua c? b?n ph? h�p"
+                          description="H?y th? ?'?.i t? kh?a t?m ki?m ho?c k�t b?n th?m ?'?f danh s?ch phong ph? hon."
                         />
                       )}
                     </div>
@@ -722,11 +722,11 @@ export default function FriendHubModal({
             {activeMenu === "groups" ? (
               <div>
                 <div className="border-b border-slate-200 bg-white px-8 py-7">
-                  <div className="text-4xl font-black tracking-tight text-slate-900">Danh sách nhóm và cộng đồng</div>
+                  <div className="text-4xl font-black tracking-tight text-slate-900">Danh s?ch nh?m v? c?Tng ?'?"ng</div>
                 </div>
                 <div className="px-8 py-6">
                   <div className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/80">
-                    <div className="mb-6 text-2xl font-black tracking-tight text-slate-900">Nhóm chat ({groups.length})</div>
+                    <div className="mb-6 text-2xl font-black tracking-tight text-slate-900">Nh?m chat ({groups.length})</div>
                     <div className="grid gap-4 xl:grid-cols-2">
                       {filteredGroups.length ? (
                         filteredGroups.map((group) => (
@@ -743,9 +743,9 @@ export default function FriendHubModal({
                                 {(group.name || "N").slice(0, 2).toUpperCase()}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="truncate text-xl font-black tracking-tight text-slate-900">{group.name || "Nhóm chat"}</div>
+                                <div className="truncate text-xl font-black tracking-tight text-slate-900">{group.name || "Nh?m chat"}</div>
                                 <div className="mt-1 text-sm text-slate-500">
-                                  {group.members?.length || 0} thành viên
+                                  {group.members?.length || 0} th�nh vi?n
                                 </div>
                               </div>
                             </button>
@@ -754,14 +754,14 @@ export default function FriendHubModal({
                               onClick={() => setInviteRoom(group)}
                               className="mt-4 rounded-2xl bg-[#eef4ff] px-4 py-2.5 text-sm font-bold text-[#0d5bd7] hover:bg-[#e0ecff]"
                             >
-                              Mời bạn
+                              M?i b?n
                             </button>
                           </div>
                         ))
                       ) : (
                         <EmptyPanel
                           title="Chưa có nhóm phù hợp"
-                          description="Khi bạn tham gia nhóm chat, danh sách sẽ hiện ở đây để quản lý giống các ứng dụng nhắn tin thật."
+                          description="Khi bạn tham gia nhóm chat, danh sách sẽ hiển thị ở đây." 
                         />
                       )}
                     </div>
@@ -773,31 +773,31 @@ export default function FriendHubModal({
             {activeMenu === "requests" ? (
               <div>
                 <div className="border-b border-slate-200 bg-white px-8 py-7">
-                  <div className="text-4xl font-black tracking-tight text-slate-900">Lời mời kết bạn</div>
+                  <div className="text-4xl font-black tracking-tight text-slate-900">L?i m?i k�t b?n</div>
                 </div>
                 <div className="space-y-7 px-8 py-6">
                   <section>
                     <div className="mb-4 text-2xl font-black tracking-tight text-slate-900">
-                      Lời mời đã nhận ({incomingRequests.length})
+                      L?i m?i ?'? nh�n ({incomingRequests.length})
                     </div>
                     <div className="grid gap-5 xl:grid-cols-2">
                       {incomingRequests.length ? incomingRequests.map((item) => (
                         <RequestCard key={`incoming-${item.id}`} item={item} type="incoming" loading={loading} onAccept={onAccept} onDecline={onDecline} onRevoke={onRevokeRequest} />
                       )) : (
-                        <EmptyPanel title="Chưa có lời mời mới" description="Khi có người gửi lời mời kết bạn, bạn sẽ thấy ở đây để đồng ý hoặc từ chối." />
+                        <EmptyPanel title="Chưa có lời mời mới" description="Khi có người gửi lời mời kết bạn, bạn sẽ thấy ở đây để chấp nhận hoặc từ chối." />
                       )}
                     </div>
                   </section>
 
                   <section>
                     <div className="mb-4 text-2xl font-black tracking-tight text-slate-900">
-                      Lời mời đã gửi ({outgoingRequests.length})
+                      L?i m?i ?'? g�i ({outgoingRequests.length})
                     </div>
                     <div className="grid gap-5 xl:grid-cols-2">
                       {outgoingRequests.length ? outgoingRequests.map((item) => (
                         <RequestCard key={`outgoing-${item.id}`} item={item} type="outgoing" loading={loading} onAccept={onAccept} onDecline={onDecline} onRevoke={onRevokeRequest} />
                       )) : (
-                        <EmptyPanel title="Bạn chưa gửi lời mời nào" description="Hãy dùng nút thêm bạn để tìm bạn bè và mở rộng danh bạ của bạn." />
+                        <EmptyPanel title="Bạn chưa gửi lời mời nào" description="Hãy dùng nút Thêm bạn để tìm bạn bè và mở rộng danh bạ của bạn." />
                       )}
                     </div>
                   </section>
@@ -809,7 +809,7 @@ export default function FriendHubModal({
                         onClick={() => setShowSuggestions((prev) => !prev)}
                         className="flex items-center gap-2 text-2xl font-black tracking-tight text-slate-900"
                       >
-                        <span>Gợi ý kết bạn ({visibleSuggestions.length})</span>
+                        <span>G?i ? k�t b?n ({visibleSuggestions.length})</span>
                         <ChevronDown className={`h-5 w-5 text-slate-500 transition ${showSuggestions ? "" : "-rotate-90"}`} />
                       </button>
                       {showSuggestions && visibleSuggestions.length > 4 ? (
@@ -822,7 +822,7 @@ export default function FriendHubModal({
                           }
                           className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#0d5bd7] ring-1 ring-slate-200 transition hover:bg-[#eef4ff]"
                         >
-                          {suggestionLimit >= visibleSuggestions.length ? "Thu gọn" : "Xem thêm"}
+                          {suggestionLimit >= visibleSuggestions.length ? "Thu g?n" : "Xem th?m"}
                         </button>
                       ) : null}
                     </div>
@@ -840,8 +840,8 @@ export default function FriendHubModal({
                           />
                         )) : (
                           <EmptyPanel
-                            title="Không còn gợi ý phù hợp"
-                            description="Khi hệ thống có thêm gợi ý kết bạn mới, danh sách sẽ hiển thị ở đây."
+                            title="Kh�ng c?n g�i ? ph? h�p"
+                            description="Khi h?? th?'ng c? th?m g�i ? k�t b?n m?>i, danh s?ch s? hi?fn th?< ?Y ?'?y."
                           />
                         )}
                       </div>

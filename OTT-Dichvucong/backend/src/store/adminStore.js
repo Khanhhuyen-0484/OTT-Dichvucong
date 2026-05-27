@@ -4,17 +4,24 @@ const { sendMessage, getChatHistory } = require("./supportConversationsStore");
 const { findById } = require("./userStore");
 const { readAll: readApplications, findByCode: findApplicationByCode, updateByCode: updateApplicationByCode } = require("./serviceApplicationStore");
 
-const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "COMPLETED", "REJECTED"]);
+const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "REJECTED"]);
+
+function isPaidApplication(app) {
+  if (!app) return false;
+  const fee = Number(app.fee || 0);
+  const paymentStatus = String(app.paymentStatus || "").trim().toUpperCase();
+  return fee <= 0 || paymentStatus === "COMPLETED" || paymentStatus === "PAID";
+}
 
 const SUPPORT_CONVERSATIONS_TABLE = process.env.SUPPORT_CONVERSATIONS_TABLE || process.env.DYNAMODB_SUPPORT_CONVERSATIONS_TABLE || "SupportConversations";
 const ADMIN_AI_TABLE = process.env.DYNAMODB_ADMIN_AI_TABLE || "AdminAi";
-const DEFAULT_AI_RULES = `1. Chỉ tư vấn trong phạm vi Cổng Dịch vụ công và thủ tục hành chính phổ biến.
-2. Trả lời bằng tiếng Việt rõ ràng, lịch sự, ngắn gọn, dễ làm theo.
-3. Nếu thiếu thông tin như địa phương, loại hồ sơ, đối tượng nộp thì phải hỏi lại ngắn gọn.
-4. Không khẳng định chắc chắn các yêu cầu pháp lý nếu chưa đủ dữ kiện; luôn nhắc người dân đối chiếu quy định và cơ quan có thẩm quyền.
-5. Ưu tiên đưa ra: giấy tờ cần chuẩn bị, các bước thực hiện, nơi tiếp nhận, lưu ý quan trọng.
-6. Không bịa thông tin, không suy đoán mức phí/thời hạn nếu không có căn cứ rõ ràng.
-7. Nếu câu hỏi vượt phạm vi, hướng người dùng sang cán bộ hỗ trợ hoặc cơ quan tiếp nhận hồ sơ.`;
+const DEFAULT_AI_RULES = `1. Ch?? tu v?n trong ph?m vi C?.ng D?<ch v? c?ng v? th? t?c h?nh ch?nh ph?. bi?n.
+2. Tr? l?i b?ng ti?ng Vi??t r? r?ng, l?<ch s?, ng?n g?n, d?. l?m theo.
+3. N?u thi?u th?ng tin nhu ?'?<a phuong, lo?i h?" so, ?'?'i tu?ng n?Tp th? ph?i h?i l?i ng?n g?n.
+4. Kh?ng kh?ng ?'?<nh ch?c ch?n c?c y?u c?u ph?p l? n?u chua ?'? d? ki??n; lu?n nh?c ngu?i d?n ?'?'i chi?u quy ?'?<nh v? co quan c? th?m quy?n.
+5. Uu ti?n ?'ua ra: gi?y t? c?n chu?n b?<, c?c bu?>c th?c hi??n, noi ti?p nh?n, luu ? quan tr?ng.
+6. Kh?ng b?<a th?ng tin, kh?ng suy ?'o?n m?c ph?/th?i h?n n?u kh?ng c? c?fn c? r? r?ng.
+7. N?u c?u h?i vu?t ph?m vi, hu?>ng ngu?i d?ng sang c?n b?T h?- tr? ho?c co quan ti?p nh?n h?" so.`;
 
 let localDb = null;
 function ensureLocalDb() { if (!localDb) localDb = { conversations: [], ai: { id: "default", rulesText: DEFAULT_AI_RULES, history: [] } }; return localDb; }
@@ -29,7 +36,7 @@ async function safeUpdate(tableName, params) { const client = await getClient();
 
 async function getDashboardStats() {
   try {
-    const dossiers = await readApplications();
+    const dossiers = (await readApplications()).filter(isPaidApplication);
     const conversations = await safeScan(SUPPORT_CONVERSATIONS_TABLE);
     return {
       totalPending: dossiers.filter((x) => String(x.status || "").toUpperCase() === "PENDING").length,
@@ -48,9 +55,10 @@ async function getDashboardStats() {
 async function listDossiers(query = "") {
   try {
     const dossiers = await readApplications();
+    const visibleDossiers = dossiers.filter(isPaidApplication);
     const q = String(query || "").trim().toLowerCase();
-    if (!q) return dossiers;
-    return dossiers.filter((d) => String(d.dossierId || d.dossierCode || d.id || "").toLowerCase().includes(q) || String(d.phone || d.formData?.phone || "").toLowerCase().includes(q) || String(d.citizenName || d.formData?.fullName || "").toLowerCase().includes(q));
+    if (!q) return visibleDossiers;
+    return visibleDossiers.filter((d) => String(d.dossierId || d.dossierCode || d.id || "").toLowerCase().includes(q) || String(d.phone || d.formData?.phone || "").toLowerCase().includes(q) || String(d.citizenName || d.formData?.fullName || "").toLowerCase().includes(q));
   } catch (error) {
     console.error("[adminStore.listDossiers] error:", error?.name, error?.message, error);
     return [];
@@ -84,7 +92,7 @@ async function getOrCreateConversationByDossier(dossierId) {
     let conv = found.find((x) => x.dossierId === dossierId) || null;
     if (!conv) {
       const dossier = await getDossierById(dossierId);
-      conv = { id: `sup-${Date.now()}`, dossierId, citizenName: dossier?.citizenName || dossier?.formData?.fullName || "Người dân", status: "active", messages: [], lastMessage: null, updatedAt: nowIso() };
+      conv = { id: `sup-${Date.now()}`, dossierId, citizenName: dossier?.citizenName || dossier?.formData?.fullName || "Ngu?i d?n", status: "active", messages: [], lastMessage: null, updatedAt: nowIso() };
       await safePut(SUPPORT_CONVERSATIONS_TABLE, conv);
     }
     return conv;
@@ -95,13 +103,13 @@ async function getOrCreateConversationByDossier(dossierId) {
 }
 
 async function upsertConversationFromCitizen({ citizenUserId, citizenName, text }) { try { const uid = String(citizenUserId || "").trim(); if (!uid) return null; await sendMessage({ userId: uid, from: "citizen", text }); return getChatHistory(uid); } catch (error) { console.error("[adminStore.upsertConversationFromCitizen] error:", error?.name, error?.message, error); return null; } }
-async function listConversations() { try { const conversations = await safeScan(SUPPORT_CONVERSATIONS_TABLE); const userIds = [...new Set(conversations.map((c) => c.citizenUserId || c.id).filter(Boolean))]; const userRecords = await Promise.all(userIds.map((uid) => findById(uid).catch(() => null))); const userMap = {}; userIds.forEach((uid, i) => { if (userRecords[i]) userMap[uid] = userRecords[i]; }); return conversations.map((conv) => { const uid = conv.citizenUserId || conv.id; const userRecord = userMap[uid] || null; const citizenName = (userRecord?.fullName && userRecord.fullName.trim()) ? userRecord.fullName.trim() : (conv.citizenName && conv.citizenName !== "Người dân" && conv.citizenName.trim()) ? conv.citizenName.trim() : conv.citizenName || "Người dân"; const avatarUrl = userRecord?.avatarUrl && userRecord.avatarUrl.trim() ? userRecord.avatarUrl.trim() : null; return { ...conv, citizenName, avatarUrl, latestMessage: conv.messages?.[conv.messages.length - 1] || null, unreadCount: conv.status === "active" || conv.status === "waiting" ? 1 : 0 }; }); } catch (error) { console.error("[adminStore.listConversations] error:", error?.name, error?.message, error); return []; } }
+async function listConversations() { try { const conversations = await safeScan(SUPPORT_CONVERSATIONS_TABLE); const userIds = [...new Set(conversations.map((c) => c.citizenUserId || c.id).filter(Boolean))]; const userRecords = await Promise.all(userIds.map((uid) => findById(uid).catch(() => null))); const userMap = {}; userIds.forEach((uid, i) => { if (userRecords[i]) userMap[uid] = userRecords[i]; }); return conversations.map((conv) => { const uid = conv.citizenUserId || conv.id; const userRecord = userMap[uid] || null; const citizenName = (userRecord?.fullName && userRecord.fullName.trim()) ? userRecord.fullName.trim() : (conv.citizenName && conv.citizenName !== "Ngu?i d?n" && conv.citizenName.trim()) ? conv.citizenName.trim() : conv.citizenName || "Ngu?i d?n"; const avatarUrl = userRecord?.avatarUrl && userRecord.avatarUrl.trim() ? userRecord.avatarUrl.trim() : null; return { ...conv, citizenName, avatarUrl, latestMessage: conv.messages?.[conv.messages.length - 1] || null, unreadCount: conv.status === "active" || conv.status === "waiting" ? 1 : 0 }; }); } catch (error) { console.error("[adminStore.listConversations] error:", error?.name, error?.message, error); return []; } }
 async function getConversationById(id) { try { return await getChatHistory(id); } catch { return null; } }
 async function addConversationMessage({ conversationId, from, text, sender }) { try { const current = await getChatHistory(conversationId); if (!current) return null; return await sendMessage({ userId: conversationId, from, text, sender }); } catch { return null; } }
 async function resolveConversation(conversationId) { const result = await safeUpdate(SUPPORT_CONVERSATIONS_TABLE, { Key: { id: conversationId }, UpdateExpression: "SET #status = :status, updatedAt = :updated_at", ExpressionAttributeNames: { "#status": "status" }, ExpressionAttributeValues: { ":status": "resolved", ":updated_at": nowIso() }, ConditionExpression: "attribute_exists(id)", ReturnValues: "ALL_NEW" }); return result?.Attributes || null; }
 async function getAiHistory() { try { const item = await safeGet(ADMIN_AI_TABLE, { id: "default" }); if (item) return Array.isArray(item.history) ? item.history : []; return ensureLocalDb().ai.history; } catch { return ensureLocalDb().ai.history; } }
 async function getAiRules() { try { const item = await safeGet(ADMIN_AI_TABLE, { id: "default" }); if (item) return String(item.rulesText || DEFAULT_AI_RULES); return ensureLocalDb().ai.rulesText; } catch { return ensureLocalDb().ai.rulesText; } }
-async function updateAiRules(rulesText, adminEmail) { const historyItem = { id: `ai-${Date.now()}`, question: "Cập nhật bộ quy tắc trả lời", answer: `Admin ${adminEmail || "unknown"} đã cập nhật rules`, at: nowIso() }; try { const result = await safeUpdate(ADMIN_AI_TABLE, { Key: { id: "default" }, UpdateExpression: "SET rulesText = :rules_text, history = list_append(:new_history, if_not_exists(history, :empty_list)), updatedAt = :updated_at", ExpressionAttributeValues: { ":rules_text": String(rulesText || ""), ":empty_list": [], ":new_history": [historyItem], ":updated_at": historyItem.at }, ReturnValues: "ALL_NEW" }); return result?.Attributes?.rulesText || String(rulesText || ""); } catch { const db = ensureLocalDb(); db.ai.rulesText = String(rulesText || ""); db.ai.history.unshift(historyItem); return db.ai.rulesText; } }
+async function updateAiRules(rulesText, adminEmail) { const historyItem = { id: `ai-${Date.now()}`, question: "C?p nh?t b?T quy t?c tr? l?i", answer: `Admin ${adminEmail || "unknown"} ?'? c?p nh?t rules`, at: nowIso() }; try { const result = await safeUpdate(ADMIN_AI_TABLE, { Key: { id: "default" }, UpdateExpression: "SET rulesText = :rules_text, history = list_append(:new_history, if_not_exists(history, :empty_list)), updatedAt = :updated_at", ExpressionAttributeValues: { ":rules_text": String(rulesText || ""), ":empty_list": [], ":new_history": [historyItem], ":updated_at": historyItem.at }, ReturnValues: "ALL_NEW" }); return result?.Attributes?.rulesText || String(rulesText || ""); } catch { const db = ensureLocalDb(); db.ai.rulesText = String(rulesText || ""); db.ai.history.unshift(historyItem); return db.ai.rulesText; } }
 async function appendAiHistory(entry) { const historyItem = { id: entry?.id || `ai-${Date.now()}`, sessionId: String(entry?.sessionId || ""), question: String(entry?.question || "").slice(0, 4000), answer: String(entry?.answer || "").slice(0, 6000), source: String(entry?.source || "home_chat"), mode: String(entry?.mode || "fallback"), userId: String(entry?.userId || ""), userName: String(entry?.userName || ""), turnIndex: Number.isFinite(entry?.turnIndex) ? entry.turnIndex : 0, feedbackStatus: String(entry?.feedbackStatus || "pending"), confidenceLabel: String(entry?.confidenceLabel || "review"), note: String(entry?.note || "").slice(0, 1000), at: entry?.at || nowIso(), meta: entry?.meta && typeof entry.meta === "object" ? entry.meta : {} }; try { await safeUpdate(ADMIN_AI_TABLE, { Key: { id: "default" }, UpdateExpression: "SET history = list_append(:new_history, if_not_exists(history, :empty_list)), updatedAt = :updated_at", ExpressionAttributeValues: { ":new_history": [historyItem], ":empty_list": [], ":updated_at": nowIso() } }); } catch { ensureLocalDb().ai.history.unshift(historyItem); } return historyItem; }
 
 module.exports = { getDashboardStats, listDossiers, getDossierById, decideDossier, getOrCreateConversationByDossier, upsertConversationFromCitizen, listConversations, getConversationById, addConversationMessage, resolveConversation, getAiHistory, getAiRules, updateAiRules, appendAiHistory };

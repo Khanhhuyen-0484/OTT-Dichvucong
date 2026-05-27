@@ -38,7 +38,7 @@ function createAiGreeting() {
     id: "assistant-welcome",
     role: "assistant",
     content:
-      "Xin chào, mình là trợ lý AI của Cổng Dịch vụ công. Bạn cứ hỏi tên thủ tục, giấy tờ cần chuẩn bị hoặc tình huống đang vướng, mình sẽ hướng dẫn theo từng bước.",
+      "Xin chào, mình là trợ lý AI của Cổng Dịch vụ công. Bạn có thể hỏi tên thủ tục, giấy tờ cần chuẩn bị hoặc tình huống đang vướng, mình sẽ hướng dẫn theo từng bước.",
     createdAt: new Date().toISOString(),
     suggestions: [
       "Đăng ký khai sinh cần gì?",
@@ -271,13 +271,14 @@ export default function HomeChatSection() {
   const currentLoading = tabState === "ai" ? aiLoading : staffLoading;
   const resetAiConversation = () => {
     const nextSession = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const greeting = createAiGreeting();
     setAiSessionId(nextSession);
-    setAiMessages([createAiGreeting()]);
+    setAiMessages([greeting]);
     setAiInput("");
     setAiErr(null);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(AI_SESSION_KEY, nextSession);
-      window.localStorage.setItem(AI_STORAGE_KEY, JSON.stringify([createAiGreeting()]));
+      window.localStorage.setItem(AI_STORAGE_KEY, JSON.stringify([greeting]));
     }
   };
 
@@ -374,33 +375,27 @@ export default function HomeChatSection() {
             ) : null}
 
             {tabState === "ai" ? (
-              <>
-                <div className="space-y-3">
-                  {aiMessages.map((message) => {
-                    const showSuggestions = message.role === "assistant" && !typing;
-                    return (
-                      <div key={message.id || `${message.role}-${message.createdAt}`}>
-                        <ChatBubble
-                          type={message.role === "assistant" ? "ai" : "user"}
-                          title={message.role === "assistant" ? "Trợ lý AI" : "Bạn"}
-                          text={message.content}
-                          time={formatTime(message.createdAt)}
-                          mine={message.role === "user"}
-                        />
-                        {showSuggestions ? (
-                          <div className="ml-10">
-                            <SuggestionChips
-                              items={message.suggestions}
-                              onPick={sendAi}
-                              disabled={aiLoading}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
+              <div className="space-y-3">
+                {aiMessages.map((message) => {
+                  const showSuggestions = message.role === "assistant" && !typing;
+                  return (
+                    <div key={message.id || `${message.role}-${message.createdAt}`}>
+                      <ChatBubble
+                        type={message.role === "assistant" ? "ai" : "user"}
+                        title={message.role === "assistant" ? "Trợ lý AI" : "Bạn"}
+                        text={message.content}
+                        time={formatTime(message.createdAt)}
+                        mine={message.role === "user"}
+                      />
+                      {showSuggestions ? (
+                        <div className="ml-10">
+                          <SuggestionChips items={message.suggestions} onPick={sendAi} disabled={aiLoading} />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             ) : staffMessages.length ? (
               <div className="space-y-3">
                 {staffMessages.map((message) => (
@@ -446,7 +441,7 @@ export default function HomeChatSection() {
                 <div
                   className="ai-suggestion-scroll mb-1.5 overflow-x-auto overflow-y-hidden pb-1.5 scroll-smooth"
                   role="region"
-                  aria-label="Câu hỏi gợi ý — cuộn ngang để xem thêm"
+                  aria-label="Câu hỏi gợi ý, cuộn ngang để xem thêm"
                 >
                   <div className="flex w-max gap-2 pr-1">
                     {AI_SUGGESTIONS.map((item) => (
@@ -492,7 +487,7 @@ export default function HomeChatSection() {
               <>
                 <div className="mb-2 flex items-center gap-2 text-[11px] text-slate-500">
                   <span className="rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
-                    Ưu tiên trường hợp cần xử lý hồ sơ thật
+                    Ưu tiên trường hợp cần xử lý hồ sơ gấp
                   </span>
                   <ChevronRight className="h-3 w-3" />
                   <span>Phản hồi trong giờ hành chính</span>

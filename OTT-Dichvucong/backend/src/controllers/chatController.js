@@ -1,574 +1,3 @@
-<<<<<<< HEAD
-const { getChatHistory, sendMessage } = require("../store/supportConversationsStore");
-const userStore = require("../store/userStore");
-const { getIo } = require("../socket");
-const multiChatStore = require("../store/multiChatStore");
-const crypto = require("crypto");
-const path = require("path");
-const multer = require("multer");
-const { createPresignedPut, isS3Configured } = require("../config/s3");
-
-exports.staffHistory = async (req, res) => {
-  try {
-    const conversation = await getChatHistory(req.user.id);
-    const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
-    res.json({ messages });
-  } catch (err) {
-    res.status(500).json({ message: err.message || "Lỗi đọc hội thoại" });
-  }
-};
-
-exports.staffSend = async (req, res) => {
-  try {
-    const text = String(req.body?.text || "").trim();
-    if (!text) {
-      return res.status(400).json({ message: "Nội dung không được trống" });
-    }
-    if (text.length > 2000) {
-      return res.status(400).json({ message: "Tối đa 2000 ký tự" });
-    }
-
-    const conversationId = req.user.id;
-    const userData = await userStore.findById(req.user.id);
-    const fullName = userData?.fullName || "Người dùng";
-    const avatarUrl =
-      userData?.avatarUrl ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&size=128`;
-    const sender = {
-      id: req.user.id,
-      fullName,
-      avatarUrl
-    };
-
-    await sendMessage({
-      userId: conversationId,
-      from: "user",
-      text,
-      sender
-    });
-
-    const conversation = await getChatHistory(conversationId);
-    const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
-
-    try {
-      const io = getIo();
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage) {
-        io.to("admin").emit("supportConversationMessage", {
-          userId: conversationId,
-          message: lastMessage
-        });
-      }
-    } catch (socketError) {
-      console.warn("[Socket] Không thể gửi sự kiện supportConversationMessage:", socketError.message);
-    }
-
-    res.json({ ok: true, messages });
-  } catch (err) {
-    res.status(500).json({ message: err.message || "Lỗi gửi tin" });
-  }
-};
-
-function fallbackAiReply(userText) {
-  const t = userText.toLowerCase();
-  if (/chào|xin chào|hello|hi\b/.test(t)) {
-    return "Xin chào! Tôi là trợ lý AI hỗ trợ thủ tục hành chính trên Cổng dịch vụ công. Bạn cần tra cứu thủ tục, biểu mẫu hay hướng dẫn nộp hồ sơ?";
-  }
-  if (/tạm trú|đăng ký cư trú/.test(t)) {
-    return "Về tạm trú: thường cần CMND/CCCD, giấy tờ chỗ ở, phiếu báo tạm vắng (nếu có). Bạn nên chọn đúng cấp tiếp nhận (xã/phường) trên cổng và điền form trực tuyến.";
-  }
-  if (/gplx|lái xe|giấy phép lái/.test(t)) {
-    return "Đổi GPLX: chuẩn bị ảnh, giấy khám sức khỏe, GPLX cũ và làm theo hướng dẫn trên CSDL giao thông / cổng dịch vụ công — có thể nộp trực tuyến tùy địa phương.";
-  }
-  if (/hộ chiếu|passport/.test(t)) {
-    return "Cấp/đổi hộ chiếu: kiểm tra ảnh, CMND/CCCD, lịch hẹn (nếu có). Nhiều bước đã được điện tử hóa — xem mục Hộ chiếu trên cổng.";
-  }
-  if (/thời gian|giờ làm|mấy giờ/.test(t)) {
-    return "Thông thường bộ phận một cửa làm việc giờ hành chính (sáng 7h30–11h30, chiều 13h30–17h00), có thể khác theo địa phương.";
-  }
-  return "Cảm ơn bạn đã liên hệ. Hãy mô tả ngắn thủ tục (ví dụ: tạm trú, GPLX, hộ tịch) hoặc dùng ô tìm kiếm ở trên để tra cứu. Nếu cần trao đổi với cán bộ, hãy chọn tab “Chat cán bộ”.";
-}
-
-async function openAiChat(messages) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-  const body = {
-    model,
-    messages: [
-      {
-        role: "system",
-        content: `Bạn là trợ lý AI thông minh và thân thiện của Cổng Dịch vụ công Việt Nam, giống như một chatbot AI hiện đại như Zalo AI.
-
-Hướng dẫn chung:
-- Trả lời bằng tiếng Việt tự nhiên, thân thiện, dễ hiểu
-- Có thể đùa vui nhẹ nhàng khi phù hợp, nhưng vẫn chuyên nghiệp
-- Hỏi lại nếu cần thêm thông tin để hỗ trợ tốt hơn
-- Luôn hướng dẫn người dùng đến các bước tiếp theo hoặc liên hệ cơ quan nếu cần
-
-Chức năng chính:
-- Tư vấn thủ tục hành chính: tạm trú, GPLX, hộ chiếu, hộ tịch, v.v.
-- Hướng dẫn chuẩn bị giấy tờ cần thiết
-- Giải thích quy trình nộp hồ sơ
-- Trả lời câu hỏi chung về dịch vụ công
-
-Phong cách trả lời:
-- Bắt đầu bằng lời chào thân thiện nếu là tin nhắn đầu
-- Sử dụng emoji phù hợp để làm cho cuộc trò chuyện vui vẻ hơn
-- Cung cấp thông tin chính xác, ngắn gọn
-- Kết thúc bằng câu hỏi để tiếp tục cuộc trò chuyện
-
-Quan trọng: Không thay thế văn bản pháp luật chính thức. Luôn khuyên người dùng xác nhận tại cơ quan có thẩm quyền.`
-      },
-      ...messages
-    ],
-    max_tokens: 900,
-    temperature: 0.4
-  };
-
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!r.ok) {
-    const errText = await r.text();
-    throw new Error(errText.slice(0, 300) || `OpenAI HTTP ${r.status}`);
-  }
-
-  const data = await r.json();
-  const text = data?.choices?.[0]?.message?.content;
-  return typeof text === "string" ? text.trim() : null;
-}
-
-exports.aiChat = async (req, res) => {
-  try {
-    const raw = req.body?.message;
-    const history = req.body?.messages;
-
-    let userText = "";
-    if (typeof raw === "string") {
-      userText = raw.trim();
-    } else if (Array.isArray(history) && history.length) {
-      const last = history[history.length - 1];
-      if (last && last.role === "user" && typeof last.content === "string") {
-        userText = last.content.trim();
-      }
-    }
-
-    if (!userText) {
-      return res.status(400).json({ message: "Vui lòng nhập nội dung câu hỏi." });
-    }
-    if (userText.length > 4000) {
-      return res.status(400).json({ message: "Nội dung quá dài." });
-    }
-
-    const msgs = Array.isArray(history)
-      ? history
-          .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-          .slice(-12)
-          .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
-      : [{ role: "user", content: userText }];
-
-    let reply = null;
-    try {
-      reply = await openAiChat(msgs);
-    } catch (e) {
-      console.error("OpenAI error:", e.message);
-    }
-
-    if (!reply) {
-      reply = fallbackAiReply(userText);
-    }
-
-    res.json({
-      reply,
-      mode: process.env.OPENAI_API_KEY ? "openai" : "fallback"
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message || "Lỗi trợ lý AI" });
-  }
-};
-
-async function emitRoomUpdate(roomId, eventName, payload) {
-  try {
-    const io = getIo();
-    io.to(`chat_${roomId}`).emit(eventName, payload);
-  } catch (e) {
-    console.warn(`[Socket] Không thể phát sự kiện ${eventName}:`, e.message);
-  }
-}
-
-exports.chatContacts = async (req, res) => {
-  try {
-    const q = req.query?.q || "";
-    const contacts = await multiChatStore.searchContacts({
-      keyword: q,
-      currentUserId: req.user.id
-    });
-    return res.json({ contacts });
-  } catch (err) {
-    return res.status(500).json({ message: err.message || "Lỗi tải danh bạ" });
-  }
-};
-
-exports.chatRooms = async (req, res) => {
-  try {
-    const rooms = await multiChatStore.listRoomsForUser(req.user.id);
-    const hydrated = await Promise.all(rooms.map((r) => multiChatStore.hydrateRoomForUser(r, req.user.id)));
-    return res.json({ rooms: hydrated });
-  } catch (err) {
-    return res.status(500).json({ message: err.message || "Lỗi tải phòng chat" });
-  }
-};
-
-exports.chatRoomDetail = async (req, res) => {
-  try {
-    const room = await multiChatStore.getRoomById(req.params.roomId);
-    if (!room) return res.status(404).json({ message: "Không tìm thấy phòng chat" });
-    const isMember = room.members?.some((m) => m.id === req.user.id);
-    if (!isMember) return res.status(403).json({ message: "Bạn không có quyền truy cập phòng này" });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(500).json({ message: err.message || "Lỗi tải chi tiết phòng chat" });
-  }
-};
-
-exports.ensureDirectChat = async (req, res) => {
-  try {
-    const targetUserId = String(req.body?.userId || "").trim();
-    if (!targetUserId) return res.status(400).json({ message: "Thiếu ID người dùng" });
-    const room = await multiChatStore.ensureDirectRoom(req.user.id, targetUserId);
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể khởi tạo hội thoại" });
-  }
-};
-
-exports.createGroupChat = async (req, res) => {
-  try {
-    const room = await multiChatStore.createGroupRoom({
-      ownerId: req.user.id,
-      name: req.body?.name,
-      avatarUrl: req.body?.avatarUrl,
-      memberIds: req.body?.memberIds
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể tạo nhóm chat" });
-  }
-};
-
-exports.sendRoomMessage = async (req, res) => {
-  try {
-    const text = String(req.body?.text || "").trim();
-    const media = req.body?.media || null;
-    const replyToMessageId = String(req.body?.replyToMessageId || "").trim();
-    if (!text && !media) return res.status(400).json({ message: "Tin nhắn không được để trống" });
-    const room = await multiChatStore.appendMessage({
-      roomId: req.params.roomId,
-      senderId: req.user.id,
-      text,
-      media,
-      replyToMessageId
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    const lastMessage = hydrated.messages[hydrated.messages.length - 1];
-    await emitRoomUpdate(req.params.roomId, "multiChatMessage", {
-      roomId: req.params.roomId,
-      message: lastMessage
-    });
-    return res.json({ room: hydrated, message: lastMessage });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể gửi tin nhắn" });
-  }
-};
-
-exports.presignChatMediaUpload = async (req, res) => {
-  if (!isS3Configured()) {
-    return res.status(503).json({
-      message:
-        "Chưa cấu hình S3. Đặt S3_BUCKET (hoặc AWS_S3_BUCKET), AWS_REGION và AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY trong backend/.env."
-    });
-  }
-  try {
-    const contentType = String(req.body?.contentType || "")
-      .trim()
-      .toLowerCase();
-    let fileName = String(req.body?.fileName || "file").trim();
-    // Accept images, videos, and common document formats (PDF, DOC, DOCX)
-    const isAllowedType = 
-      contentType.startsWith("image/") ||
-      contentType.startsWith("video/") ||
-      contentType === "application/pdf" ||
-      contentType === "application/msword" ||
-      contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-      fileName.toLowerCase().endsWith(".pdf") ||
-      fileName.toLowerCase().endsWith(".doc") ||
-      fileName.toLowerCase().endsWith(".docx");
-    
-    if (!contentType || !isAllowedType) {
-      return res.status(400).json({
-        message: "Chỉ chấp nhận media ảnh/video hoặc file PDF/DOC/DOCX"
-      });
-    }
-
-    const ext = path.extname(fileName).toLowerCase();
-    if (!ext) {
-      const inferred = contentType.startsWith("video/") ? ".mp4" : ".jpg";
-      fileName += inferred;
-    }
-    const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
-    const key = `chat-media/${req.user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName}`;
-
-    const { uploadUrl, publicUrl } = await createPresignedPut({
-      key,
-      contentType,
-      expiresSec: 300
-    });
-
-    return res.json({
-      uploadUrl,
-      publicUrl,
-      key,
-      method: "PUT",
-      headers: { "Content-Type": contentType }
-    });
-  } catch (err) {
-    return res.status(500).json({
-      message: err.message || "Không tạo được link upload media chat"
-    });
-  }
-};
-
-exports.uploadChatMedia = async (req, res) => {
-  if (!isS3Configured()) {
-    return res.status(503).json({
-      message: "Chưa cấu hình S3."
-    });
-  }
-  try {
-    const file = req.file;
-    if (!file) {
-      return res.status(400).json({ message: "Không có file được upload" });
-    }
-
-    const contentType = file.mimetype;
-    const allowedDocs = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ];
-    if (
-      !contentType ||
-      (!contentType.startsWith("image/") &&
-        !contentType.startsWith("video/") &&
-        !allowedDocs.includes(contentType))
-    ) {
-      return res.status(400).json({
-        message: "Chỉ chấp nhận ảnh, video, file .doc/.docx/.pdf"
-      });
-    }
-
-    const fileName = file.originalname || "file";
-    const ext = path.extname(fileName).toLowerCase();
-    let safeName = path.basename(fileName, ext).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
-    if (!ext) {
-      const inferred = contentType.startsWith("video/") ? ".mp4" : ".jpg";
-      safeName += inferred;
-    } else {
-      safeName += ext;
-    }
-    const key = `chat-media/${req.user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName}`;
-
-    // Upload to S3
-    const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-    const cfg = require("../config/s3").getConfig();
-    const client = new S3Client({
-      region: cfg.region,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-      }
-    });
-
-    const command = new PutObjectCommand({
-      Bucket: cfg.bucket,
-      Key: key,
-      Body: file.buffer,
-      ContentType: contentType
-    });
-
-    await client.send(command);
-
-    // Generate GET URL
-    const { GetObjectCommand } = require("@aws-sdk/client-s3");
-    const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-    const getCommand = new GetObjectCommand({
-      Bucket: cfg.bucket,
-      Key: key
-    });
-    const publicUrl = await getSignedUrl(client, getCommand, { expiresIn: 3600 * 24 * 7 });
-
-    return res.json({
-      url: publicUrl,
-      key,
-      contentType
-    });
-  } catch (err) {
-    return res.status(500).json({
-      message: err.message || "Không upload được media chat"
-    });
-  }
-};
-
-exports.unsendRoomMessage = async (req, res) => {
-  try {
-    const room = await multiChatStore.unsendMessage({
-      roomId: req.params.roomId,
-      messageId: req.params.messageId,
-      requesterId: req.user.id
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    await emitRoomUpdate(req.params.roomId, "multiChatRoomUpdated", {
-      roomId: req.params.roomId
-    });
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể thu hồi tin nhắn" });
-  }
-};
-
-exports.deleteRoomMessageForMe = async (req, res) => {
-  try {
-    const room = await multiChatStore.deleteMessageForUser({
-      roomId: req.params.roomId,
-      messageId: req.params.messageId,
-      userId: req.user.id
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể xóa tin nhắn" });
-  }
-};
-
-exports.forwardRoomMessage = async (req, res) => {
-  try {
-    const targetRoomId = String(req.body?.targetRoomId || "").trim();
-    if (!targetRoomId) return res.status(400).json({ message: "Thiếu phòng chuyển tiếp" });
-    const room = await multiChatStore.forwardMessage({
-      sourceRoomId: req.params.roomId,
-      messageId: req.params.messageId,
-      targetRoomId,
-      senderId: req.user.id
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    const lastMessage = hydrated.messages[hydrated.messages.length - 1];
-    await emitRoomUpdate(targetRoomId, "multiChatMessage", {
-      roomId: targetRoomId,
-      message: lastMessage
-    });
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể chuyển tiếp tin nhắn" });
-  }
-};
-
-exports.addGroupMember = async (req, res) => {
-  try {
-    const room = await multiChatStore.addGroupMember({
-      roomId: req.params.roomId,
-      requesterId: req.user.id,
-      memberId: req.body?.memberId
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể thêm thành viên" });
-  }
-};
-
-exports.removeGroupMember = async (req, res) => {
-  try {
-    const room = await multiChatStore.removeGroupMember({
-      roomId: req.params.roomId,
-      requesterId: req.user.id,
-      memberId: req.params.memberId
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể xóa thành viên" });
-  }
-};
-
-exports.assignDeputy = async (req, res) => {
-  try {
-    const room = await multiChatStore.assignDeputy({
-      roomId: req.params.roomId,
-      requesterId: req.user.id,
-      memberId: req.params.memberId,
-      enabled: true
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể gán quyền phó nhóm" });
-  }
-};
-
-exports.removeDeputy = async (req, res) => {
-  try {
-    const room = await multiChatStore.assignDeputy({
-      roomId: req.params.roomId,
-      requesterId: req.user.id,
-      memberId: req.params.memberId,
-      enabled: false
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể gỡ quyền phó nhóm" });
-  }
-};
-
-exports.dissolveGroup = async (req, res) => {
-  try {
-    await multiChatStore.dissolveGroup({
-      roomId: req.params.roomId,
-      requesterId: req.user.id
-    });
-    return res.json({ ok: true });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể giải tán nhóm" });
-  }
-};
-
-exports.updateGroupInfo = async (req, res) => {
-  try {
-    const room = await multiChatStore.updateGroupInfo({
-      roomId: req.params.roomId,
-      requesterId: req.user.id,
-      name: req.body?.name,
-      avatarUrl: req.body?.avatarUrl
-    });
-    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
-    await emitRoomUpdate(req.params.roomId, "multiChatRoomUpdated", { roomId: req.params.roomId });
-    return res.json({ room: hydrated });
-  } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể cập nhật thông tin nhóm" });
-  }
-};
-=======
 const { getChatHistory, sendMessage } = require("../store/supportConversationsStore");
 const userStore = require("../store/userStore");
 const { getIo } = require("../socket");
@@ -579,118 +8,9 @@ const multer = require("multer");
 const { createPresignedPut, isS3Configured } = require("../config/s3");
 const { getAiRules, appendAiHistory } = require("../store/adminStore");
 
-const TOPIC_KB = {
-  birth: {
-    label: "đăng ký khai sinh",
-    ask: "Đây là đăng ký khai sinh đúng hạn cho trẻ mới sinh hay đăng ký lại giấy khai sinh đã mất/thất lạc?",
-    documents:
-      "Với đăng ký khai sinh đúng hạn, hồ sơ thường gồm: giấy chứng sinh hoặc giấy tờ thay thế, CCCD/căn cước của cha mẹ hoặc người đi đăng ký, và thông tin cư trú để xác định nơi tiếp nhận. Nếu trẻ chưa có giấy chứng sinh, cơ quan hộ tịch thường sẽ yêu cầu giấy xác nhận hoặc tài liệu thay thế theo trường hợp thực tế.",
-    steps:
-      "Bạn có thể làm theo 3 bước: 1. Chuẩn bị giấy chứng sinh hoặc giấy tờ thay thế cùng giấy tờ tùy thân của người đi đăng ký. 2. Nộp hồ sơ tại UBND cấp xã nơi cư trú của cha hoặc mẹ, hoặc thực hiện trên cổng dịch vụ công nếu địa phương hỗ trợ. 3. Theo dõi kết quả và đối chiếu thông tin của trẻ, cha mẹ trước khi nhận giấy khai sinh.",
-    ontime:
-      "Nếu là đăng ký khai sinh đúng hạn, bạn nên chuẩn bị giấy chứng sinh hoặc giấy tờ thay thế, CCCD/căn cước của cha, mẹ hoặc người đi đăng ký, và thông tin nơi cư trú để xác định UBND cấp xã có thẩm quyền tiếp nhận. Sau đó bạn có thể nộp trực tiếp hoặc nộp trực tuyến nếu địa phương hỗ trợ.",
-    reissue:
-      "Nếu là đăng ký lại khai sinh, bạn thường cần bản cam kết hoặc giấy tờ chứng minh thông tin khai sinh cũ, giấy tờ tùy thân của người yêu cầu và tài liệu liên quan để cơ quan hộ tịch đối chiếu. Trường hợp này dễ khác nhau theo nơi đăng ký trước đây, nên bạn nên chuẩn bị thêm thông tin nơi đã đăng ký khai sinh lần đầu.",
-    online:
-      "Nếu bạn muốn nộp đăng ký khai sinh online, hãy chuẩn bị ảnh hoặc bản scan giấy chứng sinh, giấy tờ tùy thân của người đi đăng ký và thông tin cư trú. Sau đó đăng nhập cổng dịch vụ công của địa phương, chọn thủ tục đăng ký khai sinh, điền thông tin của trẻ và cha mẹ, tải hồ sơ lên rồi theo dõi trạng thái xử lý. Khi cơ quan hộ tịch yêu cầu đối chiếu bản gốc, bạn cần mang giấy tờ thật đến theo hướng dẫn.",
-    offline:
-      "Nếu nộp trực tiếp đăng ký khai sinh, bạn mang hồ sơ đến UBND cấp xã có thẩm quyền, nộp giấy tờ cho bộ phận tiếp nhận, kiểm tra lại thông tin của trẻ và cha mẹ rồi chờ trả kết quả theo giấy hẹn hoặc hướng dẫn tại chỗ.",
-    authority:
-      "Nơi tiếp nhận thường là UBND cấp xã nơi cư trú của cha hoặc mẹ. Nếu địa phương có hỗ trợ trực tuyến, bạn vẫn cần chọn đúng cơ quan tiếp nhận theo nơi cư trú thực tế.",
-    fees:
-      "Nhiều địa phương xử lý đăng ký khai sinh đúng hạn với mức phí rất thấp hoặc không thu phí trong một số trường hợp, nhưng bạn vẫn nên kiểm tra biểu phí tại nơi tiếp nhận để có thông tin chính xác nhất.",
-    tips: [
-      "Kiểm tra kỹ họ tên, ngày sinh, quê quán của trẻ trước khi xác nhận hồ sơ.",
-      "Nếu thiếu giấy chứng sinh, nên hỏi trước cơ quan hộ tịch về giấy tờ thay thế được chấp nhận.",
-      "Nếu làm online, hãy chuẩn bị ảnh chụp hoặc bản scan giấy tờ rõ nét."
-    ]
-  },
-  residence: {
-    label: "đăng ký tạm trú",
-    ask: "Bạn đang cần hướng dẫn phần hồ sơ cần chuẩn bị hay các bước nộp tạm trú?",
-    documents:
-      "Với thủ tục tạm trú, bạn thường cần giấy tờ tùy thân, thông tin hoặc giấy tờ chứng minh chỗ ở hợp pháp, và biểu mẫu/khai báo theo hướng dẫn của địa phương.",
-    steps:
-      "Các bước thường là: 1. Chuẩn bị giấy tờ tùy thân và giấy tờ về nơi ở. 2. Kê khai thông tin tạm trú trực tuyến hoặc tại nơi tiếp nhận. 3. Theo dõi trạng thái xử lý và bổ sung nếu cơ quan tiếp nhận yêu cầu.",
-    online:
-      "Nếu nộp online, bạn nên chuẩn bị bản scan giấy tờ tùy thân và giấy tờ về chỗ ở hợp pháp để tải lên cổng dịch vụ công.",
-    authority:
-      "Thủ tục tạm trú thường do cơ quan công an hoặc cơ quan quản lý cư trú tại địa phương tiếp nhận, tùy mô hình triển khai của nơi bạn cư trú.",
-    timeline:
-      "Thời gian xử lý tạm trú có thể khác nhau theo địa phương và tình trạng hồ sơ. Bạn nên theo dõi kết quả trên cổng hoặc hỏi trực tiếp nơi tiếp nhận sau khi nộp.",
-    tips: [
-      "Chuẩn bị đầy đủ giấy tờ về chỗ ở hợp pháp để tránh bị yêu cầu bổ sung.",
-      "Nếu bạn thuê trọ, nên kiểm tra trước giấy tờ mà chủ nhà cần cung cấp."
-    ]
-  },
-  license: {
-    label: "đổi/cấp lại giấy phép lái xe",
-    ask: "Bạn đang hỏi về cấp đổi hay cấp lại giấy phép lái xe?",
-    documents:
-      "Thường sẽ có nhóm giấy tờ như GPLX hiện có hoặc thông tin GPLX cũ, giấy tờ tùy thân, ảnh chân dung và đôi khi là giấy khám sức khỏe tùy trường hợp.",
-    steps:
-      "Bạn nên xác định rõ là cấp đổi hay cấp lại, sau đó chuẩn bị hồ sơ, nộp tại kênh tiếp nhận phù hợp và theo dõi kết quả xử lý theo giấy hẹn hoặc hệ thống trực tuyến.",
-    online:
-      "Nếu nộp online đổi GPLX, bạn nên chuẩn bị ảnh chân dung, giấy tờ tùy thân, thông tin GPLX và các giấy tờ được yêu cầu ở dạng số hóa rõ nét.",
-    authority:
-      "Thủ tục GPLX thường do cơ quan giao thông hoặc đơn vị được ủy quyền tiếp nhận. Bạn nên kiểm tra cổng dịch vụ công hoặc nơi tiếp nhận tại địa phương.",
-    timeline:
-      "Thời gian xử lý đổi hoặc cấp lại GPLX tùy từng địa phương và loại thủ tục. Bạn nên theo dõi giấy hẹn hoặc trạng thái hồ sơ trực tuyến.",
-    tips: [
-      "Kiểm tra thời hạn GPLX hiện tại trước khi chọn thủ tục cấp đổi hay cấp lại.",
-      "Ảnh chân dung và giấy tờ tải lên nên rõ, đủ sáng, không cắt mất góc."
-    ]
-  },
-  passport: {
-    label: "cấp/đổi hộ chiếu",
-    ask: "Bạn đang cần hướng dẫn cấp mới hay cấp lại hộ chiếu?",
-    documents:
-      "Bạn nên chuẩn bị ảnh đúng chuẩn, giấy tờ tùy thân và kiểm tra yêu cầu hồ sơ của cơ quan quản lý xuất nhập cảnh đối với trường hợp của bạn.",
-    steps:
-      "Các bước thường là chuẩn bị hồ sơ, chọn nơi tiếp nhận, kê khai thông tin chính xác và theo dõi lịch hẹn hoặc trạng thái xử lý.",
-    authority:
-      "Hộ chiếu thường do cơ quan quản lý xuất nhập cảnh tiếp nhận và xử lý. Bạn nên kiểm tra đúng nơi tiếp nhận theo địa phương hoặc diện thủ tục của mình.",
-    tips: [
-      "Ảnh dùng cho hộ chiếu nên đúng chuẩn để tránh bị yêu cầu nộp lại.",
-      "Kiểm tra kỹ thông tin nhân thân trước khi xác nhận hồ sơ."
-    ]
-  },
-  identity: {
-    label: "cấp/cấp đổi/cấp lại CCCD",
-    ask: "Bạn đang làm CCCD lần đầu, cấp đổi hay cấp lại?",
-    documents:
-      "Với CCCD/Căn cước, bạn nên chuẩn bị giấy tờ tùy thân hiện có, thông tin cư trú và kiểm tra cơ quan công an nơi tiếp nhận.",
-    steps:
-      "Bạn nên xác định đúng loại thủ tục trước, sau đó chuẩn bị giấy tờ theo trường hợp cấp mới, cấp đổi hoặc cấp lại rồi đến đúng nơi tiếp nhận.",
-    authority:
-      "CCCD/Căn cước thường do cơ quan công an có thẩm quyền tiếp nhận và xử lý theo nơi cư trú hoặc theo điểm tiếp nhận được bố trí.",
-    tips: [
-      "Nếu là cấp đổi, bạn nên mang theo giấy tờ hiện có để đối chiếu.",
-      "Nên kiểm tra trước nơi tiếp nhận để tránh đi sai điểm làm thủ tục."
-    ]
-  }
-};
-
-function normalizeVietnameseChatText(text) {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/\bko\b|\bkhong\b/g, "không")
-    .replace(/\bokela\b|\boki\b|\boke\b/g, "ok")
-    .replace(/\bcccđ\b/g, "cccd")
-    .trim();
-}
-
-function buildBulletList(items = []) {
-  if (!Array.isArray(items) || !items.length) return "";
-  return items.map((item) => `- ${item}`).join("\n");
-}
-
-// ─── FIX: emit "new-message" đến từng user_${memberId} ───────────────────────
-// Vấn đề cũ: emit vào `chat_${roomId}` nhưng frontend không join room đó.
-// Frontend chỉ join `user_${userId}` khi connect socket.
-// Fix: lấy members của room → emit đến `user_${memberId}` từng người.
-// Event name phải là "new-message" để khớp với ChatPage.jsx socket listener.
+// ---------------------------
+// Socket helpers
+// ---------------------------
 async function emitToRoomMembers(room, payload) {
   try {
     const io = getIo();
@@ -701,7 +21,7 @@ async function emitToRoomMembers(room, payload) {
       io.to(`user_${memberId}`).emit("new-message", payload);
     });
   } catch (e) {
-    console.warn("[Socket] Không thể emit new-message:", e.message);
+    console.warn("[Socket] Cannot emit new-message:", e.message);
   }
 }
 
@@ -715,18 +35,20 @@ async function emitToRoomAction(room, eventName, payload) {
       io.to(`user_${memberId}`).emit(eventName, payload);
     });
   } catch (e) {
-    console.warn(`[Socket] Không thể emit ${eventName}:`, e.message);
+    console.warn(`[Socket] Cannot emit ${eventName}:`, e.message);
   }
 }
 
-// ─── Staff chat ───────────────────────────────────────────────────────────────
+// ---------------------------
+// Staff chat
+// ---------------------------
 exports.staffHistory = async (req, res) => {
   try {
     const conversation = await getChatHistory(req.user.id);
     const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
     res.json({ messages });
   } catch (err) {
-    res.status(500).json({ message: err.message || "Lỗi đọc hội thoại" });
+    res.status(500).json({ message: err.message || "Lỗi hệ thống" });
   }
 };
 
@@ -742,6 +64,7 @@ exports.staffSend = async (req, res) => {
     const avatarUrl =
       userData?.avatarUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&size=128`;
+
     const sender = { id: req.user.id, fullName, avatarUrl };
 
     await sendMessage({ userId: conversationId, from: "user", text, sender });
@@ -764,60 +87,154 @@ exports.staffSend = async (req, res) => {
 
     res.json({ ok: true, messages });
   } catch (err) {
-    res.status(500).json({ message: err.message || "Lỗi gửi tin" });
+    res.status(500).json({ message: err.message || "Lỗi gửi tin nhắn" });
   }
 };
 
+// ---------------------------
+// AI helpers (clean rewrite)
+// ---------------------------
+
+const TOPIC_KB = {
+  birth: {
+    label: "Khai sinh",
+    ask: "Bạn muốn đăng ký khai sinh cho mới sinh hay xin cấp lại giấy khai sinh?",
+    documents:
+      "Với đăng ký khai sinh/cấp lại giấy khai sinh và hạn: hồ sơ thường gồm: giấy chứng sinh hoặc giấy tờ thay thế; CCCD/căn cước của cha/mẹ hoặc người đi đăng ký; giấy tờ xác định nơi tiếp nhận. Nếu chưa có giấy chứng sinh, cơ quan thẩm quyền yêu cầu giấy xác nhận hoặc tài liệu thay thế theo từng trường hợp.",
+    steps:
+      "Bạn có thể làm theo các bước: 1) Chuẩn bị giấy tờ của cha/mẹ và giấy tờ liên quan; 2) Nộp hồ sơ tại UBND cấp xã nơi cư trú hoặc nộp trực tuyến (nếu địa phương có); 3) Theo dõi kết quả và nhận giấy khai sinh theo hướng dẫn.",
+    ontime:
+      "Nếu đăng ký đúng hạn, bạn nên chuẩn bị giấy chứng sinh hoặc giấy tờ thay thế, CCCD/căn cước của cha/mẹ hoặc người đi đăng ký và thông tin nơi cư trú để xác định UBND cấp xã có thẩm quyền. Sau đó nộp trực tiếp hoặc nộp trực tuyến nếu địa phương hỗ trợ.",
+    reissue:
+      "Nếu đăng ký lại khai sinh (cấp lại), bạn thường cần giấy tờ chứng minh thông tin khai sinh cũ, giấy tờ tùy thân của người yêu cầu và tài liệu liên quan; trường hợp cụ thể sẽ khác nhau theo nơi đã đăng ký trước đây.",
+    online:
+      "Nếu đăng ký khai sinh online, hãy chuẩn bị ảnh/scanh giấy tờ. Sau đó đăng nhập cổng dịch vụ công, chọn thủ tục đăng ký khai sinh, điền thông tin của trẻ và cha/mẹ, nộp hồ sơ và theo dõi trạng thái xử lý. Nếu cơ quan yêu cầu đối chiếu bản gốc, bạn cần mang giấy tờ theo hướng dẫn.",
+    offline:
+      "Nếu nộp trực tiếp đăng ký khai sinh, bạn mang hồ sơ đến UBND cấp xã có thẩm quyền, nộp giấy tờ cho bộ phận tiếp nhận, kiểm tra lại thông tin của cha/mẹ rồi chờ kết quả theo giấy hẹn hoặc hướng dẫn trên cổng dịch vụ.",
+    authority:
+      "Nơi tiếp nhận thường là UBND cấp xã nơi cư trú của cha hoặc mẹ. Nếu địa phương có lựa chọn trực tuyến, bạn vẫn có thể chọn đúng cơ quan tiếp nhận theo nơi thực tế.",
+    fees:
+      "Lệ phí đăng ký khai sinh trực tuyến hoặc trực tiếp thường thấp hoặc có thể không thu trong một số trường hợp; bạn nên kiểm tra biểu phí tại nơi tiếp nhận hoặc trên cổng dịch vụ công để biết chính xác.",
+    tips: [
+      "Kiểm tra kỹ giấy tờ, ngày sinh và thông tin của trẻ trước khi xác nhận hồ sơ.",
+      "Nếu thiếu giấy chứng sinh, nên hỏi trước cơ quan có thẩm quyền để biết tài liệu thay thế được chấp nhận.",
+      "Nếu làm online, hãy chuẩn bị ảnh scan rõ nét của giấy tờ."
+    ],
+  },
+
+  residence: {
+    label: "Đăng ký tạm trú",
+    ask: "Bạn đang cần hướng dẫn đăng ký tạm trú theo đúng thủ tục và các bước nộp hồ sơ?",
+    documents:
+      "Với thủ tục tạm trú, bạn thường cần giấy tờ tùy thân, thông tin hoặc giấy tờ chứng minh chỗ ở hợp pháp, và biểu mẫu/khai báo theo hướng dẫn của địa phương.",
+    steps:
+      "Các bước thường là: 1) Chuẩn bị giấy tờ tùy thân và giấy tờ về nơi ở; 2) Nộp hồ sơ trực tuyến hoặc tại nơi tiếp nhận; 3) Theo dõi trạng thái xử lý và bổ sung nếu cơ quan tiếp nhận yêu cầu.",
+    online:
+      "Nếu nộp online, bạn nên chuẩn bị ảnh scan giấy tờ tùy thân và giấy tờ về chỗ ở hợp pháp để nộp hồ sơ trên cổng dịch vụ công.",
+    authority:
+      "Thủ tục tạm trú thường do cơ quan công an hoặc cơ quan quản lý cư trú tại địa phương tiếp nhận; tùy mô hình mà cách khai báo có thể khác nhau.",
+    timeline:
+      "Thời gian xử lý tạm trú có thể khác nhau theo địa phương và tình trạng hồ sơ. Bạn nên theo dõi kết quả trên cổng dịch vụ hoặc hỏi trực tiếp nơi tiếp nhận sau khi nộp."
+    ,
+    tips: [
+      "Chuẩn bị đầy đủ giấy tờ và thông tin để tránh bị yêu cầu bổ sung.",
+      "Nếu bị từ chối hoặc yêu cầu chỉnh sửa, hãy kiểm tra lại thông tin trước khi nộp lại."
+    ]
+  },
+
+  license: {
+    label: "Giấy phép lái xe",
+    ask: "Bạn đang hỏi về cấp mới hoặc cấp lại giấy phép lái xe?",
+    documents:
+      "Thường cần giấy tờ như: GPLX hiện có hoặc thông tin GPLX cũ; giấy tờ tùy thân; ảnh chân dung và giấy khám sức khỏe (tùy trường hợp).",
+    steps:
+      "Bạn nên xác định rõ yêu cầu (cấp mới hoặc cấp lại). Sau đó chuẩn bị hồ sơ phù hợp, nộp tại kênh tiếp nhận thích hợp và theo dõi kết quả theo giấy hẹn hoặc trực tuyến.",
+    online:
+      "Nếu nộp online, bạn nên chuẩn bị ảnh chân dung, giấy tờ tùy thân, thông tin GPLX và các giấy tờ được yêu cầu để thực hiện thủ tục.",
+    authority:
+      "Thủ tục GPLX thường do cơ quan giao thông vận tải hoặc đơn vị được ủy quyền tiếp nhận; bạn nên kiểm tra đúng cơ quan theo địa phương/hồ sơ.",
+    timeline:
+      "Thời gian xử lý cấp mới/cấp lại GPLX tùy địa phương và loại thủ tục. Bạn nên theo dõi giấy hẹn hoặc trạng thái trên cổng dịch vụ.",
+    tips: [
+      "Kiểm tra thời hạn GPLX và tình trạng hồ sơ trước khi nộp.",
+      "Ảnh chân dung và giấy tờ phải rõ ràng, đúng quy định về kích thước/định dạng."
+    ]
+  },
+
+  passport: {
+    label: "Hộ chiếu",
+    ask: "Bạn đang cần hướng dẫn cấp mới hay cấp lại hộ chiếu?",
+    documents:
+      "Bạn nên chuẩn bị ảnh/ảnh chân dung, giấy tờ tùy thân và giấy tờ theo yêu cầu của cơ quan quản lý xuất nhập cảnh phù hợp với trường hợp của bạn.",
+    steps:
+      "Các bước thường là: chuẩn bị hồ sơ; chọn nơi tiếp nhận; kê khai thông tin chính xác và nộp hồ sơ; theo dõi lịch hẹn hoặc trạng thái xử lý.",
+    authority:
+      "Hộ chiếu thường do cơ quan quản lý xuất nhập cảnh tiếp nhận và xử lý. Bạn nên kiểm tra đúng nơi nộp theo địa phương hoặc theo điều kiện của mình.",
+    tips: [
+      "Chuẩn bị ảnh đúng chuẩn để tránh bị yêu cầu nộp lại.",
+      "Kiểm tra kỹ thông tin cá nhân trước khi xác nhận hồ sơ."
+    ]
+  },
+
+  identity: {
+    label: "CCCD/Căn cước công dân",
+    ask: "Bạn đang hỏi làm CCCD lần đầu, cấp đổi hoặc cấp lại?",
+    documents:
+      "Với CCCD/Căn cước, bạn nên chuẩn bị giấy tờ tùy thân hiện có, thông tin cư trú/giấy tờ liên quan và giấy tờ theo yêu cầu của cơ quan công an tại nơi tiếp nhận.",
+    steps:
+      "Bạn nên xác định đúng loại thủ tục (lần đầu/cấp đổi/cấp lại), sau đó chuẩn bị giấy tờ tương ứng rồi đến hoặc nộp theo kênh tiếp nhận của địa phương.",
+    authority:
+      "CCCD/Căn cước thường do cơ quan công an có thẩm quyền tiếp nhận và xử lý theo nơi cư trú hoặc theo hình thức được cấp phép.",
+    tips: [
+      "Nếu cấp đổi/cấp lại, mang theo giấy tờ hiện có và tài liệu chứng minh liên quan.",
+      "Kiểm tra thông tin trước khi nộp để tránh sai hồ sơ."
+    ]
+  },
+};
+
+function normalizeVietnameseChatText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\bko\b|\bkhông\b/g, "không")
+    .replace(/\bokela\b|\boki\b|\boke\b/g, "ok")
+    .replace(/\bcccđ\b/g, "cccd")
+    .trim();
+}
+
+function buildBulletList(items = []) {
+  if (!Array.isArray(items) || !items.length) return "";
+  return items.map((item) => `- ${item}`).join("\n");
+}
+
 function detectFallbackTopic(text) {
   const t = normalizeVietnameseChatText(text);
-  if (/khai sinh|hộ tịch|giấy khai sinh/.test(t)) return "birth";
-  if (/tạm trú|đăng ký cư trú|lưu trú/.test(t)) return "residence";
-  if (/gplx|lái xe|giấy phép lái/.test(t)) return "license";
+  if (/khai sinh|đăng ký khai sinh|giấy khai sinh/.test(t)) return "birth";
+  if (/tạm trú|đăng ký tạm trú|giữ chỗ tạm|lưu trú/.test(t)) return "residence";
+  if (/gplx|lái xe|giấy phép lái xe|giấy ph5p l5i/.test(t)) return "license";
   if (/hộ chiếu|passport|xuất nhập cảnh/.test(t)) return "passport";
-  if (/căn cước|cccd|chứng minh thư/.test(t)) return "identity";
-  if (/lệ phí|phí|bao nhiêu tiền/.test(t)) return "fees";
+  if (/cccd|chứng minh thư|căn cước/.test(t)) return "identity";
+  if (/phí|lệ phí|bao nhiêu tiền|giá/.test(t)) return "fees";
   if (/thời gian|giờ làm|mấy giờ/.test(t)) return "hours";
   return "";
 }
 
 function detectFollowUpIntent(text) {
   const t = normalizeVietnameseChatText(text);
-  if (/hướng dẫn đúng hơn|nói rõ hơn|chi tiết hơn|cụ thể hơn|hướng dẫn tiếp|giải thích thêm/.test(t)) {
-    return "detail";
-  }
-  if (/cần giấy tờ gì|hồ sơ gồm gì|chuẩn bị gì/.test(t)) {
-    return "documents";
-  }
-  if (/thủ tục thế nào|các bước|quy trình/.test(t)) {
-    return "steps";
-  }
-  if (/đăng ký lại|làm lại/.test(t)) {
-    return "reissue";
-  }
-  if (/đúng hạn/.test(t)) {
-    return "ontime";
-  }
-  if (/nộp online|trực tuyến|online/.test(t)) {
-    return "online";
-  }
-  if (/nộp trực tiếp|đến trực tiếp|trực tiếp/.test(t)) {
-    return "offline";
-  }
-  if (/ở đâu|nơi nào|cơ quan nào|ubnd nào|nộp ở đâu/.test(t)) {
-    return "authority";
-  }
-  if (/lưu ý|cần chú ý|cần lưu ý|mẹo/.test(t)) {
-    return "tips";
-  }
-  if (/bao lâu|mất bao lâu|thời hạn|mấy ngày/.test(t)) {
-    return "timeline";
-  }
-  if (/đúng rồi|đúng vậy|phải|vâng|ừ|ok|oke/.test(t)) {
-    return "confirm_yes";
-  }
-  if (/không phải|không|chưa|sai rồi/.test(t)) {
-    return "confirm_no";
-  }
+
+  if (/hướng dẫn|nộp ở đâu|nộp đâu|chi tiết|cần chi tiết/.test(t)) return "detail";
+  if (/cần giấy tờ|hồ sơ gồm|chuẩn bị|mang gì/.test(t)) return "documents";
+  if (/thủ tục|quy trình|các bước/.test(t)) return "steps";
+  if (/cấp lại|cấp đổi|làm lại/.test(t)) return "reissue";
+  if (/đúng hạn/.test(t)) return "ontime";
+  if (/nộp online|trực tuyến|online/.test(t)) return "online";
+  if (/nộp trực tiếp|đến trực tiếp/.test(t)) return "offline";
+  if (/nơi nào|cơ quan nào|ubnd|địa chỉ nộp|nộp ở đâu/.test(t)) return "authority";
+  if (/lưu ý|cần lưu|mẹo|note/.test(t)) return "tips";
+  if (/bao lâu|mất bao lâu|thời hạn|mấy ngày/.test(t)) return "timeline";
+  if (/đúng rồi|vâng|ok/.test(t)) return "confirm_yes";
+  if (/không|chưa|sai rồi/.test(t)) return "confirm_no";
+
   return "";
 }
 
@@ -825,27 +242,35 @@ function isShortFollowUpAnswer(text) {
   const t = normalizeVietnameseChatText(text);
   if (!t) return false;
   if (t.length <= 30) return true;
-  return /^(đúng hạn|đăng ký lại|nộp online|online|trực tiếp|cần giấy tờ gì|các bước|hướng dẫn tiếp)$/i.test(t);
+  return /^(đúng hạn|cấp lại|nộp online|trực tuyến|nộp trực tiếp|cần giấy tờ|các bước|hướng dẫn chi tiết)$/i.test(t);
 }
 
 function inferTopicFromAssistantPrompt(text) {
   const t = normalizeVietnameseChatText(text);
   if (/khai sinh|giấy khai sinh/.test(t)) return "birth";
-  if (/tạm trú|cư trú/.test(t)) return "residence";
-  if (/gplx|giấy phép lái|lái xe/.test(t)) return "license";
+  if (/tạm trú|lưu trú/.test(t)) return "residence";
+  if (/gplx|giấy phép lái xe|lái xe/.test(t)) return "license";
   if (/hộ chiếu|passport/.test(t)) return "passport";
-  if (/cccd|căn cước|chứng minh thư/.test(t)) return "identity";
+  if (/cccd|chứng minh thư|căn cước/.test(t)) return "identity";
   return "";
 }
 
-function inferPendingQuestion(text) {
-  const t = normalizeVietnameseChatText(text);
-  if (/đúng hạn|đăng ký lại/.test(t)) return "birth_branch";
+function inferPendingQuestion(lastAssistantMessage) {
+  const t = normalizeVietnameseChatText(lastAssistantMessage);
+  if (/đúng hạn|cấp lại|cấp đổi/.test(t)) return "birth_branch";
   if (/cấp mới|cấp lại|cấp đổi/.test(t)) return "variant_branch";
-  if (/hồ sơ|giấy tờ|chuẩn bị/.test(t)) return "documents";
+  if (/giấy tờ|hồ sơ|mang|chuẩn bị/.test(t)) return "documents";
   if (/các bước|quy trình|thủ tục/.test(t)) return "steps";
   if (/online|trực tuyến|trực tiếp/.test(t)) return "channel_branch";
-  if (/ở đâu|cơ quan nào|ubnd/.test(t)) return "authority";
+  if (/nộp ở đâu|cơ quan|ubnd/.test(t)) return "authority";
+  return "";
+}
+
+function findLastAssistantMessage(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (list[i]?.role === "assistant" && typeof list[i]?.content === "string") return list[i].content;
+  }
   return "";
 }
 
@@ -859,31 +284,17 @@ function findTopicFromMessages(messages) {
   return "";
 }
 
-function findLastAssistantMessage(messages) {
-  const list = Array.isArray(messages) ? messages : [];
-  for (let i = list.length - 1; i >= 0; i -= 1) {
-    if (list[i]?.role === "assistant" && typeof list[i]?.content === "string") {
-      return list[i].content;
-    }
-  }
-  return "";
-}
-
 function buildConversationState(messages, userText) {
   const lastAssistantMessage = findLastAssistantMessage(messages.slice(0, -1));
   const assistantTopic = inferTopicFromAssistantPrompt(lastAssistantMessage);
   const previousTopic = findTopicFromMessages(messages.slice(0, -1));
   const currentTopic = detectFallbackTopic(userText);
+
   const topic = currentTopic || assistantTopic || previousTopic;
   const followUpIntent = detectFollowUpIntent(userText);
   const pendingQuestion = inferPendingQuestion(lastAssistantMessage);
 
-  return {
-    topic,
-    followUpIntent,
-    pendingQuestion,
-    lastAssistantMessage
-  };
+  return { topic, followUpIntent, pendingQuestion, lastAssistantMessage };
 }
 
 function replyForTopic(topic, intent) {
@@ -891,16 +302,15 @@ function replyForTopic(topic, intent) {
   if (!kb) return "";
   if (intent === "detail") return kb.steps || kb.documents || kb.ask || "";
   if (intent === "tips") {
-    return kb.tips?.length
-      ? `Một số lưu ý khi làm ${kb.label}:\n${buildBulletList(kb.tips)}`
-      : kb.documents || kb.ask || "";
-  }
-  if (intent === "fees") {
-    return kb.fees || `Lệ phí của ${kb.label} có thể thay đổi theo địa phương và loại hồ sơ. Bạn nên kiểm tra biểu phí tại nơi tiếp nhận hoặc trên cổng dịch vụ công để biết chính xác.`;
+    if (kb.tips?.length) return `Lưu ý khi làm ${kb.label}:\n${buildBulletList(kb.tips)}`;
+    return kb.documents || kb.ask || "";
   }
   if (intent === "timeline") {
-    return `Thời hạn xử lý của ${kb.label} có thể khác theo từng địa phương và từng trường hợp hồ sơ. Bạn nên kiểm tra thông báo tại nơi tiếp nhận hoặc trên cổng dịch vụ công sau khi nộp hồ sơ để biết mốc thời gian chính xác.`;
+    // default timeline (soft, not guaranteed)
+    return `Thời gian xử lý của ${kb.label} có thể khác nhau theo từng địa phương. Bạn nên kiểm tra thông báo tại nơi tiếp nhận hoặc trên cổng dịch vụ để biết mốc thời gian chính xác.`;
   }
+  if (intent === "fees") return kb.fees || `Lệ phí cho ${kb.label} có thể thay đổi theo từng địa phương. Bạn nên kiểm tra biểu phí tại nơi tiếp nhận hoặc trên cổng dịch vụ công.`;
+
   return kb[intent] || kb.ask || "";
 }
 
@@ -909,62 +319,32 @@ function composeSmartReply(topic, primaryAnswer, intent) {
   if (!kb) return primaryAnswer;
 
   const nextStepByIntent = {
-    documents: "Nếu bạn muốn, tôi có thể nói tiếp phần các bước nộp hồ sơ hoặc nơi tiếp nhận.",
+    documents: "Nếu bạn muốn, tôi có thể nói tiếp phần các giấy tờ cần chuẩn bị hoặc cách nộp hồ sơ.",
     steps: "Nếu bạn muốn, tôi có thể nói tiếp phần giấy tờ cần chuẩn bị hoặc cách nộp online.",
-    ontime: "Nếu bạn muốn, tôi có thể tách tiếp phần hồ sơ cần chuẩn bị hoặc nơi nộp cụ thể.",
-    reissue: "Nếu bạn muốn, tôi có thể nói tiếp phần giấy tờ cần đối chiếu hoặc nơi tiếp nhận.",
-    online: "Nếu bạn muốn, tôi có thể nói tiếp phần giấy tờ cần scan hoặc các lỗi thường gặp khi nộp online.",
+    ontime: "Nếu bạn muốn, tôi có thể nói tiếp phần hồ sơ cần chuẩn bị hoặc nơi nộp.",
+    reissue: "Nếu bạn muốn, tôi có thể nói tiếp phần giấy tờ cần đổi/cấp lại hoặc nơi tiếp nhận.",
+    online: "Nếu bạn muốn, tôi có thể nói tiếp phần giấy tờ cần scan/chụp và các lưu ý khi nộp online.",
     offline: "Nếu bạn muốn, tôi có thể nói tiếp phần hồ sơ cần mang theo hoặc thời gian xử lý thường gặp.",
-    authority: "Nếu bạn muốn, tôi có thể nói tiếp phần hồ sơ hoặc các bước nộp.",
-    timeline: "Nếu bạn muốn, tôi có thể nói tiếp phần hồ sơ hoặc nơi tiếp nhận."
+    authority: "Nếu bạn muốn, tôi có thể nói tiếp nơi nộp hồ sơ và các bước nộp.",
+    timeline: "Nếu bạn muốn, tôi có thể nói tiếp mốc thời gian và cách theo dõi kết quả."
   };
 
-  const nextStep = nextStepByIntent[intent] || "Nếu bạn muốn, tôi có thể nói tiếp phần hồ sơ, các bước, nơi nộp hoặc lưu ý quan trọng.";
+  const nextStep = nextStepByIntent[intent] || "Nếu bạn muốn, tôi có thể nói tiếp phần các bước, nơi nộp hoặc lưu ý quan trọng.";
   return `${primaryAnswer}\n\n${nextStep}`;
 }
 
 function buildAiSuggestions(topic, intent = "") {
   const suggestionMap = {
-    birth: [
-      "Cần giấy tờ gì?",
-      "Nộp online thế nào?",
-      "Nộp ở đâu?",
-      "Có lưu ý gì quan trọng?"
-    ],
-    residence: [
-      "Hồ sơ cần chuẩn bị gì?",
-      "Các bước nộp tạm trú là gì?",
-      "Nộp online được không?",
-      "Thời gian xử lý bao lâu?"
-    ],
-    license: [
-      "Đổi GPLX cần giấy tờ gì?",
-      "Nộp online ra sao?",
-      "Thời gian xử lý bao lâu?",
-      "Có lưu ý gì?"
-    ],
-    passport: [
-      "Cấp hộ chiếu cần giấy tờ gì?",
-      "Nộp ở đâu?",
-      "Các bước thực hiện thế nào?",
-      "Có lưu ý gì?"
-    ],
-    identity: [
-      "Làm CCCD cần giấy tờ gì?",
-      "Nộp ở đâu?",
-      "Thời gian xử lý bao lâu?",
-      "Có lưu ý gì?"
-    ]
+    birth: ["Cần giấy tờ gì?", "Nộp online thế nào?", "Nộp ở đâu?", "Có lưu ý gì khi nộp hồ sơ?"],
+    residence: ["Hồ sơ cần chuẩn bị gồm?", "Các bước đăng ký tạm trú?", "Nộp online được không?", "Thời gian xử lý bao lâu?"],
+    license: ["Đổi/cấp lại GPLX cần giấy tờ gì?", "Nộp online ra sao?", "Thời gian xử lý bao lâu?", "Lưu ý khi làm hồ sơ"],
+    passport: ["Cấp hộ chiếu cần giấy tờ gì?", "Nộp ở đâu?", "Các bước thực hiện?", "Lưu ý"],
+    identity: ["Làm CCCD cần giấy tờ gì?", "Nộp ở đâu?", "Thời gian xử lý bao lâu?", "Lưu ý"],
   };
 
-  const generic = [
-    "Cần giấy tờ gì?",
-    "Các bước thực hiện thế nào?",
-    "Nộp ở đâu?",
-    "Có lưu ý gì quan trọng?"
-  ];
-
+  const generic = ["Cần giấy tờ gì?", "Các bước thực hiện ra sao?", "Nộp ở đâu?", "Lưu ý quan trọng" ];
   const suggestions = suggestionMap[topic] || generic;
+
   if (!intent) return suggestions.slice(0, 4);
 
   return suggestions
@@ -972,7 +352,7 @@ function buildAiSuggestions(topic, intent = "") {
       const normalized = normalizeVietnameseChatText(item);
       if (intent === "documents") return !normalized.includes("giấy tờ");
       if (intent === "steps") return !normalized.includes("bước");
-      if (intent === "authority") return !normalized.includes("ở đâu");
+      if (intent === "authority") return !normalized.includes("nộp ở đâu");
       if (intent === "tips") return !normalized.includes("lưu ý");
       return true;
     })
@@ -981,37 +361,42 @@ function buildAiSuggestions(topic, intent = "") {
 
 function replyForPendingQuestion(topic, pendingQuestion, userText, intent) {
   if (!topic) return "";
+
   if (pendingQuestion === "birth_branch") {
     if (intent === "ontime") return replyForTopic(topic, "ontime");
     if (intent === "reissue") return replyForTopic(topic, "reissue");
   }
+
   if (pendingQuestion === "channel_branch") {
     if (intent === "online") return replyForTopic(topic, "online");
     if (intent === "offline") return replyForTopic(topic, "offline");
   }
+
   if (pendingQuestion === "documents" && (intent === "confirm_yes" || isShortFollowUpAnswer(userText))) {
     return replyForTopic(topic, "documents");
   }
+
   if (pendingQuestion === "steps" && (intent === "confirm_yes" || isShortFollowUpAnswer(userText))) {
     return replyForTopic(topic, "steps");
   }
+
   return "";
 }
 
 function buildConversationSummary(messages, userText) {
   const state = buildConversationState(messages, userText);
   const recentUserMessages = messages
-    .filter((message) => message?.role === "user" && typeof message?.content === "string")
+    .filter((m) => m?.role === "user" && typeof m?.content === "string")
     .slice(-3)
-    .map((message) => `- ${message.content}`)
+    .map((m) => `- ${m.content}`)
     .join("\n");
 
   return [
-    state.topic ? `Chủ đề hiện tại suy ra: ${state.topic}` : "Chưa suy ra rõ chủ đề hiện tại",
+    state.topic ? `Chủ đề suy ra: ${state.topic}` : "Chưa suy ra chủ đề",
     state.followUpIntent ? `Ý định gần nhất của người dùng: ${state.followUpIntent}` : "Ý định gần nhất chưa rõ",
-    state.pendingQuestion ? `Câu hỏi nhánh gần nhất của trợ lý: ${state.pendingQuestion}` : "Không có câu hỏi nhánh đang chờ",
-    state.lastAssistantMessage ? `Tin nhắn gần nhất của trợ lý: ${state.lastAssistantMessage}` : "Chưa có tin nhắn trợ lý gần trước đó",
-    recentUserMessages ? `Ba tin nhắn người dùng gần nhất:\n${recentUserMessages}` : "Chưa có đủ lịch sử người dùng"
+    state.pendingQuestion ? `Câu hỏi nhánh gần nhất: ${state.pendingQuestion}` : "Không có câu hỏi nhánh",
+    state.lastAssistantMessage ? `Tin nhắn trợ lý gần nhất: ${state.lastAssistantMessage}` : "Chưa có tin nhắn trợ lý gần nhất",
+    recentUserMessages ? `Ba tin nhắn người dùng gần nhất:\n${recentUserMessages}` : "Chưa có tin nhắn người dùng" 
   ].join("\n");
 }
 
@@ -1034,65 +419,55 @@ function fallbackAiReply(userText, messages = []) {
   }
 
   if (/chào|xin chào|hello|hi\b/.test(t)) {
-    return "Xin chào! Tôi là trợ lý AI hỗ trợ thủ tục hành chính trên Cổng dịch vụ công. Bạn cần tra cứu thủ tục, biểu mẫu hay hướng dẫn nộp hồ sơ?";
+    return "Xin chào! Tôi là trợ lý AI hỗ trợ tra cứu thủ tục hành chính trên Cổng dịch vụ công. Bạn cần tra cứu thủ tục, biểu mẫu hay hướng dẫn nộp hồ sơ?";
   }
-  if (/căn cước|cccd|chứng minh thư/.test(t)) {
-    return "Với thủ tục liên quan CCCD/Căn cước, bạn nên chuẩn bị giấy tờ tùy thân hiện có, thông tin cư trú và kiểm tra cơ quan công an nơi tiếp nhận. Nếu bạn nói rõ là cấp mới, cấp đổi hay cấp lại, tôi sẽ hướng dẫn sát hơn.";
+
+  if (/chứng minh thư|cccd|căn cước/.test(t)) {
+    return "Với thủ tục liên quan CCCD/Căn cước công dân, bạn nên chuẩn bị giấy tờ tùy thân hiện có và thông tin cư trú, sau đó thực hiện theo hướng dẫn của cơ quan công an tại nơi tiếp nhận. Nếu bạn nói rõ bạn đang làm lần đầu/cấp đổi/cấp lại, tôi sẽ hướng dẫn sát hơn.";
   }
-  if (/khai sinh|hộ tịch|giấy khai sinh/.test(t)) {
-    return "Đăng ký khai sinh thường cần thông tin cha mẹ, giấy chứng sinh hoặc giấy tờ thay thế, cùng giấy tờ tùy thân của người đi đăng ký. Bạn cho tôi biết là đăng ký đúng hạn hay đăng ký lại để tôi hướng dẫn đúng hơn.";
+
+  if (/khai sinh/.test(t)) {
+    return "Đăng ký khai sinh thường cần thông tin của cha mẹ/người đi đăng ký và giấy tờ theo từng trường hợp (giấy chứng sinh hoặc giấy tờ thay thế, giấy tờ tùy thân). Bạn cho tôi biết bạn đăng ký đúng hạn hay đăng ký lại/cấp lại để tôi hướng dẫn đúng quy trình.";
   }
-  if (/tạm trú|đăng ký cư trú/.test(t)) {
-    return "Về tạm trú: thường cần CMND/CCCD, giấy tờ chỗ ở, phiếu báo tạm vắng (nếu có). Bạn nên chọn đúng cấp tiếp nhận (xã/phường) trên cổng và điền form trực tuyến.";
+
+  if (/tạm trú|lưu trú/.test(t)) {
+    return "Về tạm trú/lưu trú: thường cần giấy tờ tùy thân, giấy tờ chứng minh chỗ ở hợp pháp (nếu có), và hồ sơ/biểu mẫu theo hướng dẫn. Bạn cho tôi biết bạn muốn nộp trực tuyến hay trực tiếp để tôi hướng dẫn chính xác.";
   }
-  if (/gplx|lái xe|giấy phép lái/.test(t)) {
-    return "Đổi GPLX: chuẩn bị ảnh, giấy khám sức khỏe, GPLX cũ và làm theo hướng dẫn trên CSDL giao thông / cổng dịch vụ công — có thể nộp trực tuyến tùy địa phương.";
+
+  if (/gplx|giấy phép lái xe|lái xe/.test(t)) {
+    return "Về GPLX: chuẩn bị ảnh, giấy khám sức khỏe, GPLX cũ (nếu cấp lại/đổi) và thực hiện theo hướng dẫn tại cổng dịch vụ công/đơn vị tiếp nhận. Bạn cho tôi biết cấp mới hay cấp lại để tôi hướng dẫn sát hơn.";
   }
+
   if (/hộ chiếu|passport/.test(t)) {
-    return "Cấp/đổi hộ chiếu: kiểm tra ảnh, CMND/CCCD, lịch hẹn (nếu có). Nhiều bước đã được điện tử hóa — xem mục Hộ chiếu trên cổng.";
+    return "Cấp hộ chiếu: thường cần ảnh chân dung, CCCD/giấy tờ tùy thân và các giấy tờ theo yêu cầu. Bạn cho tôi biết bạn muốn cấp mới hay cấp lại để tôi hướng dẫn chi tiết.";
   }
-  if (/thời gian|giờ làm|mấy giờ/.test(t)) {
-    return "Thông thường bộ phận một cửa làm việc giờ hành chính (sáng 7h30–11h30, chiều 13h30–17h00), có thể khác theo địa phương.";
-  }
-  if (/lệ phí|phí|bao nhiêu tiền/.test(t)) {
-    return "Lệ phí phụ thuộc từng thủ tục và từng địa phương. Bạn hãy cho tôi biết tên thủ tục và nơi nộp hồ sơ để tôi hướng dẫn cách kiểm tra chính xác hơn trên cổng hoặc tại cơ quan tiếp nhận.";
-  }
+
   if (topic) {
     const topicReply = replyForTopic(topic, "");
     if (topicReply) return composeSmartReply(topic, topicReply, "");
   }
 
-  return "Cảm ơn bạn đã liên hệ. Hãy mô tả ngắn thủ tục (ví dụ: tạm trú, GPLX, hộ tịch) hoặc dùng ô tìm kiếm ở trên để tra cứu. Nếu cần trao đổi với cán bộ, hãy chọn tab “Chat cán bộ”.";
+  return "Cảm ơn bạn đã liên hệ. Hãy mô tả ngắn thủ tục bạn cần (ví dụ: tạm trú, GPLX, hộ chiếu, khai sinh) hoặc cho tôi biết bạn muốn nộp online hay trực tiếp.";
 }
 
 function buildKnowledgeSnippets(userText) {
   const t = String(userText || "").toLowerCase();
   const snippets = [];
 
-  if (/tạm trú|đăng ký cư trú|lưu trú/.test(t)) {
-    snippets.push(
-      "Chủ đề cư trú/tạm trú: ưu tiên hướng dẫn theo nhóm thông tin gồm giấy tờ tùy thân, giấy tờ chỗ ở hợp pháp, bước kê khai trực tuyến và lưu ý xác nhận tại công an/cơ quan cư trú địa phương."
-    );
+  if (/tạm trú|lưu trú/.test(t)) {
+    snippets.push("Tạm trú/lưu trú: ưu tiên hướng dẫn theo nhóm thông tin (giấy tờ tùy thân, giấy tờ chỗ ở hợp pháp, quy trình nộp trực tuyến và theo dõi xác nhận)." );
   }
-  if (/gplx|giấy phép lái|lái xe/.test(t)) {
-    snippets.push(
-      "Chủ đề GPLX: nêu rõ khác biệt giữa cấp đổi, cấp lại, đổi do sắp hết hạn; nhắc kiểm tra ảnh chân dung, giấy khám sức khỏe và kênh nộp hồ sơ trực tuyến của địa phương."
-    );
+  if (/gplx|giấy phép lái xe|lái xe/.test(t)) {
+    snippets.push("GPLX: nhắc kiểm tra sự khác nhau giữa cấp mới/cấp lại/đổi; chuẩn bị ảnh chân dung, giấy khám sức khỏe, và kênh nộp theo địa phương." );
   }
   if (/hộ chiếu|passport|xuất nhập cảnh/.test(t)) {
-    snippets.push(
-      "Chủ đề hộ chiếu: gợi ý người dùng chuẩn bị ảnh đúng chuẩn, CCCD/căn cước, thông tin nhân thân và kiểm tra nơi tiếp nhận hồ sơ thuộc cơ quan quản lý xuất nhập cảnh."
-    );
+    snippets.push("Hộ chiếu: chuẩn bị ảnh đúng chuẩn, CCCD/giấy tờ tùy thân và theo yêu cầu của cơ quan quản lý xuất nhập cảnh tại nơi tiếp nhận." );
   }
-  if (/khai sinh|hộ tịch|kết hôn|khai tử/.test(t)) {
-    snippets.push(
-      "Chủ đề hộ tịch: trả lời theo cấu trúc giấy tờ cần có, đối tượng đi nộp, nơi đăng ký, thời hạn xử lý và trường hợp phải đối chiếu bản gốc."
-    );
+  if (/khai sinh/.test(t)) {
+    snippets.push("Khai sinh: nhắc theo trường hợp đúng hạn/cấp lại; giấy tờ của cha mẹ/người đi đăng ký; nơi nộp và thời gian xử lý theo hướng dẫn." );
   }
-  if (/đất đai|sổ đỏ|quyền sử dụng đất/.test(t)) {
-    snippets.push(
-      "Chủ đề đất đai: nhấn mạnh hồ sơ thường nhiều biến thể theo loại thủ tục, cần hỏi thêm địa phương và loại biến động trước khi kết luận."
-    );
+  if (/căn cước|cccd|chứng minh thư|giấy tờ tùy thân/.test(t)) {
+    snippets.push("CCCD/Căn cước: nhấn mạnh xác định đúng loại thủ tục và kiểm tra giấy tờ trước khi nộp." );
   }
 
   return snippets;
@@ -1100,30 +475,10 @@ function buildKnowledgeSnippets(userText) {
 
 function buildSystemPrompt(rulesText, conversationSummary, snippets = []) {
   const knowledgeBlock = snippets.length
-    ? `\nNgữ cảnh chủ đề liên quan:\n- ${snippets.join("\n- ")}`
+    ? `\nNgữ cảnh liên quan:\n- ${snippets.join("\n- ")}`
     : "";
 
-  return `Bạn là GOV Assistant, trợ lý AI của Cổng Dịch vụ công Việt Nam.
-
-Mục tiêu:
-- Hỗ trợ người dân tra cứu thủ tục hành chính, giấy tờ, quy trình và lưu ý thực hiện.
-- Trả lời giống trợ lý chat hiện đại: thân thiện, mạch lạc, gọn, có định hướng bước tiếp theo.
-- Tuyệt đối không bịa thông tin pháp lý hoặc cam kết kết quả xử lý hồ sơ.
-
-Quy tắc trả lời hiện hành do admin cấu hình:
-${rulesText}${knowledgeBlock}
-
-Tóm tắt hội thoại hiện có:
-${conversationSummary}
-
-Cách trả lời:
-- Luôn trả lời bằng tiếng Việt.
-- Ưu tiên cấu trúc ngắn: trả lời trực tiếp, rồi liệt kê 2-5 ý quan trọng nếu cần.
-- Nếu câu hỏi chưa đủ dữ kiện, hỏi lại tối đa 1-2 ý quan trọng nhất.
-- Nếu người dùng đang trả lời cho câu hỏi phân nhánh trước đó của trợ lý, hãy nối tiếp đúng nhánh thay vì hỏi lại từ đầu.
-- Nếu có rủi ro sai khác theo địa phương/quy định mới, nói rõ đây là thông tin tham khảo và khuyên xác nhận tại cơ quan có thẩm quyền.
-- Không dùng emoji nếu không thật sự cần.
-- Nếu ngoài phạm vi thủ tục hành chính, lịch sự từ chối và hướng sang kênh hỗ trợ phù hợp.`;
+  return `Bạn là GOV Assistant, trợ lý AI của Cổng Dịch vụ công Việt Nam.\n\nMục tiêu:\n- Hỗ trợ người dân tra cứu thủ tục hành chính, giấy tờ, quy trình nộp hồ sơ và lưu ý thực hiện.\n- Trả lời giống kiểu chat hiện đại: thân thiện, mạch lạc, gọn và có chỉ dẫn bước tiếp theo.\n- Tuyệt đối không bịa thông tin pháp lý/không cam kết kết quả xử lý.\n\nQuy tắc trả lời hiện hành do admin cấu hình:\n${rulesText || ""}${knowledgeBlock}\n\nTóm tắt hội thoại hiện tại:\n${conversationSummary}\n\nCách trả lời:\n- Luôn trả lời bằng tiếng Việt.\n- Ưu tiên câu trả lời trực tiếp, rồi liệt kê 2-5 ý quan trọng nếu cần.\n- Nếu câu hỏi chưa đủ dữ kiện, hỏi lại 1-2 thông tin quan trọng nhất.\n- Nếu người dùng đã trả lời cho câu hỏi nhánh, trả lời tiếp ngay vào phần tương ứng.\n- Nếu có rủi ro sai khác theo địa phương/quy định mới, nêu rõ đây là tham khảo và khuyến nghị kiểm tra tại cơ quan có thẩm quyền.\n- Không dùng emoji nếu không thật sự cần.\n- Nếu ngoài phạm vi thủ tục hành chính, lịch sự từ chối và hướng người sang kênh hỗ trợ phù hợp.`;
 }
 
 async function openAiChat(messages, rulesText, userText) {
@@ -1133,12 +488,13 @@ async function openAiChat(messages, rulesText, userText) {
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   const snippets = buildKnowledgeSnippets(userText);
   const conversationSummary = buildConversationSummary(messages, userText);
+
   const body = {
     model,
     messages: [
       {
         role: "system",
-        content: buildSystemPrompt(rulesText, conversationSummary, snippets)
+        content: buildSystemPrompt(rulesText, conversationSummary, snippets),
       },
       ...messages,
     ],
@@ -1148,7 +504,10 @@ async function openAiChat(messages, rulesText, userText) {
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
     body: JSON.stringify(body),
   });
 
@@ -1173,9 +532,7 @@ exports.aiChat = async (req, res) => {
       userText = raw.trim();
     } else if (Array.isArray(history) && history.length) {
       const last = history[history.length - 1];
-      if (last?.role === "user" && typeof last.content === "string") {
-        userText = last.content.trim();
-      }
+      if (last?.role === "user" && typeof last.content === "string") userText = last.content.trim();
     }
 
     if (!userText) return res.status(400).json({ message: "Vui lòng nhập nội dung câu hỏi." });
@@ -1183,15 +540,19 @@ exports.aiChat = async (req, res) => {
 
     const msgs = Array.isArray(history)
       ? history
-          .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+          .filter(
+            (m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string"
+          )
           .slice(-12)
           .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
       : [{ role: "user", content: userText }];
 
     const rulesText = await getAiRules().catch(() => "");
     const state = buildConversationState(msgs, userText);
+
     let reply = null;
     let mode = process.env.OPENAI_API_KEY ? "openai" : "fallback";
+
     try {
       reply = await openAiChat(msgs, rulesText, userText);
     } catch (e) {
@@ -1222,41 +583,41 @@ exports.aiChat = async (req, res) => {
       mode,
       userId: req.user?.id || "",
       userName: actorName,
-      turnIndex: msgs.filter((message) => message.role === "user").length,
+      turnIndex: msgs.filter((m) => m.role === "user").length,
       confidenceLabel: mode === "openai" ? "assisted" : "fallback",
-      note: mode === "fallback" ? "Tra loi bang bo quy tac noi bo/fallback" : "Tra loi bang mo hinh AI",
+      note:
+        mode === "fallback"
+          ? "Trả lời bằng bộ quy tắc nội bộ/fallback"
+          : "Trả lời bằng mô hình AI",
       meta: {
         turns: msgs.length,
         detectedTopic,
         suggestions,
         hasAuthenticatedUser: Boolean(req.user?.id),
-        ip:
-          req.headers["x-forwarded-for"] ||
-          req.socket?.remoteAddress ||
-          "",
-        userAgent: req.headers["user-agent"] || ""
-      }
+        ip: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "",
+        userAgent: req.headers["user-agent"] || "",
+      },
     }).catch((error) => {
       console.error("appendAiHistory error:", error.message);
     });
 
-    res.json({
-      reply,
-      mode,
-      sessionId,
-      detectedTopic,
-      suggestions
-    });
+    res.json({ reply, mode, sessionId, detectedTopic, suggestions });
   } catch (err) {
-    res.status(500).json({ message: err.message || "Lỗi trợ lý AI" });
+    res.status(500).json({ message: err.message || "Lỗi trả lời AI" });
   }
 };
 
-// ─── Room/Contact queries ─────────────────────────────────────────────────────
+// ---------------------------
+// Room / Contact APIs
+// (kept as in existing controller)
+// ---------------------------
 exports.chatContacts = async (req, res) => {
   try {
     const q = req.query?.q ?? req.query?.query ?? "";
-    const contacts = await multiChatStore.searchContacts({ keyword: q, currentUserId: req.user.id });
+    const contacts = await multiChatStore.searchContacts({
+      keyword: q,
+      currentUserId: req.user.id,
+    });
     return res.json({ contacts });
   } catch (err) {
     console.error("[chatContacts]", err);
@@ -1289,16 +650,17 @@ exports.friendRequests = async (req, res) => {
   try {
     const [incoming, outgoing] = await Promise.all([
       userStore.listIncomingFriendRequests(req.user.id),
-      userStore.listOutgoingFriendRequests(req.user.id)
+      userStore.listOutgoingFriendRequests(req.user.id),
     ]);
+
     return res.json({
       requests: incoming,
       incoming,
       outgoing,
       counts: {
         incoming: incoming.length,
-        outgoing: outgoing.length
-      }
+        outgoing: outgoing.length,
+      },
     });
   } catch (err) {
     console.error("[friendRequests]", err);
@@ -1309,9 +671,7 @@ exports.friendRequests = async (req, res) => {
 exports.sendFriendRequest = async (req, res) => {
   try {
     const targetUserId = String(req.body?.targetUserId || "").trim();
-    if (!targetUserId) {
-      return res.status(400).json({ message: "Thiếu người dùng cần kết bạn" });
-    }
+    if (!targetUserId) return res.status(400).json({ message: "Thiếu người dùng cần kết bạn" });
     const result = await userStore.sendFriendRequest(req.user.id, targetUserId);
     return res.json(result);
   } catch (err) {
@@ -1336,9 +696,7 @@ exports.respondFriendRequest = async (req, res) => {
 exports.revokeFriendRequest = async (req, res) => {
   try {
     const targetUserId = String(req.params.userId || "").trim();
-    if (!targetUserId) {
-      return res.status(400).json({ message: "Thiếu người dùng cần thu hồi lời mời" });
-    }
+    if (!targetUserId) return res.status(400).json({ message: "Thiếu người dùng cần thu hồi" });
     const result = await userStore.revokeFriendRequest(req.user.id, targetUserId);
     return res.json(result);
   } catch (err) {
@@ -1374,7 +732,7 @@ exports.blockedFriends = async (req, res) => {
     return res.json({ users });
   } catch (err) {
     console.error("[blockedFriends]", err);
-    return res.status(500).json({ message: err.message || "Không thể tải danh sách đã chặn" });
+    return res.status(500).json({ message: err.message || "Không thể tải danh sách bị chặn" });
   }
 };
 
@@ -1392,7 +750,9 @@ exports.unblockFriend = async (req, res) => {
 exports.chatRooms = async (req, res) => {
   try {
     const rooms = await multiChatStore.listRoomsForUser(req.user.id);
-    const hydrated = await Promise.all(rooms.map((r) => multiChatStore.hydrateRoomForUser(r, req.user.id)));
+    const hydrated = await Promise.all(
+      rooms.map((r) => multiChatStore.hydrateRoomForUser(r, req.user.id))
+    );
     return res.json({ rooms: hydrated });
   } catch (err) {
     console.error("[chatRooms]", err);
@@ -1404,8 +764,10 @@ exports.chatRoomDetail = async (req, res) => {
   try {
     const room = await multiChatStore.getRoomById(req.params.roomId);
     if (!room) return res.status(404).json({ message: "Không tìm thấy phòng chat" });
+
     const isMember = room.members?.some((m) => m.id === req.user.id);
     if (!isMember) return res.status(403).json({ message: "Bạn không có quyền truy cập phòng này" });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
   } catch (err) {
@@ -1417,6 +779,7 @@ exports.ensureDirectChat = async (req, res) => {
   try {
     const targetUserId = String(req.body?.userId || "").trim();
     if (!targetUserId) return res.status(400).json({ message: "Thiếu ID người dùng" });
+
     const room = await multiChatStore.ensureDirectRoom(req.user.id, targetUserId);
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
@@ -1433,6 +796,7 @@ exports.createGroupChat = async (req, res) => {
       avatarUrl: req.body?.avatarUrl,
       memberIds: req.body?.memberIds,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
   } catch (err) {
@@ -1443,7 +807,9 @@ exports.createGroupChat = async (req, res) => {
 exports.groupInvites = async (req, res) => {
   try {
     const rooms = await multiChatStore.listGroupInvitesForUser(req.user.id);
-    const invites = await Promise.all(rooms.map((room) => multiChatStore.hydrateRoomForUser(room, req.user.id)));
+    const invites = await Promise.all(
+      rooms.map((room) => multiChatStore.hydrateRoomForUser(room, req.user.id))
+    );
     return res.json({ invites });
   } catch (err) {
     console.error("[groupInvites]", err);
@@ -1454,11 +820,13 @@ exports.groupInvites = async (req, res) => {
 exports.inviteGroupMembers = async (req, res) => {
   try {
     const memberIds = Array.isArray(req.body?.memberIds) ? req.body.memberIds : [];
+
     const room = await multiChatStore.inviteMembersToGroup({
       roomId: req.params.roomId,
       requesterId: req.user.id,
-      memberIds
+      memberIds,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
   } catch (err) {
@@ -1472,11 +840,13 @@ exports.respondGroupInvite = async (req, res) => {
     if (!["accept", "decline"].includes(action)) {
       return res.status(400).json({ message: "Phản hồi không hợp lệ" });
     }
+
     const room = await multiChatStore.respondToGroupInvite({
       roomId: req.params.roomId,
       userId: req.user.id,
-      action
+      action,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
   } catch (err) {
@@ -1490,7 +860,10 @@ exports.sendRoomMessage = async (req, res) => {
     const media = req.body?.media || null;
     const location = req.body?.location || null;
     const replyToMessageId = String(req.body?.replyToMessageId || "").trim();
-    if (!text && !media && !location) return res.status(400).json({ message: "Tin nhắn không được để trống" });
+
+    if (!text && !media && !location) {
+      return res.status(400).json({ message: "Tin nhắn không được để trống" });
+    }
 
     const room = await multiChatStore.appendMessage({
       roomId: req.params.roomId,
@@ -1498,13 +871,12 @@ exports.sendRoomMessage = async (req, res) => {
       text,
       media,
       location,
-      replyToMessageId
+      replyToMessageId,
     });
 
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     const lastMessage = hydrated.messages[hydrated.messages.length - 1];
 
-    // ✅ Emit đúng event name + đúng room
     await emitToRoomMembers(room, { roomId: req.params.roomId, message: lastMessage });
 
     return res.json({ room: hydrated, message: lastMessage });
@@ -1517,23 +889,24 @@ exports.presignChatMediaUpload = async (req, res) => {
   if (!isS3Configured()) {
     return res.status(503).json({
       message:
-        "Chưa cấu hình S3. Đặt S3_BUCKET (hoặc AWS_S3_BUCKET), AWS_REGION và AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY trong backend/.env."
+        "Chưa cấu hình S3. Đặt S3_BUCKET (hoặc AWS_S3_BUCKET), AWS_REGION và AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY trong backend/.env.",
     });
   }
+
   try {
-    const contentType = String(req.body?.contentType || "")
-      .trim()
-      .toLowerCase();
+    const contentType = String(req.body?.contentType || "").trim().toLowerCase();
     let fileName = String(req.body?.fileName || "file").trim();
+
     const isImageOrVideo = contentType.startsWith("image/") || contentType.startsWith("video/");
     const isDocument = [
       "application/pdf",
       "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ].includes(contentType);
+
     if (!contentType || (!isImageOrVideo && !isDocument)) {
       return res.status(400).json({
-        message: "Chỉ chấp nhận ảnh, video hoặc tài liệu (.pdf/.doc/.docx)"
+        message: "Chỉ chấp nhận ảnh, video hoặc tài liệu (.pdf/.doc/.docx)",
       });
     }
 
@@ -1548,13 +921,18 @@ exports.presignChatMediaUpload = async (req, res) => {
             : ".jpg";
       fileName += inferred;
     }
-    const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
+
+    const safeName = path
+      .basename(fileName)
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .slice(0, 120);
+
     const key = `chat-media/${req.user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName}`;
 
     const { uploadUrl, publicUrl } = await createPresignedPut({
       key,
       contentType,
-      expiresSec: 300
+      expiresSec: 300,
     });
 
     return res.json({
@@ -1562,43 +940,44 @@ exports.presignChatMediaUpload = async (req, res) => {
       publicUrl,
       key,
       method: "PUT",
-      headers: { "Content-Type": contentType }
+      headers: { "Content-Type": contentType },
     });
   } catch (err) {
-    return res.status(500).json({
-      message: err.message || "Không tạo được link upload media chat"
-    });
+    return res.status(500).json({ message: err.message || "Không tạo được link upload media chat" });
   }
 };
 
 exports.uploadChatMedia = async (req, res) => {
   if (!isS3Configured()) {
-    return res.status(503).json({
-      message: "Chưa cấu hình S3."
-    });
+    return res.status(503).json({ message: "Chưa cấu hình S3." });
   }
+
   try {
     const file = req.file;
-    if (!file) {
-      return res.status(400).json({ message: "Không có file được upload" });
-    }
+    if (!file) return res.status(400).json({ message: "Không có file được upload" });
 
     const contentType = file.mimetype;
     const isImageOrVideo = contentType.startsWith("image/") || contentType.startsWith("video/");
     const isDocument = [
       "application/pdf",
       "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ].includes(contentType);
+
     if (!contentType || (!isImageOrVideo && !isDocument)) {
       return res.status(400).json({
-        message: "Chỉ chấp nhận ảnh, video hoặc tài liệu (.pdf/.doc/.docx)"
+        message: "Chỉ chấp nhận ảnh, video hoặc tài liệu (.pdf/.doc/.docx)",
       });
     }
 
     const fileName = file.originalname || "file";
     const ext = path.extname(fileName).toLowerCase();
-    let safeName = path.basename(fileName, ext).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
+
+    let safeName = path
+      .basename(fileName, ext)
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .slice(0, 100);
+
     if (!ext) {
       const inferred = contentType.startsWith("video/")
         ? ".mp4"
@@ -1611,25 +990,24 @@ exports.uploadChatMedia = async (req, res) => {
     } else {
       safeName += ext;
     }
+
     const key = `chat-media/${req.user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}-${safeName}`;
 
     const { uploadBuffer } = require("../config/s3");
     const uploaded = await uploadBuffer({
       key,
       buffer: file.buffer,
-      contentType
+      contentType,
     });
 
     return res.json({
       url: uploaded.publicUrl,
       publicUrl: uploaded.publicUrl,
       key: uploaded.key,
-      contentType: uploaded.contentType
+      contentType: uploaded.contentType,
     });
   } catch (err) {
-    return res.status(500).json({
-      message: err.message || "Không upload được media chat"
-    });
+    return res.status(500).json({ message: err.message || "Không upload được media chat" });
   }
 };
 
@@ -1640,8 +1018,10 @@ exports.unsendRoomMessage = async (req, res) => {
       messageId: req.params.messageId,
       requesterId: req.user.id,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     await emitToRoomMembers(room, { roomId: req.params.roomId });
+
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể thu hồi tin nhắn" });
@@ -1655,6 +1035,7 @@ exports.deleteRoomMessageForMe = async (req, res) => {
       messageId: req.params.messageId,
       userId: req.user.id,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
   } catch (err) {
@@ -1669,13 +1050,16 @@ exports.togglePinRoomMessage = async (req, res) => {
       messageId: req.params.messageId,
       requesterId: req.user.id,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     const message = hydrated.messages.find((m) => m.id === req.params.messageId) || null;
+
     if (message?.isPinned || message?.pinned) {
       await emitToRoomAction(room, "message:pinned", { roomId: req.params.roomId, message });
     } else {
       await emitToRoomAction(room, "message:unpinned", { roomId: req.params.roomId, message });
     }
+
     await emitToRoomMembers(room, { roomId: req.params.roomId, message, action: "pin-updated" });
     return res.json({ room: hydrated, message });
   } catch (err) {
@@ -1712,11 +1096,12 @@ exports.addGroupMember = async (req, res) => {
       requesterId: req.user.id,
       memberId: req.body?.memberId,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     await emitToRoomMembers(room, { roomId: req.params.roomId });
     return res.json({ room: hydrated });
   } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể thêm thành viên" });
+    return res.status(400).json({ message: err.message || "Không thể mời thành viên" });
   }
 };
 
@@ -1727,6 +1112,7 @@ exports.removeGroupMember = async (req, res) => {
       requesterId: req.user.id,
       memberId: req.params.memberId,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     await emitToRoomMembers(room, { roomId: req.params.roomId });
     return res.json({ room: hydrated });
@@ -1743,10 +1129,11 @@ exports.assignDeputy = async (req, res) => {
       memberId: req.params.memberId,
       enabled: true,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
   } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể gán quyền phó nhóm" });
+    return res.status(400).json({ message: err.message || "Không thể gán quyền phó" });
   }
 };
 
@@ -1758,10 +1145,11 @@ exports.removeDeputy = async (req, res) => {
       memberId: req.params.memberId,
       enabled: false,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     return res.json({ room: hydrated });
   } catch (err) {
-    return res.status(400).json({ message: err.message || "Không thể gỡ quyền phó nhóm" });
+    return res.status(400).json({ message: err.message || "Không thể gỡ quyền phó" });
   }
 };
 
@@ -1769,8 +1157,10 @@ exports.updateGroupChat = async (req, res) => {
   try {
     const name = req.body?.name;
     const avatarUrl = req.body?.avatarUrl;
+
     const hasName = typeof name === "string";
     const hasAvatar = typeof avatarUrl === "string";
+
     if (!hasName && !hasAvatar) {
       return res.status(400).json({ message: "Không có thông tin cần cập nhật" });
     }
@@ -1779,10 +1169,12 @@ exports.updateGroupChat = async (req, res) => {
       roomId: req.params.roomId,
       requesterId: req.user.id,
       name: hasName ? name : undefined,
-      avatarUrl: hasAvatar ? avatarUrl : undefined
+      avatarUrl: hasAvatar ? avatarUrl : undefined,
     });
+
     const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
     await emitToRoomMembers(room, { roomId: req.params.roomId, action: "group-updated" });
+
     return res.json({ room: hydrated });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể cập nhật nhóm" });
@@ -1800,4 +1192,7 @@ exports.dissolveGroup = async (req, res) => {
     return res.status(400).json({ message: err.message || "Không thể giải tán nhóm" });
   }
 };
->>>>>>> origin/main
+
+// keep multer import used by routes if needed in other files
+exports._multer = multer;
+
