@@ -347,7 +347,7 @@ function ChatMultiPurpose({
             )}
           </div>
         )}
-        {messages.map((m) => {
+        {messages.map((m, index) => {
           const isMine = m.senderId === user?.id;
           const reactions = reactionMap[m.id] || [];
           const senderMember = activeRoom?.members?.find((x) => x.id === m.senderId);
@@ -355,6 +355,17 @@ function ChatMultiPurpose({
           const senderAvatar = isMine
             ? getAvatarUrl(user)
             : (m.senderAvatar || getAvatarUrl(senderMember) || (activeRoom.type === "group" ? GROUP_FALLBACK_AVATAR : headerAvatar));
+          const prevMessage = messages[index - 1];
+          const startsSenderRun =
+            !prevMessage ||
+            prevMessage.senderId !== m.senderId ||
+            Boolean(prevMessage.unsentForAll);
+          const showGroupSenderName =
+            activeRoom.type === "group" &&
+            !isMine &&
+            !m.unsentForAll &&
+            startsSenderRun;
+          const showAvatar = !isMine && (activeRoom.type !== "group" || startsSenderRun);
 
           return (
             <div
@@ -376,7 +387,13 @@ function ChatMultiPurpose({
                 setReactionHoverId(null);
               }}
             >
-              {!isMine && <Avatar src={senderAvatar} name={senderName} className="mt-1 h-7 w-7 rounded-full border border-slate-200 object-cover" />}
+              {!isMine ? (
+                showAvatar ? (
+                  <Avatar src={senderAvatar} name={senderName} className="mt-1 h-7 w-7 shrink-0 rounded-full border border-slate-200 object-cover" />
+                ) : (
+                  <div className="h-7 w-7 shrink-0" />
+                )
+              ) : null}
               <div className={`relative flex max-w-[88%] flex-col sm:max-w-[82%] ${isMine ? "items-end" : "items-start"}`}>
                 <Bubble
                   text={m.unsentForAll ? "Tin nhắn đã được thu hồi" : m.text}
@@ -393,6 +410,8 @@ function ChatMultiPurpose({
                   createdAt={m.createdAt}
                   pinned={m.pinned}
                   isPinned={m.isPinned ?? m.pinned}
+                  senderName={senderName}
+                  showSenderName={showGroupSenderName}
                   onMediaRendered={scrollToLatestMessage}
                 />
                 {!m.unsentForAll && hoverMessageId === m.id && (

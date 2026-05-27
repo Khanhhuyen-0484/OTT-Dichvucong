@@ -57,6 +57,8 @@ function Bubble({
   reactions = [],
   pinned,
   isPinned,
+  senderName,
+  showSenderName = false,
   onMediaRendered,
 }) {
   // =========================
@@ -104,7 +106,7 @@ function Bubble({
   const fileName =
     fileMedia?.name ||
     messageFileName ||
-    (fileUrl ? fileUrl.split("/").pop() : "T??p ?'?nh k?m");
+    (fileUrl ? fileUrl.split("/").pop() : "Tệp đính kèm");
 
   const ext = (fileName.split(".").pop() || "").toLowerCase();
   const resolvedExt = ext || mediaExt;
@@ -149,14 +151,21 @@ function Bubble({
 
   if (isCallLog) {
     return (
-      <div className="flex w-full justify-center py-1">
-        <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1.5 text-xs text-gray-600 shadow-sm">
-          {callLog?.status === "missed" ? (
-            <PhoneMissed size={14} className="text-red-500" />
-          ) : (
-            <Phone size={14} />
-          )}
-          <span>Cuộc gọi</span>
+      <div className="inline-flex py-1">
+        <div className="rounded-[15px] border bg-white px-3 py-2 text-gray-600 shadow-sm">
+          {showSenderName && senderName ? (
+            <div className="mb-1 text-[11px] font-semibold leading-none text-slate-500">
+              {senderName}
+            </div>
+          ) : null}
+          <div className="inline-flex items-center gap-2 text-xs">
+            {callLog?.status === "missed" ? (
+              <PhoneMissed size={14} className="text-red-500" />
+            ) : (
+              <Phone size={14} />
+            )}
+            <span>Cuộc gọi</span>
+          </div>
         </div>
       </div>
     );
@@ -182,6 +191,12 @@ function Bubble({
         }`}
         style={{ maxWidth: "280px" }}
       >
+        {showSenderName && senderName ? (
+          <div className="mb-1 text-[11px] font-semibold leading-none text-slate-500">
+            {senderName}
+          </div>
+        ) : null}
+
         {/* REPLY */}
         {replyTo && !onlyImageMessage && (
           <div className="mb-2 rounded border bg-gray-50 px-2 py-1 text-[11px]">
