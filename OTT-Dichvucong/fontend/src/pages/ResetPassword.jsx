@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import GovHeader from "../components/GovHeader.jsx";
-import RegisterPasswordField from "../components/RegisterPasswordField.jsx";
 import { getApiErrorMessage, resetPassword } from "../lib/api.js";
 
 export default function ResetPassword() {
@@ -69,13 +68,7 @@ export default function ResetPassword() {
             </button>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <RegisterPasswordField
-                label="Mật khẩu mới"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                placeholder="Nhập mật khẩu mới"
-              />
+              <Field label="Mật khẩu mới" value={password} onChange={setPassword} />
               <Field label="Nhập lại mật khẩu mới" value={confirmPassword} onChange={setConfirmPassword} />
               <button disabled={loading} className="w-full rounded-xl bg-[#003366] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">
                 {loading ? "Đang xử lý..." : "Đặt lại mật khẩu"}
