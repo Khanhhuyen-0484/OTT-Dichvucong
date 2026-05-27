@@ -5,8 +5,8 @@ const dotenv = require("dotenv");
 let loadedPath = null;
 
 /**
- * N?p backend/.env ??" ?'?c file + dotenv.parse (b? BOM UTF-8) r?"i ghi ?'? process.env.
- * Tr?nh tru?ng h?p dotenv.config b? qua file ho?c bi?n kh?ng v?o env.
+ * Nạp backend/.env — đọc file + dotenv.parse (bỏ BOM UTF-8) rồi ghi đè process.env.
+ * Tránh trường hợp dotenv.config bỏ qua file hoặc biến không vào env.
  */
 function loadEnv() {
   if (loadedPath) return loadedPath;
@@ -27,7 +27,7 @@ function loadEnv() {
 
       const parsed = dotenv.parse(raw);
       if (Object.keys(parsed).length === 0) {
-        console.warn("[loadEnv] File kh?ng c? bi?n ENV h?p l??:", envPath);
+        console.warn("[loadEnv] File không có biến ENV hợp lệ:", envPath);
         continue;
       }
       for (const [key, value] of Object.entries(parsed)) {
@@ -35,21 +35,21 @@ function loadEnv() {
       }
 
       loadedPath = envPath;
-      console.log("[loadEnv] ?? n?p:", envPath);
+      console.log("[loadEnv] Đã nạp:", envPath);
       const hasMail = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
       if (!hasMail) {
         console.warn(
-          "[loadEnv] Trong file kh?ng th?y EMAIL_USER/EMAIL_PASS sau khi parse. Keys:",
+          "[loadEnv] Trong file không thấy EMAIL_USER/EMAIL_PASS sau khi parse. Keys:",
           Object.keys(parsed).join(", ")
         );
       }
       return loadedPath;
     } catch (err) {
-      console.error("[loadEnv] L?-i ?'?c .env:", envPath, err.message);
+      console.error("[loadEnv] Lỗi đọc .env:", envPath, err.message);
     }
   }
 
-  console.warn("[loadEnv] Kh?ng t?m th?y .env trong:", candidates);
+  console.warn("[loadEnv] Không tìm thấy .env trong:", candidates);
   return null;
 }
 
