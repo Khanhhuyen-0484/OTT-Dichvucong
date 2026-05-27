@@ -422,42 +422,6 @@ async function updateUserAvatar(userId, avatarUrl) {
   return updateUserById(userId, { avatarUrl });
 }
 
-function removeUserIdFromRelations(user, deletedUserId) {
-  const next = withFriendFields(user);
-  if (!next || next.id === deletedUserId) return { changed: false, user: next };
-
-  const relationKeys = [
-    "friendIds",
-    "incomingFriendRequestIds",
-    "outgoingFriendRequestIds",
-    "blockedUserIds",
-  ];
-  let changed = false;
-
-  for (const key of relationKeys) {
-    const before = next[key] || [];
-    const after = before.filter((id) => id !== deletedUserId);
-    if (after.length !== before.length) {
-      next[key] = after;
-      changed = true;
-    }
-  }
-
-  return { changed, user: next };
-}
-
-async function cleanupDeletedUserReferences(deletedUserId) {
-  const users = await listUsers();
-  const updates = users
-    .map((user) => removeUserIdFromRelations(user, deletedUserId))
-    .filter((result) => result.changed && result.user?.id)
-    .map((result) => saveUserRecord(result.user));
-
-  if (updates.length > 0) {
-    await Promise.all(updates);
-  }
-}
-
 async function deleteUserById(id) {
   try {
     if (!id) return false;
@@ -471,9 +435,6 @@ async function deleteUserById(id) {
         Key: { id },
       })
     );
-    cleanupDeletedUserReferences(id).catch((error) => {
-      console.error("[userStore.deleteUserById] Failed to cleanup user references:", error?.name, error?.message, error);
-    });
     return Boolean(existing);
   } catch (error) {
     console.error("[userStore.deleteUserById] DynamoDB error:", error?.name, error?.message, error);

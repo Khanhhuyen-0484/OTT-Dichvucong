@@ -600,7 +600,23 @@ exports.addApplicationSupplement = async (req, res) => {
   const { formData = {}, attachments = [], note = "" } = req.body || {};
   const supplementNote = String(note || formData.supplementNote || "").trim();
   const nextFormData = { ...(application.formData || {}), ...formData };
-  const nextAttachments = Array.isArray(attachments) && attachments.length ? attachments : application.attachments || [];
+  const existingAttachments = Array.isArray(application.attachments)
+    ? application.attachments.map((item) => ({
+        ...item,
+        attachmentGroup: item.attachmentGroup || item.source || "initial",
+      }))
+    : [];
+  const supplementAttachments = Array.isArray(attachments)
+    ? attachments.map((item) => ({
+        ...item,
+        attachmentGroup: "supplement",
+        source: "supplement",
+        supplementedAt: nowIso(),
+      }))
+    : [];
+  const nextAttachments = supplementAttachments.length
+    ? [...existingAttachments, ...supplementAttachments]
+    : existingAttachments;
   const timeline = pushTimeline(application, {
     status: "SUPPLEMENTED",
     action: "supplement",
@@ -612,6 +628,10 @@ exports.addApplicationSupplement = async (req, res) => {
     ...application,
     formData: nextFormData,
     attachments: nextAttachments,
+    supplementAttachments: [
+      ...(Array.isArray(application.supplementAttachments) ? application.supplementAttachments : []),
+      ...supplementAttachments,
+    ],
     status: "SUPPLEMENTED",
     updatedAt: nowIso(),
     timeline,

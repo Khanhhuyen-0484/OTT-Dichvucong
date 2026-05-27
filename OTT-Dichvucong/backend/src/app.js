@@ -72,6 +72,7 @@ app.get("/api/test", authMiddleware, (req, res) => {
 
 // API routes
 app.use("/api/chat", require("./routes/chat"));
+app.use("/api/ai", require("./routes/ai"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/upload", require("./routes/upload"));

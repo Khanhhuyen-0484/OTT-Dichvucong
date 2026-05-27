@@ -7,6 +7,11 @@ const path = require("path");
 const multer = require("multer");
 const { createPresignedPut, isS3Configured } = require("../config/s3");
 const { getAiRules, appendAiHistory } = require("../store/adminStore");
+const {
+  AI_ASSISTANT_ID,
+  buildAiMessage,
+  generateAiReply,
+} = require("../services/aiService");
 
 // ---------------------------
 // Socket helpers
@@ -481,6 +486,235 @@ function buildSystemPrompt(rulesText, conversationSummary, snippets = []) {
   return `Bạn là GOV Assistant, trợ lý AI của Cổng Dịch vụ công Việt Nam.\n\nMục tiêu:\n- Hỗ trợ người dân tra cứu thủ tục hành chính, giấy tờ, quy trình nộp hồ sơ và lưu ý thực hiện.\n- Trả lời giống kiểu chat hiện đại: thân thiện, mạch lạc, gọn và có chỉ dẫn bước tiếp theo.\n- Tuyệt đối không bịa thông tin pháp lý/không cam kết kết quả xử lý.\n\nQuy tắc trả lời hiện hành do admin cấu hình:\n${rulesText || ""}${knowledgeBlock}\n\nTóm tắt hội thoại hiện tại:\n${conversationSummary}\n\nCách trả lời:\n- Luôn trả lời bằng tiếng Việt.\n- Ưu tiên câu trả lời trực tiếp, rồi liệt kê 2-5 ý quan trọng nếu cần.\n- Nếu câu hỏi chưa đủ dữ kiện, hỏi lại 1-2 thông tin quan trọng nhất.\n- Nếu người dùng đã trả lời cho câu hỏi nhánh, trả lời tiếp ngay vào phần tương ứng.\n- Nếu có rủi ro sai khác theo địa phương/quy định mới, nêu rõ đây là tham khảo và khuyến nghị kiểm tra tại cơ quan có thẩm quyền.\n- Không dùng emoji nếu không thật sự cần.\n- Nếu ngoài phạm vi thủ tục hành chính, lịch sự từ chối và hướng người sang kênh hỗ trợ phù hợp.`;
 }
 
+const CLEAN_AI_KB = {
+  birth: {
+    label: "khai sinh",
+    documents: "Hồ sơ khai sinh thường gồm giấy chứng sinh hoặc giấy tờ thay thế, giấy tờ tùy thân của cha/mẹ hoặc người đi đăng ký, thông tin cư trú và giấy tờ liên quan theo yêu cầu nơi tiếp nhận.",
+    steps: "Các bước cơ bản: 1) Chuẩn bị giấy tờ; 2) Nộp hồ sơ tại UBND cấp xã có thẩm quyền hoặc qua cổng dịch vụ công nếu địa phương hỗ trợ; 3) Theo dõi trạng thái và nhận kết quả theo hướng dẫn.",
+    authority: "Nơi tiếp nhận thường là UBND cấp xã nơi cư trú của cha hoặc mẹ. Nếu nộp trực tuyến, vẫn cần chọn đúng cơ quan tiếp nhận theo địa phương.",
+    online: "Khi nộp online, hãy chuẩn bị ảnh/scan rõ nét, đăng nhập cổng dịch vụ công, chọn thủ tục đăng ký khai sinh, điền thông tin trẻ và cha/mẹ, tải giấy tờ lên và theo dõi yêu cầu bổ sung nếu có.",
+    timeline: "Thời gian xử lý phụ thuộc hồ sơ và địa phương. Bạn nên xem giấy hẹn hoặc trạng thái trên cổng dịch vụ công để biết mốc chính xác.",
+    tips: ["Kiểm tra kỹ họ tên, ngày sinh, quê quán trước khi nộp.", "Ảnh/scan giấy tờ cần rõ nét, đủ trang.", "Nếu thiếu giấy chứng sinh, nên hỏi cơ quan tiếp nhận về giấy tờ thay thế."]
+  },
+  residence: {
+    label: "đăng ký tạm trú",
+    documents: "Hồ sơ tạm trú thường gồm giấy tờ tùy thân, thông tin hoặc giấy tờ chứng minh chỗ ở hợp pháp, và tờ khai/biểu mẫu theo hướng dẫn của địa phương.",
+    steps: "Các bước cơ bản: 1) Chuẩn bị giấy tờ tùy thân và giấy tờ về chỗ ở; 2) Nộp trực tuyến hoặc tại cơ quan tiếp nhận cư trú; 3) Theo dõi kết quả và bổ sung nếu được yêu cầu.",
+    authority: "Thủ tục tạm trú thường do cơ quan công an hoặc cơ quan quản lý cư trú tại địa phương tiếp nhận.",
+    online: "Nếu nộp online, chuẩn bị ảnh/scan giấy tờ tùy thân và giấy tờ về chỗ ở hợp pháp, sau đó khai thông tin trên cổng dịch vụ công theo đúng nơi cư trú.",
+    timeline: "Thời gian xử lý có thể khác nhau theo địa phương và tình trạng hồ sơ. Hãy theo dõi thông báo trên cổng dịch vụ công hoặc liên hệ nơi tiếp nhận.",
+    tips: ["Thông tin nơi ở phải khớp giấy tờ chứng minh chỗ ở.", "Nên chuẩn bị số điện thoại để cơ quan tiếp nhận liên hệ khi cần bổ sung."]
+  },
+  license: {
+    label: "giấy phép lái xe",
+    documents: "Hồ sơ đổi/cấp lại GPLX thường cần giấy tờ tùy thân, GPLX cũ hoặc thông tin GPLX, ảnh chân dung và giấy khám sức khỏe nếu trường hợp của bạn yêu cầu.",
+    steps: "Bạn cần xác định rõ cấp mới, cấp đổi hay cấp lại. Sau đó chuẩn bị hồ sơ phù hợp, nộp qua kênh trực tuyến hoặc đơn vị tiếp nhận và theo dõi kết quả.",
+    authority: "Thủ tục GPLX thường do cơ quan giao thông vận tải hoặc đơn vị được ủy quyền tiếp nhận.",
+    online: "Khi nộp online, chuẩn bị ảnh chân dung, giấy tờ tùy thân, thông tin GPLX và các file đính kèm theo yêu cầu trên cổng dịch vụ công.",
+    timeline: "Thời gian xử lý phụ thuộc loại thủ tục và địa phương. Bạn nên theo dõi giấy hẹn hoặc trạng thái hồ sơ.",
+    tips: ["Kiểm tra hạng và thời hạn GPLX trước khi nộp.", "Ảnh chân dung và giấy tờ tải lên phải rõ nét."]
+  },
+  passport: {
+    label: "hộ chiếu",
+    documents: "Hồ sơ hộ chiếu thường cần ảnh chân dung, CCCD/giấy tờ tùy thân và giấy tờ bổ sung theo từng trường hợp cấp mới, cấp lại hoặc trẻ em.",
+    steps: "Các bước cơ bản: chuẩn bị hồ sơ, chọn nơi tiếp nhận, kê khai thông tin chính xác, nộp hồ sơ và theo dõi lịch hẹn hoặc trạng thái xử lý.",
+    authority: "Hộ chiếu thường do cơ quan quản lý xuất nhập cảnh tiếp nhận và xử lý.",
+    online: "Nếu nộp online, cần chuẩn bị ảnh đúng chuẩn, giấy tờ tùy thân và kiểm tra kỹ thông tin trước khi gửi hồ sơ.",
+    timeline: "Thời gian xử lý tùy trường hợp và nơi tiếp nhận. Hãy theo dõi giấy hẹn hoặc thông báo trên cổng dịch vụ công.",
+    tips: ["Ảnh cần đúng chuẩn để tránh phải nộp lại.", "Kiểm tra kỹ họ tên, ngày sinh, số giấy tờ."]
+  },
+  identity: {
+    label: "CCCD/căn cước",
+    documents: "Hồ sơ CCCD/căn cước thường cần giấy tờ tùy thân hiện có, thông tin cư trú và giấy tờ liên quan tùy trường hợp cấp mới, cấp đổi hoặc cấp lại.",
+    steps: "Xác định loại thủ tục, chuẩn bị giấy tờ tương ứng, sau đó nộp hoặc đặt lịch theo kênh tiếp nhận của địa phương.",
+    authority: "CCCD/căn cước thường do cơ quan công an có thẩm quyền tiếp nhận và xử lý.",
+    timeline: "Thời gian xử lý phụ thuộc địa phương và tình trạng hồ sơ. Bạn nên theo dõi giấy hẹn hoặc thông báo từ cơ quan tiếp nhận.",
+    tips: ["Mang theo giấy tờ hiện có khi cấp đổi/cấp lại.", "Kiểm tra thông tin cá nhân trước khi xác nhận hồ sơ."]
+  }
+};
+
+function normalizeVietnameseChatText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectFallbackTopic(text) {
+  const t = normalizeVietnameseChatText(text);
+  if (/khai sinh|giay khai sinh/.test(t)) return "birth";
+  if (/tam tru|luu tru|cu tru/.test(t)) return "residence";
+  if (/gplx|lai xe|giay phep lai xe/.test(t)) return "license";
+  if (/ho chieu|passport|xuat nhap canh/.test(t)) return "passport";
+  if (/cccd|can cuoc|chung minh thu|cmnd/.test(t)) return "identity";
+  if (/phi|le phi|bao nhieu tien|gia/.test(t)) return "fees";
+  if (/thoi gian|bao lau|may ngay/.test(t)) return "timeline";
+  return "";
+}
+
+function detectFollowUpIntent(text) {
+  const t = normalizeVietnameseChatText(text);
+  if (/giay to|ho so|chuan bi|mang gi|can gi/.test(t)) return "documents";
+  if (/thu tuc|quy trinh|cac buoc|lam the nao|huong dan/.test(t)) return "steps";
+  if (/nop online|truc tuyen|online/.test(t)) return "online";
+  if (/nop o dau|co quan|noi tiep nhan|ubnd|dia chi/.test(t)) return "authority";
+  if (/luu y|can luu|meo|note/.test(t)) return "tips";
+  if (/bao lau|thoi han|thoi gian|may ngay/.test(t)) return "timeline";
+  if (/phi|le phi|bao nhieu tien|gia/.test(t)) return "fees";
+  if (/cap lai|cap doi|lam lai/.test(t)) return "reissue";
+  if (/dung roi|vang|ok|duoc/.test(t)) return "confirm_yes";
+  return "";
+}
+
+function buildBulletList(items = []) {
+  return Array.isArray(items) ? items.map((item) => `- ${item}`).join("\n") : "";
+}
+
+function findLastAssistantMessage(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (list[i]?.role === "assistant" && typeof list[i]?.content === "string") return list[i].content;
+  }
+  return "";
+}
+
+function findTopicFromMessages(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const topic = detectFallbackTopic(list[i]?.content || "");
+    if (topic) return topic;
+  }
+  return "";
+}
+
+function inferPendingQuestion(lastAssistantMessage) {
+  const t = normalizeVietnameseChatText(lastAssistantMessage);
+  if (/online|truc tuyen|truc tiep/.test(t)) return "channel_branch";
+  if (/giay to|ho so|chuan bi/.test(t)) return "documents";
+  if (/cac buoc|quy trinh|thu tuc/.test(t)) return "steps";
+  return "";
+}
+
+function buildConversationState(messages, userText) {
+  const previous = Array.isArray(messages) ? messages.slice(0, -1) : [];
+  const lastAssistantMessage = findLastAssistantMessage(previous);
+  const topic = detectFallbackTopic(userText) || detectFallbackTopic(lastAssistantMessage) || findTopicFromMessages(previous);
+  return {
+    topic,
+    followUpIntent: detectFollowUpIntent(userText),
+    pendingQuestion: inferPendingQuestion(lastAssistantMessage),
+    lastAssistantMessage,
+  };
+}
+
+function replyForTopic(topic, intent) {
+  const kb = CLEAN_AI_KB[topic];
+  if (!kb) return "";
+  if (intent === "tips") return kb.tips?.length ? `Một số lưu ý khi làm ${kb.label}:\n${buildBulletList(kb.tips)}` : "";
+  if (intent === "fees") return `Lệ phí ${kb.label} có thể thay đổi theo địa phương và từng trường hợp. Bạn nên kiểm tra biểu phí tại nơi tiếp nhận hoặc trên cổng dịch vụ công trước khi nộp.`;
+  if (intent === "reissue") return kb.documents || kb.steps || "";
+  return kb[intent] || kb.steps || kb.documents || "";
+}
+
+function composeSmartReply(topic, primaryAnswer, intent) {
+  if (!topic || !primaryAnswer) return primaryAnswer;
+  const next = {
+    documents: "Bạn có thể hỏi tiếp về cách nộp online, nơi tiếp nhận hoặc thời gian xử lý.",
+    steps: "Bạn có thể hỏi tiếp về giấy tờ cần chuẩn bị hoặc lưu ý khi nộp hồ sơ.",
+    online: "Bạn có thể hỏi tiếp về file cần scan/chụp hoặc cách theo dõi kết quả.",
+    authority: "Bạn có thể hỏi tiếp về hồ sơ cần mang theo hoặc các bước nộp.",
+    timeline: "Bạn có thể hỏi tiếp về cách kiểm tra trạng thái hồ sơ.",
+  }[intent] || "Bạn có thể nói rõ địa phương hoặc trường hợp cụ thể để tôi hướng dẫn sát hơn.";
+  return `${primaryAnswer}\n\n${next}`;
+}
+
+function buildAiSuggestions(topic, intent = "") {
+  const generic = ["Cần giấy tờ gì?", "Các bước thực hiện?", "Nộp ở đâu?", "Có lưu ý gì?"];
+  const map = {
+    birth: ["Khai sinh cần giấy tờ gì?", "Nộp online thế nào?", "Nộp ở đâu?", "Có lưu ý gì?"],
+    residence: ["Tạm trú cần giấy tờ gì?", "Các bước đăng ký tạm trú?", "Nộp online được không?", "Bao lâu có kết quả?"],
+    license: ["Đổi GPLX cần giấy tờ gì?", "Nộp online ra sao?", "Bao lâu có kết quả?", "Lưu ý khi làm hồ sơ"],
+    passport: ["Cấp hộ chiếu cần giấy tờ gì?", "Nộp ở đâu?", "Các bước thực hiện?", "Lưu ý khi nộp"],
+    identity: ["Làm CCCD cần giấy tờ gì?", "Nộp ở đâu?", "Bao lâu có kết quả?", "Lưu ý khi làm hồ sơ"],
+  };
+  return (map[topic] || generic)
+    .filter((item) => normalizeVietnameseChatText(item) !== normalizeVietnameseChatText(intent))
+    .slice(0, 4);
+}
+
+function replyForPendingQuestion(topic, pendingQuestion, userText, intent) {
+  if (!topic) return "";
+  if (pendingQuestion === "documents" && (intent === "confirm_yes" || !intent)) return replyForTopic(topic, "documents");
+  if (pendingQuestion === "steps" && (intent === "confirm_yes" || !intent)) return replyForTopic(topic, "steps");
+  if (pendingQuestion === "channel_branch" && intent === "online") return replyForTopic(topic, "online");
+  return "";
+}
+
+function buildConversationSummary(messages, userText) {
+  const state = buildConversationState(messages, userText);
+  const recent = (Array.isArray(messages) ? messages : [])
+    .filter((m) => m?.role === "user")
+    .slice(-3)
+    .map((m) => `- ${m.content}`)
+    .join("\n");
+  return [
+    state.topic ? `Chủ đề suy ra: ${state.topic}` : "Chưa suy ra chủ đề",
+    state.followUpIntent ? `Ý định gần nhất: ${state.followUpIntent}` : "Ý định gần nhất chưa rõ",
+    state.pendingQuestion ? `Câu hỏi nhánh gần nhất: ${state.pendingQuestion}` : "Không có câu hỏi nhánh",
+    recent ? `Tin nhắn gần đây:\n${recent}` : "Chưa có tin nhắn người dùng",
+  ].join("\n");
+}
+
+function fallbackAiReply(userText, messages = []) {
+  const state = buildConversationState(messages, userText);
+  const pendingReply = replyForPendingQuestion(state.topic, state.pendingQuestion, userText, state.followUpIntent);
+  if (pendingReply) return composeSmartReply(state.topic, pendingReply, state.followUpIntent);
+
+  if (/^(xin chao|chao|hello|hi)\b/.test(normalizeVietnameseChatText(userText))) {
+    return "Xin chào! Tôi là trợ lý AI hỗ trợ tra cứu thủ tục hành chính. Bạn có thể hỏi về giấy tờ cần chuẩn bị, các bước nộp hồ sơ, nơi tiếp nhận hoặc lưu ý khi thực hiện.";
+  }
+
+  if (state.topic) {
+    const intent = state.followUpIntent || "steps";
+    return composeSmartReply(state.topic, replyForTopic(state.topic, intent), intent);
+  }
+
+  return "Tôi có thể hỗ trợ các thủ tục phổ biến như khai sinh, tạm trú, giấy phép lái xe, hộ chiếu và CCCD/căn cước. Bạn hãy mô tả ngắn thủ tục cần làm hoặc cho biết muốn nộp online hay trực tiếp.";
+}
+
+function buildKnowledgeSnippets(userText) {
+  const topic = detectFallbackTopic(userText);
+  const kb = CLEAN_AI_KB[topic];
+  if (!kb) return [];
+  return [`${kb.label}: ${kb.documents}`, `${kb.label}: ${kb.steps}`];
+}
+
+function buildSystemPrompt(rulesText, conversationSummary, snippets = []) {
+  const knowledgeBlock = snippets.length ? `\nNgữ cảnh liên quan:\n- ${snippets.join("\n- ")}` : "";
+  return `Bạn là GOV Assistant, trợ lý AI của Cổng Dịch vụ công Việt Nam.
+
+Mục tiêu:
+- Hỗ trợ người dân tra cứu thủ tục hành chính, giấy tờ, quy trình nộp hồ sơ và lưu ý thực hiện.
+- Trả lời ngắn gọn, rõ ràng, thân thiện và có bước tiếp theo.
+- Không bịa thông tin pháp lý, không cam kết kết quả xử lý.
+
+Quy tắc do admin cấu hình:
+${rulesText || ""}${knowledgeBlock}
+
+Tóm tắt hội thoại:
+${conversationSummary}
+
+Cách trả lời:
+- Luôn trả lời bằng tiếng Việt.
+- Ưu tiên trả lời trực tiếp, sau đó liệt kê 2-5 ý quan trọng nếu cần.
+- Nếu thiếu dữ kiện, hỏi lại 1-2 thông tin quan trọng nhất.
+- Nếu có rủi ro khác theo địa phương/quy định mới, nói rõ đây là thông tin tham khảo và khuyến nghị kiểm tra tại cơ quan có thẩm quyền.
+- Nếu ngoài phạm vi thủ tục hành chính, lịch sự từ chối và hướng sang kênh hỗ trợ phù hợp.`;
+}
+
 async function openAiChat(messages, rulesText, userText) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
@@ -860,6 +1094,40 @@ exports.sendRoomMessage = async (req, res) => {
     const media = req.body?.media || null;
     const location = req.body?.location || null;
     const replyToMessageId = String(req.body?.replyToMessageId || "").trim();
+    const isAiChat =
+      req.body?.receiverId === AI_ASSISTANT_ID ||
+      req.body?.chatType === "AI" ||
+      req.params.roomId === AI_ASSISTANT_ID;
+
+    if (isAiChat) {
+      if (!text) return res.status(400).json({ message: "Vui lòng nhập nội dung cần hỗ trợ." });
+      const result = await generateAiReply({
+        userId: req.user.id,
+        message: text,
+        messages: req.body?.messages || [],
+      });
+      const aiMessage = buildAiMessage(result.reply, {
+        mode: result.mode,
+        action: result.action || "",
+      });
+
+      try {
+        getIo().to(`user_${req.user.id}`).emit("new-message", {
+          roomId: AI_ASSISTANT_ID,
+          chatType: "AI",
+          message: aiMessage,
+        });
+      } catch (socketError) {
+        console.warn("[AI_SOCKET] Cannot emit AI message:", socketError.message);
+      }
+
+      return res.json({
+        ok: true,
+        chatType: "AI",
+        action: result.action || "",
+        message: aiMessage,
+      });
+    }
 
     if (!text && !media && !location) {
       return res.status(400).json({ message: "Tin nhắn không được để trống" });
