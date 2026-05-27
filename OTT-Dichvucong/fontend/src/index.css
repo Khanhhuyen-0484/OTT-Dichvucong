@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700&display=swap");
+@import "tailwindcss";
 
 :root {
   --gov-navy: #003366;
@@ -12,7 +12,13 @@ body {
 }
 
 body {
-  font-family: "Inter", "Roboto", system-ui, -apple-system, Segoe UI, sans-serif;
+  font-family:
+    "Inter",
+    "Roboto",
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    sans-serif;
   color: #0f172a;
   background: #f8fafc;
 }
@@ -22,3 +28,45 @@ body {
   outline-offset: 2px;
 }
 
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Thanh cuộn ngang — AI suggestion */
+.ai-suggestion-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #e2e8f0;
+}
+
+.ai-suggestion-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.ai-suggestion-scroll::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+
+.ai-suggestion-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 999px;
+}
+
+.ai-suggestion-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}

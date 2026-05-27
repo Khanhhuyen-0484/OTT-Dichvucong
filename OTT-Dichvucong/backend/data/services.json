@@ -1,0 +1,37 @@
+[
+  {
+    "id": "tam-tru",
+    "name": "Đăng ký tạm trú",
+    "processingTime": "03 ngày làm việc",
+    "fee": 15000,
+    "description": "Thực hiện đăng ký tạm trú cho công dân.",
+    "documents": [
+      { "key": "cccd", "label": "CCCD/CMND", "required": true },
+      { "key": "residenceProof", "label": "Giấy tờ chứng minh chỗ ở hợp pháp", "required": true },
+      { "key": "residenceForm", "label": "Tờ khai cư trú", "required": true }
+    ]
+  },
+  {
+    "id": "doi-gplx",
+    "name": "Đổi giấy phép lái xe",
+    "processingTime": "05 ngày làm việc",
+    "fee": 135000,
+    "description": "Đổi giấy phép lái xe trực tuyến.",
+    "documents": [
+      { "key": "oldLicense", "label": "Giấy phép lái xe cũ", "required": true },
+      { "key": "cccd", "label": "CCCD/CMND", "required": true },
+      { "key": "healthCheck", "label": "Giấy khám sức khỏe", "required": false }
+    ]
+  },
+  {
+    "id": "cap-lai-khai-sinh",
+    "name": "Cấp lại giấy khai sinh",
+    "processingTime": "05 ngày làm việc",
+    "fee": 10000,
+    "description": "Yêu cầu cấp lại bản sao hoặc cấp lại giấy khai sinh.",
+    "documents": [
+      { "key": "cccd", "label": "CCCD/CMND", "required": true },
+      { "key": "requestForm", "label": "Đơn yêu cầu cấp lại", "required": true }
+    ]
+  }
+]

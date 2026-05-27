@@ -4,18 +4,21 @@ let socket = null;
 
 export function connectSocket() {
   const token = localStorage.getItem("token");
+
   const serverUrl = String(
     import.meta.env.VITE_SOCKET_URL ||
       import.meta.env.VITE_API_ORIGIN ||
-      (import.meta.env.DEV ? "http://localhost:3000" : window.location.origin)
+      (import.meta.env.DEV ? "http://localhost:3000" : window.location.origin),
   ).trim();
+
   const auth = token ? { token } : {};
 
-  if (socket && socket.auth?.token === auth.token && socket.connected) {
-    return socket;
-  }
-
+  // Không tạo socket mới nếu đã có instance, tránh duplicate khi đang connecting
   if (socket) {
+    if (socket.auth?.token === auth.token) {
+      return socket;
+    }
+
     socket.disconnect();
     socket = null;
   }
@@ -28,7 +31,7 @@ export function connectSocket() {
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    timeout: 10000
+    timeout: 10000,
   });
 
   socket.on("connect", () => {
@@ -37,6 +40,14 @@ export function connectSocket() {
 
   socket.on("connect_error", (err) => {
     console.warn("[Socket] connect_error", err.message);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.warn("[Socket] disconnected", reason);
+
+    if (reason === "io server disconnect") {
+      socket.connect();
+    }
   });
 
   socket.on("reconnect_attempt", (attempt) => {
@@ -50,6 +61,7 @@ export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
+    console.info("[Socket] disconnected and cleared");
   }
 }
 

@@ -1,0 +1,472 @@
+[
+  {
+    "id": "1776259199349",
+    "applicationCode": "HS-20260415-FHI2PR",
+    "serviceId": "tam-tru",
+    "serviceName": "Đăng ký tạm trú",
+    "formData": {
+      "fullName": "PHAM THUY TRANG",
+      "email": "phamtrangdrhvcsnd@gmail.com",
+      "phone": "0989471415",
+      "citizenId": "123456742",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "fsfsf"
+    },
+    "paymentMethod": "MoMo",
+    "attachments": [
+      {
+        "key": "cccd",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/abd4f19c-d84e-4e9b-b291-0dc6b5935684"
+      },
+      {
+        "key": "residenceProof",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/461fa1b5-918b-4174-9dcb-de0669d7d4c1"
+      },
+      {
+        "key": "residenceForm",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/bd827845-b3f0-4816-9af1-84d67dbe939a"
+      }
+    ],
+    "fee": 15000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T13:19:59.349Z"
+  },
+  {
+    "id": "1776259356154",
+    "applicationCode": "HS-20260415-AFLQAT",
+    "serviceId": "doi-gplx",
+    "serviceName": "Đổi giấy phép lái xe",
+    "formData": {
+      "fullName": "Trang Phạm",
+      "email": "",
+      "phone": "0989471415",
+      "citizenId": "214353414",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "124"
+    },
+    "paymentMethod": "BANK_TRANSFER",
+    "attachments": [
+      {
+        "key": "oldLicense",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/440a9c43-8335-4b7f-8fc7-f347a53c2948"
+      },
+      {
+        "key": "cccd",
+        "name": "z6635783394507_b6033edbc42c909a2c2273e1c8bafb8f.jpg",
+        "size": 40685,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/6ad4a396-b6b7-40d3-b0ab-29fda22634a1"
+      }
+    ],
+    "fee": 135000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T13:22:36.154Z"
+  },
+  {
+    "id": "1776261726419",
+    "applicationCode": "HS-20260415-7JUQ1E",
+    "serviceId": "tam-tru",
+    "serviceName": "Đăng ký tạm trú",
+    "formData": {
+      "fullName": "Trang Phạm",
+      "email": "",
+      "phone": "0989471415",
+      "citizenId": "213441143",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "yctd"
+    },
+    "paymentMethod": "BANK_TRANSFER",
+    "attachments": [
+      {
+        "key": "cccd",
+        "name": "z6635783394507_b6033edbc42c909a2c2273e1c8bafb8f.jpg",
+        "size": 40685,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/922f723f-5dbf-4739-8d84-26f56bc08ce0"
+      },
+      {
+        "key": "residenceProof",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/05a70fb5-b747-42f3-bca1-0299a14e75ce"
+      },
+      {
+        "key": "residenceForm",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/9b53d450-37f9-493c-a61c-910a2a736137"
+      }
+    ],
+    "fee": 15000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T14:02:06.419Z"
+  },
+  {
+    "id": "1776261795638",
+    "applicationCode": "HS-20260415-P2REOL",
+    "serviceId": "tam-tru",
+    "serviceName": "Đăng ký tạm trú",
+    "formData": {
+      "fullName": "PHAM THUY TRANG",
+      "email": "",
+      "phone": "0989471415",
+      "citizenId": "3423413131",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": " ấ"
+    },
+    "paymentMethod": "MoMo",
+    "attachments": [
+      {
+        "key": "cccd",
+        "name": "z6710708100522_90e690c70ee40f308e3f273a8e61709c.jpg",
+        "size": 8604,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/d47e9418-018b-4d76-bb50-0b2fdbbe2adf"
+      },
+      {
+        "key": "residenceProof",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/6fe31627-5237-428e-b5fa-5168afa1984f"
+      },
+      {
+        "key": "residenceForm",
+        "name": "z6635783394507_b6033edbc42c909a2c2273e1c8bafb8f.jpg",
+        "size": 40685,
+        "type": "image/jpeg",
+        "previewUrl": "blob:http://localhost:5173/33a7ec96-dce1-48f6-bddb-2afd246be9e1"
+      }
+    ],
+    "fee": 15000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T14:03:15.638Z"
+  },
+  {
+    "id": "1776269812691",
+    "userId": "u_1776255853223",
+    "applicationCode": "HS-20260415-XMYUWP",
+    "serviceId": "doi-gplx",
+    "serviceName": "Đổi giấy phép lái xe",
+    "formData": {
+      "fullName": "Trang Phạm",
+      "email": "phamtrangdrhvcsnd@gmail.com",
+      "phone": "0123443215",
+      "citizenId": "1341241423",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "sdf"
+    },
+    "paymentMethod": "BANK_TRANSFER",
+    "attachments": [
+      {
+        "key": "oldLicense",
+        "name": "z6710708100522_90e690c70ee40f308e3f273a8e61709c.jpg",
+        "size": 8604,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/oldLicense-1776269812340.jpg"
+      },
+      {
+        "key": "cccd",
+        "name": "z6635783394507_b6033edbc42c909a2c2273e1c8bafb8f.jpg",
+        "size": 40685,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/cccd-1776269812571.jpg"
+      }
+    ],
+    "fee": 135000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T16:16:52.691Z"
+  },
+  {
+    "id": "1776271823393",
+    "userId": "u_1776255853223",
+    "applicationCode": "HS-20260415-OJ7CHK",
+    "serviceId": "doi-gplx",
+    "serviceName": "Đổi giấy phép lái xe",
+    "formData": {
+      "fullName": "PHAM THUY TRANG",
+      "email": "",
+      "phone": "0989471415",
+      "citizenId": "12231231231",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "sấ"
+    },
+    "paymentMethod": "BANK_TRANSFER",
+    "attachments": [
+      {
+        "key": "oldLicense",
+        "name": "z6635783394507_b6033edbc42c909a2c2273e1c8bafb8f.jpg",
+        "size": 40685,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/oldLicense-1776271822929.jpg"
+      },
+      {
+        "key": "cccd",
+        "name": "z6710708100522_90e690c70ee40f308e3f273a8e61709c.jpg",
+        "size": 8604,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/cccd-1776271823290.jpg"
+      }
+    ],
+    "fee": 135000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T16:50:23.393Z"
+  },
+  {
+    "id": "1776272602460",
+    "userId": "u_1776255853223",
+    "applicationCode": "HS-20260416-1V7DAL",
+    "serviceId": "cap-lai-khai-sinh",
+    "serviceName": "Cấp lại giấy khai sinh",
+    "formData": {
+      "fullName": "Trang Phạm",
+      "email": "phamtrangdrhvcsnd@gmail.com",
+      "phone": "0124454164",
+      "citizenId": "4564564165",
+      "address": "122 đường số 20",
+      "ward": "phường an nhơn",
+      "district": "quận gò vấp",
+      "city": "thành phố hồ chí minh",
+      "requestContent": "thay đổi "
+    },
+    "paymentMethod": "MoMo",
+    "attachments": [
+      {
+        "key": "cccd",
+        "name": "z6710708100522_90e690c70ee40f308e3f273a8e61709c.jpg",
+        "size": 8604,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/cccd-1776272602090.jpg"
+      },
+      {
+        "key": "requestForm",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/requestForm-1776272602366.jpg"
+      }
+    ],
+    "fee": 10000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T17:03:22.460Z"
+  },
+  {
+    "id": "1776272767406",
+    "userId": "u_1776255853223",
+    "applicationCode": "HS-20260416-ELJXRQ",
+    "serviceId": "tam-tru",
+    "serviceName": "Đăng ký tạm trú",
+    "formData": {
+      "fullName": "Trang Phạm",
+      "email": "phamtrangdrhvcsnd@gmail.com",
+      "phone": "0989471415",
+      "citizenId": "1555554564",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "sấ"
+    },
+    "paymentMethod": "BANK_TRANSFER",
+    "attachments": [
+      {
+        "key": "cccd",
+        "name": "z6710708100522_90e690c70ee40f308e3f273a8e61709c.jpg",
+        "size": 8604,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/cccd-1776272766985.jpg"
+      },
+      {
+        "key": "residenceProof",
+        "name": "z4239497723312_646cce4ec7aa9fc3df6c80b57f814dde.jpg",
+        "size": 32483,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/residenceProof-1776272767195.jpg"
+      },
+      {
+        "key": "residenceForm",
+        "name": "hinh-nen-thu-hut-tai-loc-menh-thuy-1.jpg",
+        "size": 50250,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/residenceForm-1776272767305.jpg"
+      }
+    ],
+    "fee": 15000,
+    "status": "Đã tiếp nhận",
+    "createdAt": "2026-04-15T17:06:07.406Z"
+  },
+  {
+    "id": "1776273068870",
+    "userId": "u_1776255853223",
+    "applicationCode": "HS-20260416-W3YC4J",
+    "serviceId": "tam-tru",
+    "serviceName": "Đăng ký tạm trú",
+    "formData": {
+      "fullName": "Trang Phạm",
+      "email": "phamtrangdrhvcsnd@gmail.com",
+      "phone": "0989471415",
+      "citizenId": "324234342",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "13v ád"
+    },
+    "paymentMethod": "MoMo",
+    "attachments": [
+      {
+        "key": "cccd",
+        "name": "z6710708100522_90e690c70ee40f308e3f273a8e61709c.jpg",
+        "size": 8604,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/cccd-1776273068405.jpg"
+      },
+      {
+        "key": "residenceProof",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/residenceProof-1776273068684.jpg"
+      },
+      {
+        "key": "residenceForm",
+        "name": "z4239497723312_646cce4ec7aa9fc3df6c80b57f814dde.jpg",
+        "size": 32483,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/residenceForm-1776273068776.jpg"
+      }
+    ],
+    "fee": 15000,
+    "status": "Đã tiếp nhận",
+    "paymentStatus": "completed",
+    "paymentAmount": 15000,
+    "paymentExpireAt": "2026-04-15T18:11:08.884Z",
+    "paymentCompletedAt": "2026-04-15T17:13:23.581Z",
+    "createdAt": "2026-04-15T17:11:08.870Z",
+    "paymentDescription": "Thanh toán phí dịch vụ Đăng ký tạm trú"
+  },
+  {
+    "id": "1776273265654",
+    "userId": "u_1776255853223",
+    "applicationCode": "HS-20260416-0G2CQO",
+    "serviceId": "doi-gplx",
+    "serviceName": "Đổi giấy phép lái xe",
+    "formData": {
+      "fullName": "PHAM THUY TRANG",
+      "email": "",
+      "phone": "0989471415",
+      "citizenId": "515566626",
+      "address": "THON DAN KHE-XA THACH KHE-HUYEN THACH HA-TINH HA TINH-VIET NAM",
+      "ward": "",
+      "district": "",
+      "city": "Tphcm",
+      "requestContent": "aaaa"
+    },
+    "paymentMethod": "ChuyenKhoan",
+    "attachments": [
+      {
+        "key": "oldLicense",
+        "name": "z6710708100522_90e690c70ee40f308e3f273a8e61709c.jpg",
+        "size": 8604,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/oldLicense-1776273265342.jpg"
+      },
+      {
+        "key": "cccd",
+        "name": "z6780405611511_df98b84ffb8cf304fea25f0b5498d6a6.jpg",
+        "size": 12001,
+        "type": "image/jpeg",
+        "previewUrl": "https://ott-dichvucong-files.s3.ap-southeast-1.amazonaws.com/attachments/u_1776255853223/new/cccd-1776273265554.jpg"
+      }
+    ],
+    "fee": 135000,
+    "status": "Đã tiếp nhận",
+    "paymentStatus": "completed",
+    "paymentAmount": 135000,
+    "paymentExpireAt": "2026-04-15T19:11:57.799Z",
+    "paymentCompletedAt": "2026-04-15T18:16:06.977Z",
+    "createdAt": "2026-04-15T17:14:25.654Z",
+    "paymentDescription": "Thanh toán phí dịch vụ Đổi giấy phép lái xe"
+  },
+  {
+    "applicationCode": "HS-20260508-X8UAGH",
+    "applicationId": "HS-20260508-X8UAGH",
+    "userId": "u_1776268582525",
+    "serviceId": "dat-dai-bien-dong",
+    "serviceName": "Đăng ký biến động đất đai",
+    "formData": {
+      "fullName": "Trần Thị Khánh Huyền",
+      "citizenId": "038304010988",
+      "email": "tkhanhhuyen0484@gmail.com",
+      "phone": "0368965381",
+      "address": "Tiểu khu 9",
+      "requestContent": ""
+    },
+    "attachments": [
+      {
+        "key": "landCert",
+        "name": "17955 (1).png",
+        "previewUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/chat-media/dat-dai-bien-dong/landCert-1778257518350-17955__1_.png",
+        "type": "image/png"
+      },
+      {
+        "key": "mutationForm",
+        "name": "17955.png",
+        "previewUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/chat-media/dat-dai-bien-dong/mutationForm-1778257518720-17955.png",
+        "type": "image/png"
+      },
+      {
+        "key": "idCard",
+        "name": "17955 (1).png",
+        "previewUrl": "https://image-2026.s3.ap-southeast-1.amazonaws.com/chat-media/dat-dai-bien-dong/idCard-1778257518834-17955__1_.png",
+        "type": "image/png"
+      }
+    ],
+    "paymentMethod": "MoMo",
+    "status": "PENDING",
+    "paymentStatus": "UNPAID",
+    "progress": 10,
+    "history": [
+      {
+        "at": "2026-05-08T16:25:18.967Z",
+        "status": "PENDING",
+        "note": "Hồ sơ đã được nộp"
+      }
+    ],
+    "createdAt": "2026-05-08T16:25:18.967Z",
+    "updatedAt": "2026-05-08T16:25:18.967Z",
+    "fee": 20000
+  }
+]

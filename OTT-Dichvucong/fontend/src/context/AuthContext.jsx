@@ -7,6 +7,7 @@ import React, {
   useState
 } from "react";
 import {
+  deleteMe,
   getMe,
   patchProfile
 } from "../lib/api.js";
@@ -37,7 +38,6 @@ function writeProfileCache(data) {
   }
 }
 
-/** Chỉ để lấy `id` khi cần khớp cache — không dùng làm hồ sơ thay thế API. */
 function decodeJwtPayload(token) {
   try {
     const p = token.split(".")[1];
@@ -146,7 +146,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Tự động đăng nhập lại bằng token cũ nếu có
     refreshProfile();
   }, [refreshProfile]);
 
@@ -165,50 +164,32 @@ export function AuthProvider({ children }) {
   }, []);
 
   const deleteAccount = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("Không tìm thấy token");
+    const { data } = await deleteMe();
+    if (data?.blocked) {
+      throw new Error(data.message || "Tài khoản còn hồ sơ đang xử lý");
     }
-    const response = await fetch("/api/me", {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
-    if (!response.ok) {
-      const msg = await response.text();
-      throw new Error(msg || "Không thể xóa tài khoản");
-    }
-    // Logout sau khi xóa thành công
     logout();
   }, [logout]);
 
   const uploadAvatarFile = useCallback(
     async (file) => {
       if (!user?.id) return;
-      try {
-        // Create FormData with the file
-        const formData = new FormData();
-        formData.append("file", file);
+      const formData = new FormData();
+      formData.append("file", file);
 
-        // Send to backend which will upload to S3
-        const { data } = await fetch("/api/me/avatar/upload", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`
-          },
-          body: formData
-        }).then((res) => {
-          if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-          return res.json();
-        });
+      await fetch("/api/me/avatar/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`
+        },
+        body: formData
+      }).then((res) => {
+        if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+        return res.json();
+      });
 
-        localStorage.removeItem(`avatar_${user.id}`);
-        await refreshProfile();
-      } catch (err) {
-        throw err;
-      }
+      localStorage.removeItem(`avatar_${user.id}`);
+      await refreshProfile();
     },
     [user?.id, refreshProfile]
   );
