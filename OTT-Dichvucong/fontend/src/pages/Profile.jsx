@@ -97,7 +97,6 @@ export default function Profile() {
     setDeleteLoading(true);
     try {
       await deleteAccount();
-      alert("Tài khoản đã được xóa thành công");
       navigate("/", { replace: true });
     } catch (err) {
       alert(getApiErrorMessage(err) || "Không thể xóa tài khoản");
@@ -197,11 +196,11 @@ export default function Profile() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
               <h3 className="mb-3 text-lg font-bold text-slate-900">Xóa tài khoản?</h3>
-              <p className="mb-6 text-sm text-slate-600">Hành động này không thể hoàn tác. Bạn có chắc chắn muốn xóa toàn bộ thông tin tài khoản?</p>
+              <p className="mb-6 text-sm text-slate-600">Hành động này không thể hoàn tác. Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn.</p>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowDeleteConfirm(false)} disabled={deleteLoading} className="flex-1 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50">Hủy</button>
                 <button type="button" onClick={onDeleteAccount} disabled={deleteLoading} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
-                  {deleteLoading ? "Đang xóa..." : "Xác nhận xóa"}
+                  {deleteLoading ? "Đang xóa..." : "Xóa tài khoản"}
                 </button>
               </div>
             </div>

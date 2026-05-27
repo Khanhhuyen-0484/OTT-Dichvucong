@@ -30,7 +30,7 @@ export default function Button({
             className="h-4 w-4 rounded-full border-2 border-white/60 border-t-white animate-spin"
             aria-hidden="true"
           />
-          <span>?ang x? l?...</span>
+          <span>Đang xử lí...</span>
         </span>
       ) : (
         children

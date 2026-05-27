@@ -25,6 +25,44 @@ function Avatar({ src, name, className = "" }) {
   );
 }
 
+function latestMessageOf(item) {
+  const messages = Array.isArray(item?.messages) ? item.messages.filter(Boolean) : [];
+  return item?.latestMessage || item?.lastMessage || messages[messages.length - 1] || null;
+}
+
+function messageText(message, fallback = "Chưa có tin nhắn") {
+  if (!message) return fallback;
+  if (message.unsentForAll) return "Tin nhắn đã được thu hồi";
+  const text = String(message.text || message.content || "").trim();
+  if (text) return text;
+  const media = message.media || message.attachment || {};
+  const type = String(media.type || media.mimeType || media.fileType || "").toLowerCase();
+  if (type.includes("image")) return "Đã gửi một ảnh";
+  if (type.includes("video")) return "Đã gửi một video";
+  if (type.includes("audio")) return "Đã gửi một tin nhắn thoại";
+  if (type.includes("location") || message.location) return "Đã gửi vị trí";
+  if (media.fileName || media.url || media.fileUrl) return "Đã gửi một tệp";
+  return fallback;
+}
+
+function messageTime(message) {
+  const value = message?.createdAt || message?.at || message?.updatedAt;
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return new Intl.DateTimeFormat("vi-VN", sameDay ? { hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit" }).format(date);
+}
+
+function roomPreview(room, user) {
+  const latest = latestMessageOf(room);
+  const text = messageText(latest, room?.type === "group" ? "Nhóm chat" : "Chưa có tin nhắn");
+  if (!latest || room?.type !== "group") return text;
+  const mine = latest.senderId === user?.id;
+  const senderName = mine ? "Bạn" : latest.senderName || latest.sender?.fullName || room?.members?.find((m) => m.id === latest.senderId)?.fullName || "";
+  return senderName ? `${senderName}: ${text}` : text;
+}
+
 function ContactList({
   embedded = false,
   chatModeTab,
@@ -45,8 +83,19 @@ function ContactList({
   onSelectRoom,
   roomCount = 0,
   contactCount = 0,
+  staffLatestMessage,
+  staffUnread = 0,
 }) {
-  const listItems = useMemo(() => (chatModeTab === "contacts" ? contacts : rooms), [chatModeTab, contacts, rooms]);
+  const listItems = useMemo(() => {
+    if (chatModeTab === "contacts") return contacts;
+    return [...rooms].sort((a, b) => {
+      const am = latestMessageOf(a);
+      const bm = latestMessageOf(b);
+      const at = am?.createdAt || am?.at || a.updatedAt || "";
+      const bt = bm?.createdAt || bm?.at || b.updatedAt || "";
+      return String(bt).localeCompare(String(at));
+    });
+  }, [chatModeTab, contacts, rooms]);
 
   const shellClass = embedded
     ? "flex h-full min-h-0 flex-col p-2"
@@ -55,12 +104,12 @@ function ContactList({
   return (
     <aside className={shellClass}>
       <div className="mb-2 flex items-center justify-between gap-1">
-        <h2 className="text-xs font-bold text-slate-800">Danh s?ch chat</h2>
+        <h2 className="text-xs font-bold text-slate-800">Danh sách chat</h2>
         <button
           type="button"
           onClick={onOpenFriendHub}
           className="relative rounded-lg bg-[#eef4ff] p-1.5 text-[#0d5bd7] hover:bg-[#dfeafe]"
-          title="Trung t?m b?n b?"
+          title="Trung tâm bạn bè"
         >
           <ContactRound className="h-3.5 w-3.5" />
           {pendingHubCount > 0 ? (
@@ -79,7 +128,7 @@ function ContactList({
             chatModeTab === "rooms" ? "bg-white text-[#003366] shadow-sm" : "text-slate-600"
           }`}
         >
-          H?Ti tho?i {roomCount > 0 ? `(${roomCount})` : ""}
+          Hội thoại {roomCount > 0 ? `(${roomCount})` : ""}
         </button>
         <button
           type="button"
@@ -88,7 +137,7 @@ function ContactList({
             chatModeTab === "contacts" ? "bg-white text-[#003366] shadow-sm" : "text-slate-600"
           }`}
         >
-          B?n b? {contactCount > 0 ? `(${contactCount})` : ""}
+          Bạn bè {contactCount > 0 ? `(${contactCount})` : ""}
         </button>
       </div>
 
@@ -98,7 +147,7 @@ function ContactList({
           <input
             value={contactQuery}
             onChange={(e) => setContactQuery(e.target.value)}
-            placeholder={chatModeTab === "contacts" ? "T?m b?n" : "T?m h?Ti tho?i"}
+            placeholder={chatModeTab === "contacts" ? "Tìm bạn" : "Tìm hội thoại"}
             className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-7 pr-2 text-[11px] focus:border-[#003366] focus:outline-none"
           />
         </div>
@@ -106,7 +155,7 @@ function ContactList({
           type="button"
           onClick={onOpenAddFriend}
           className="shrink-0 rounded-lg border border-slate-200 bg-white p-1.5 text-[#113a72] hover:bg-slate-50"
-          title="Th?m b?n"
+          title="Thêm bạn"
         >
           <UserPlus className="h-4 w-4" />
         </button>
@@ -114,7 +163,7 @@ function ContactList({
           type="button"
           onClick={() => setShowGroupModal(true)}
           className="shrink-0 rounded-lg border border-slate-200 bg-white p-1.5 text-[#113a72] hover:bg-slate-50"
-          title="T?o nh?m"
+          title="Tạo nhóm"
         >
           <Users className="h-4 w-4" />
         </button>
@@ -123,11 +172,20 @@ function ContactList({
       <button
         type="button"
         onClick={openStaffChat}
-        className="mb-2 flex w-full items-center justify-between gap-2 rounded-lg border border-[#003366]/15 bg-[#003366]/5 px-2.5 py-1 text-left hover:bg-[#003366]/10"
+        className="mb-2 flex w-full items-center gap-2 rounded-lg border border-[#003366]/15 bg-[#003366]/5 px-2.5 py-2 text-left hover:bg-[#003366]/10"
       >
-        <span className="text-[11px] font-semibold text-[#003366]">Cán bộ hỗ trợ</span>
-        <span className="shrink-0 rounded-full bg-[#003366] px-1.5 py-px text-[9px] font-semibold text-white">
-          DVCT
+        <Avatar src="" name="Cán bộ" className="h-8 w-8 shrink-0 rounded-full border border-[#003366]/10 object-cover" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-bold text-[#003366]">Cán bộ hỗ trợ</span>
+          <span className="block truncate text-[10px] text-slate-500">{messageText(staffLatestMessage, "Hỗ trợ dịch vụ công")}</span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          <span className="text-[9px] font-semibold text-slate-400">{messageTime(staffLatestMessage)}</span>
+          {staffUnread > 0 ? (
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{staffUnread > 99 ? "99+" : staffUnread}</span>
+          ) : (
+            <span className="rounded-full bg-[#003366] px-1.5 py-px text-[9px] font-semibold text-white">DVCT</span>
+          )}
         </span>
       </button>
 
@@ -157,7 +215,8 @@ function ContactList({
           }
           const isActive = activeRoomId === item.id;
           const partner = item.members?.find((m) => m.id !== user?.id);
-          const lastPreview = item.lastMessage?.text || (item.type === "group" ? "Nhóm chat" : "Tin nhắn mới");
+          const latest = latestMessageOf(item);
+          const lastPreview = roomPreview(item, user);
           return (
             <button
               key={item.id}
@@ -188,11 +247,14 @@ function ContactList({
                     {lastPreview}
                   </div>
                 </div>
-                {(item.unreadCount || item.unread || 0) > 0 ? (
-                  <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                    {(item.unreadCount || item.unread || 0) > 99 ? "99+" : item.unreadCount || item.unread}
-                  </span>
-                ) : null}
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className={`text-[9px] font-semibold ${isActive ? "text-white/65" : "text-slate-400"}`}>{messageTime(latest)}</span>
+                  {(item.unreadCount || item.unread || 0) > 0 ? (
+                    <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                      {(item.unreadCount || item.unread || 0) > 99 ? "99+" : item.unreadCount || item.unread}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </button>
           );

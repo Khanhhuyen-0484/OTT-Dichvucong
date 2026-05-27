@@ -7,7 +7,6 @@ import React, {
   useState
 } from "react";
 import {
-  deleteProfile,
   getMe,
   patchProfile
 } from "../lib/api.js";
@@ -38,16 +37,7 @@ function writeProfileCache(data) {
   }
 }
 
-function removeProfileCache(id) {
-  if (!id) return;
-  try {
-    sessionStorage.removeItem(profileCacheKey(id));
-  } catch {
-    /* ignore storage errors */
-  }
-}
-
-/** Chỉ để lấy `id` khi cần khớp cache, không dùng làm hồ sơ thay thế API. */
+/** Ch?? ?'?f l?y `id` khi c?n kh?>p cache ??" kh�ng d�ng l?m h?" so thay th? API. */
 function decodeJwtPayload(token) {
   try {
     const p = token.split(".")[1];
@@ -84,7 +74,7 @@ async function getMeWithRetry(maxAttempts = 3) {
     } catch (err) {
       lastErr = err;
       const s = err?.response?.status;
-      if (s === 401 || s === 403 || s === 404) throw err;
+      if (s === 401 || s === 403) throw err;
       if (i < maxAttempts - 1) {
         await new Promise((r) => setTimeout(r, 350 * (i + 1)));
       }
@@ -114,10 +104,7 @@ export function AuthProvider({ children }) {
       setAvatarUrl(resolveDisplayAvatar(data, legacy));
     } catch (err) {
       const status = err?.response?.status;
-      if (status === 401 || status === 403 || status === 404) {
-        const id = decodeJwtPayload(token)?.id;
-        removeProfileCache(id);
-        if (id) localStorage.removeItem(`avatar_${id}`);
+      if (status === 401 || status === 403) {
         setUser(null);
         setAvatarUrl(null);
         localStorage.removeItem("token");
@@ -159,7 +146,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Tự động đăng nhập lại bằng token cũ nếu có.
+    // T? ?'?Tng ?'?fng nh�p l�i b?ng token cu n?u c?
     refreshProfile();
   }, [refreshProfile]);
 
@@ -172,24 +159,30 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(() => {
-    const token = localStorage.getItem("token");
-    const id = user?.id || decodeJwtPayload(token)?.id;
-    removeProfileCache(id);
     localStorage.removeItem("token");
     setUser(null);
     setAvatarUrl(null);
-  }, [user?.id]);
+  }, []);
 
   const deleteAccount = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error("Không tìm thấy token");
+      throw new Error("Kh�ng t?m th?y token");
     }
-    await deleteProfile();
-    removeProfileCache(user?.id || decodeJwtPayload(token)?.id);
-    // Logout sau khi xóa thành công.
+    const response = await fetch("/api/me", {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+    if (!response.ok) {
+      const msg = await response.text();
+      throw new Error(msg || "Kh�ng th?f x?a t�i kho?n");
+    }
+    // Logout sau khi x?a th�nh c�ng
     logout();
-  }, [logout, user?.id]);
+  }, [logout]);
 
   const uploadAvatarFile = useCallback(
     async (file) => {

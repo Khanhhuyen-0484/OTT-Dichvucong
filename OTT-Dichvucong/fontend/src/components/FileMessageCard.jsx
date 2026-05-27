@@ -24,7 +24,7 @@ export default function FileMessageCard({ url, name, isMine }) {
         rel="noreferrer"
         download={fileName}
         className="ml-auto rounded-md bg-white p-1 text-slate-600 hover:text-slate-800"
-        title="T�i xu?'ng"
+        title="Tải xuống"
       >
         <Download className="h-4 w-4" />
       </a>

@@ -1,8 +1,9 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Send,
   ArrowLeft,
+  Bot,
   Mic,
   MicOff,
   Video,
@@ -18,6 +19,7 @@ import FriendHubModal from "../components/FriendHubModal.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import VideoCall from "../components/VideoCall.jsx";
 import IncomingCallModal from "../components/IncomingCallModal.jsx";
+import Bubble from "../components/Bubble.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
@@ -39,6 +41,7 @@ import {
   getChatRooms,
   getStaffChat,
   postBlockFriend,
+  postAiAssistantChat,
   postFriendRequest,
   postFriendRequestResponse,
   postGroupInviteResponse,
@@ -58,6 +61,56 @@ import { resolveMyGroupRole } from "../lib/groupRoles.js";
 import { MAX_PINNED_MESSAGES, canPinMore } from "../lib/chatPinned.js";
 
 // ─── SUB-COMPONENTS ──────────────────────────────────────────────────────────
+
+const AI_ASSISTANT_ID = "AI_ASSISTANT";
+const AI_QUICK_QUESTIONS = [
+  "Tôi cần chuẩn bị giấy tờ gì?",
+  "Hồ sơ của tôi đang ở đâu?",
+  "Thanh toán lệ phí như thế nào?",
+  "Tôi muốn gặp cán bộ hỗ trợ",
+];
+const AI_DEFAULT_QUESTIONS = AI_QUICK_QUESTIONS;
+const AI_STAFF_CONFIRM_QUESTIONS = ["Chuyển tới chat cán bộ", "Ở lại chat AI"];
+const AI_STAFF_CONFIRM_TEXT =
+  "Bạn muốn tôi đưa bạn tới trang chat với cán bộ hỗ trợ, hoặc bạn cũng có thể vào phần Hỗ trợ trực tuyến để nhắn trực tiếp với cán bộ.";
+const AI_STAY_TEXT =
+  "Được, tôi sẽ tiếp tục hỗ trợ bạn tại đây. Bạn cần hỏi thêm về thủ tục, hồ sơ, thanh toán hay trạng thái hồ sơ?";
+
+function normalizeAiIntent(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isAiStaffIntent(text) {
+  const value = normalizeAiIntent(text);
+  return /(gap|chat|noi chuyen|lien he).*(can bo|ho tro|nhan vien|tu van)|can bo ho tro/.test(value);
+}
+
+function isAiTransferToStaff(text) {
+  const value = normalizeAiIntent(text);
+  return /^chuyen toi chat can bo$|(?:chuyen|dua|sang|mo).*(?:chat )?(can bo|ho tro)|\btoi (?:trang|phan|chat)\b.*(can bo|ho tro)/.test(value);
+}
+
+function isAiStay(text) {
+  const value = normalizeAiIntent(text);
+  return /^(o lai|khong|thoi|tiep tuc).*(ai|tro ly)?|^o lai chat ai$/.test(value);
+}
+
+function createAiWelcomeMessage() {
+  return {
+    id: "ai-welcome",
+    senderId: AI_ASSISTANT_ID,
+    senderType: "AI",
+    senderName: "Trợ lý AI",
+    text: "Xin chào, tôi là trợ lý AI dịch vụ công. Bạn có thể hỏi về thủ tục, hồ sơ cần chuẩn bị, thanh toán hoặc trạng thái hồ sơ.",
+    createdAt: new Date().toISOString(),
+  };
+}
 
 function LoadingScreen() {
   return (
@@ -104,10 +157,14 @@ function ForwardModal({ rooms, activeRoomId, userId, doForward, onClose }) {
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, ready } = useAuth();
   const chatEndRef = useRef(null);
 
-  const [tabState, setTabState] = useState("multi"); // "multi" or "staff"
+  const [tabState, setTabState] = useState(() => {
+    const tab = new URLSearchParams(location.search).get("tab");
+    return tab === "staff" || tab === "ai" || tab === "multi" ? tab : "multi";
+  });
   const [contacts, setContacts] = useState([]);
   const [chatModeTab, setChatModeTab] = useState("rooms");
   const [contactQuery, setContactQuery] = useState("");
@@ -150,6 +207,11 @@ export default function ChatPage() {
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffErr, setStaffErr] = useState(null);
   const [staffUnread, setStaffUnread] = useState(0);
+  const [aiMessages, setAiMessages] = useState(() => [createAiWelcomeMessage()]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiErr, setAiErr] = useState(null);
+  const [aiQuickQuestions, setAiQuickQuestions] = useState(AI_DEFAULT_QUESTIONS);
 
   const [videoCallState, setVideoCallState] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
@@ -165,6 +227,14 @@ export default function ChatPage() {
 
   useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
   useEffect(() => { tabStateRef.current     = tabState;     }, [tabState]);
+
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get("tab");
+    if (tab === "staff" || tab === "ai" || tab === "multi") {
+      setTabState(tab);
+      if (tab === "staff") setStaffUnread(0);
+    }
+  }, [location.search]);
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -319,6 +389,26 @@ export default function ChatPage() {
 
     const handleNewMessage = async (msg) => {
       console.log("[ChatPage] 📨 new-message:", msg);
+
+      if (msg?.chatType === "AI" || msg?.roomId === AI_ASSISTANT_ID || msg?.message?.senderType === "AI") {
+        const aiMessage = msg?.message;
+        if (aiMessage) {
+          if (aiMessage?.meta?.action === "OPEN_STAFF_CHAT") {
+            setAiQuickQuestions(AI_STAFF_CONFIRM_QUESTIONS);
+            setAiMessages((prev) => [
+              ...prev,
+              {
+                ...aiMessage,
+                text: AI_STAFF_CONFIRM_TEXT,
+              },
+            ]);
+          } else {
+            setAiMessages((prev) => [...prev, aiMessage]);
+          }
+          setTimeout(() => scrollBotRef.current(), 100);
+        }
+        return;
+      }
 
       // Reload rooms để lấy messages mới nhất của tất cả thành viên
       await loadRoomsRef.current();
@@ -896,6 +986,108 @@ export default function ChatPage() {
     }
   }, [staffInput, loadStaff, scrollToBottom]);
 
+  const sendAi = useCallback(async (value) => {
+    const text = String(value ?? aiInput).trim();
+    if (!text || aiLoading) return;
+
+    if (isAiTransferToStaff(text)) {
+      setTabState("staff");
+      setStaffUnread(0);
+      navigate("/chat?tab=staff");
+      return;
+    }
+
+    const userMessage = {
+      id: `ai-user-${Date.now()}`,
+      senderId: user?.id || "me",
+      senderType: "USER",
+      senderName: user?.fullName || "Bạn",
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextMessages = [...aiMessages, userMessage];
+    setAiMessages(nextMessages);
+    setAiInput("");
+    setAiErr(null);
+
+    if (isAiStay(text)) {
+      setAiQuickQuestions(AI_DEFAULT_QUESTIONS);
+      setAiMessages([
+        ...nextMessages,
+        {
+          id: `ai-${Date.now()}`,
+          senderId: AI_ASSISTANT_ID,
+          senderType: "AI",
+          senderName: "Trợ lý AI",
+          text: AI_STAY_TEXT,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      setTimeout(scrollToBottom, 100);
+      return;
+    }
+
+    if (isAiStaffIntent(text)) {
+      setAiQuickQuestions(AI_STAFF_CONFIRM_QUESTIONS);
+      setAiMessages([
+        ...nextMessages,
+        {
+          id: `ai-${Date.now()}`,
+          senderId: AI_ASSISTANT_ID,
+          senderType: "AI",
+          senderName: "Trợ lý AI",
+          text: AI_STAFF_CONFIRM_TEXT,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      setTimeout(scrollToBottom, 100);
+      return;
+    }
+
+    setAiLoading(true);
+    setAiQuickQuestions(AI_DEFAULT_QUESTIONS);
+
+    try {
+      const { data } = await postAiAssistantChat({
+        message: text,
+        chatType: "AI",
+        receiverId: AI_ASSISTANT_ID,
+        messages: nextMessages.map((message) => ({
+          role: message.senderType === "AI" ? "assistant" : "user",
+          content: message.text || "",
+        })),
+      });
+
+      const aiMessage = data?.message || {
+        id: `ai-${Date.now()}`,
+        senderId: AI_ASSISTANT_ID,
+        senderType: "AI",
+        senderName: "Trợ lý AI",
+          text: data?.reply || "Trợ lý AI hiện đang bận, vui lòng thử lại sau.",
+        createdAt: new Date().toISOString(),
+      };
+
+      if (data?.action === "OPEN_STAFF_CHAT" || aiMessage?.meta?.action === "OPEN_STAFF_CHAT") {
+        setAiQuickQuestions(AI_STAFF_CONFIRM_QUESTIONS);
+        setAiMessages((prev) => [
+          ...prev,
+          {
+            ...aiMessage,
+            text: AI_STAFF_CONFIRM_TEXT,
+          },
+        ]);
+      } else {
+        setAiMessages((prev) => [...prev, aiMessage]);
+      }
+      setTimeout(scrollToBottom, 100);
+    } catch (err) {
+      setAiErr("Trợ lý AI hiện đang bận, vui lòng thử lại sau.");
+    } finally {
+      setAiLoading(false);
+    }
+  }, [aiInput, aiLoading, aiMessages, navigate, scrollToBottom, user?.fullName, user?.id]);
+
   if (!ready) return <LoadingScreen />;
   if (!user)  return null;
 
@@ -922,6 +1114,14 @@ export default function ChatPage() {
                 ${tabState === "multi" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/70"}`}
             >
               Chat & Nhóm
+            </button>
+            <button
+              type="button"
+              onClick={() => setTabState("ai")}
+              className={`flex h-7 flex-1 items-center justify-center rounded-md px-2 text-xs font-bold transition-all sm:text-sm
+                ${tabState === "ai" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:bg-white/70"}`}
+            >
+              Trợ lý AI
             </button>
             <button
               type="button"
@@ -983,6 +1183,8 @@ export default function ChatPage() {
                     onSelectRoom={() => setMobileRoomOpen(true)}
                     roomCount={rooms.length}
                     contactCount={contacts.length}
+                    staffLatestMessage={staffMessages[staffMessages.length - 1]}
+                    staffUnread={staffUnread}
                   />
                 </div>
 
@@ -1027,6 +1229,95 @@ export default function ChatPage() {
                 </div>
               </div>
             </>
+          ) : tabState === "ai" ? (
+            <div className="flex min-h-0 w-full flex-1 flex-col">
+              <div
+                id="chat-room-shell"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
+              >
+                <div className="shrink-0 border-b border-slate-200 bg-[#003366] p-4 text-white">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    <h2 className="font-bold text-sm">Trợ lý AI</h2>
+                  </div>
+                  <p className="text-xs text-emerald-400 mt-1">Hỗ trợ thủ tục dịch vụ công</p>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+                  {aiErr && (
+                    <div className="text-xs text-red-500 bg-red-50 p-2 rounded-lg border border-red-100">
+                      {aiErr}
+                    </div>
+                  )}
+
+                  {aiMessages.map((m) => {
+                    const isMine = m.senderType !== "AI" && m.senderId !== AI_ASSISTANT_ID;
+                    return (
+                      <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                        <div>
+                          {!isMine && (
+                            <div className="mb-1 text-[11px] font-semibold text-slate-500">
+                              {m.senderName || "Trợ lý AI"}
+                            </div>
+                          )}
+                          <Bubble
+                            from={isMine ? "user" : "staff"}
+                            text={m.text}
+                            isMine={isMine}
+                            createdAt={m.createdAt}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {aiLoading && (
+                    <div className="text-xs font-semibold text-slate-400">
+                      AI đang trả lời...
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div className="shrink-0 border-t border-slate-200 bg-white p-4 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]">
+                  <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+                    {aiQuickQuestions.map((question) => (
+                      <button
+                        key={question}
+                        type="button"
+                        onClick={() => sendAi(question)}
+                        disabled={aiLoading}
+                        className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-[#003366]/30 hover:text-[#003366] disabled:opacity-50"
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      sendAi();
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      value={aiInput}
+                      onChange={(e) => setAiInput(e.target.value)}
+                      placeholder="Nhắn tin với trợ lý AI..."
+                      disabled={aiLoading}
+                      className="flex-1 text-sm p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-[#003366]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={aiLoading || !aiInput.trim()}
+                      className="bg-[#003366] text-white p-2.5 rounded-xl disabled:opacity-50"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="flex min-h-0 w-full flex-1 flex-col">
               <div
@@ -1054,15 +1345,33 @@ export default function ChatPage() {
                   ) : (
                     staffMessages.map((m, i) => {
                       const isMine = m.from === "user" || m.from === "citizen";
+                      const staffName =
+                        m.sender?.fullName ||
+                        m.senderName ||
+                        m.fullName ||
+                        "Cán bộ hỗ trợ";
                       return (
-                        <Bubble
-                          key={i}
-                          from={isMine ? "user" : "staff"}
-                          text={m.content || m.text}
-                          isMine={isMine}
-                          label={isMine ? user.fullName : "Cán bộ"}
-                          createdAt={m.createdAt}
-                        />
+                        <div key={m.id || `${m.from}-${m.createdAt || i}`} className={`flex w-full ${isMine ? "justify-end" : "justify-start"}`}>
+                          {!isMine && (
+                            <div className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-[#003366]">
+                              {String(staffName || "CB").slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div className={`flex max-w-[80%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+                            {!isMine && (
+                              <div className="mb-1 px-1 text-xs font-semibold text-slate-500">
+                                {staffName}
+                              </div>
+                            )}
+                            <Bubble
+                              from={isMine ? "user" : "staff"}
+                              text={m.content || m.text}
+                              isMine={isMine}
+                              label={isMine ? user.fullName : staffName}
+                              createdAt={m.createdAt}
+                            />
+                          </div>
+                        </div>
                       );
                     })
                   )}

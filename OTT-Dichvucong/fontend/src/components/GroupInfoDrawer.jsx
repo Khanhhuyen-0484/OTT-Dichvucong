@@ -167,7 +167,6 @@ export default function GroupInfoDrawer({
   }, [open, initialTab]);
   const [memberQuery, setMemberQuery] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
-  const [showDissolveConfirm, setShowDissolveConfirm] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const avatarInputRef = useRef(null);
@@ -664,7 +663,11 @@ export default function GroupInfoDrawer({
             <button
               type="button"
               disabled={busy}
-              onClick={() => setShowDissolveConfirm(true)}
+              onClick={() => {
+                if (window.confirm("Giải tán nhóm? Hành động này không thể hoàn tác.")) {
+                  performGroupAction("dissolve");
+                }
+              }}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
             >
               <Trash2 className="h-4 w-4" />
@@ -673,38 +676,6 @@ export default function GroupInfoDrawer({
           )}
         </div>
       </aside>
-
-      {showDissolveConfirm && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-900">Giải tán nhóm?</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Hành động này không thể hoàn tác. Bạn có chắc chắn muốn giải tán nhóm và xóa toàn bộ thành viên khỏi nhóm?
-            </p>
-            <div className="mt-5 flex gap-3">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setShowDissolveConfirm(false)}
-                className="flex-1 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  await performGroupAction("dissolve");
-                  setShowDissolveConfirm(false);
-                }}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {busy ? "Đang giải tán..." : "Xác nhận giải tán"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {previewUrl && (
         <div

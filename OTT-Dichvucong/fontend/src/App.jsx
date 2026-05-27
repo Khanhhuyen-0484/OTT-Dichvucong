@@ -43,6 +43,7 @@ export default function App() {
       <Route path="/admin/ai" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
       <Route path="/admin/services" element={isAdmin ? <AdminServices /> : <Navigate to="/auth" replace />} />
       <Route path="/admin/services/create" element={isAdmin ? <AdminCreateService /> : <Navigate to="/auth" replace />} />
+      <Route path="/admin/services/:serviceId/edit" element={isAdmin ? <AdminCreateService /> : <Navigate to="/auth" replace />} />
       <Route path="/admin/statistics" element={isAdmin ? <AdminStatistics /> : <Navigate to="/auth" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

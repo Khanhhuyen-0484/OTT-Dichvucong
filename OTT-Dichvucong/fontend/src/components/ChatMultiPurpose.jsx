@@ -121,7 +121,7 @@ function ChatMultiPurpose({
   const [locationError, setLocationError] = useState("");
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
-  const reactionOptions = useMemo(() => ["??", "?Y'?", "?Y~,", "?Y~?", "?Y~?", "?Y~?"], []);
+  const reactionOptions = useMemo(() => ["👍", "❤️", "😂", "😮", "😢", "🙏"], []);
   const pinnedMessageRefs = useRef({});
   const latestPinnedMessageRef = useRef(null);
   const messages = activeRoom?.messages || [];
@@ -175,7 +175,7 @@ function ChatMultiPurpose({
       sendRoom(e);
       return;
     }
-    setRoomInput("?Y'?");
+    setRoomInput("👍");
     setTimeout(() => sendRoom(e), 0);
   };
 
@@ -201,7 +201,7 @@ function ChatMultiPurpose({
   if (!activeRoom) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center text-sm text-slate-400">
-        Ch�n h?Ti tho?i ?'?f b?t ?'?u chat
+        Chọn hội thoại để bắt đầu trò chuyện
       </div>
     );
   }
@@ -213,10 +213,10 @@ function ChatMultiPurpose({
           <Avatar src={headerAvatar} name={activeRoom.type === "group" ? activeRoom.name : partner?.fullName} className="mr-3 h-10 w-10 rounded-full border border-slate-200 object-cover" />
           <div>
             <div className="text-sm font-bold text-slate-800">
-              {activeRoom.type === "group" ? activeRoom.name || "Nh?m chat" : partner?.fullName || "H?Ti tho?i"}
+              {activeRoom.type === "group" ? activeRoom.name || "Nhóm chat" : partner?.fullName || "Hội thoại"}
             </div>
             <div className="text-[11px] text-slate-500">
-              {activeRoom.type === "group" ? `${(activeRoom.members || []).length} th�nh vi?n` : "?ang ho?t ?'?Tng"}
+              {activeRoom.type === "group" ? `${(activeRoom.members || []).length} thành viên` : "Đang hoạt động"}
             </div>
           </div>
         </div>
@@ -224,7 +224,7 @@ function ChatMultiPurpose({
           <button
             type="button"
             onClick={onStartVideoCall}
-            title="G?i video"
+            title="Gọi video"
             className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100"
           >
             <Video className="h-5 w-5" />
@@ -235,7 +235,7 @@ function ChatMultiPurpose({
                 <button
                   type="button"
                   onClick={() => openGroupInfo("members")}
-                  title="Th?m th�nh vi?n"
+                  title="Thêm thành viên"
                   className="rounded-full bg-emerald-50 p-2 text-emerald-600 transition hover:bg-emerald-100"
                 >
                   <UserPlus className="h-5 w-5" />
@@ -246,7 +246,7 @@ function ChatMultiPurpose({
                 onClick={() => openGroupInfo("overview")}
                 className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
               >
-                Th�ng tin nh?m
+                Thông tin nhóm
               </button>
             </>
           )}
@@ -266,7 +266,7 @@ function ChatMultiPurpose({
                   <MessageSquare className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1 leading-tight">
-                  <div className="text-xs font-bold text-slate-800">Tin nh�n</div>
+                  <div className="text-xs font-bold text-slate-800">Tin nhắn</div>
                   <div className="truncate text-[11px] text-slate-600">
                     {getPinnedPreviewText(latestPinnedPreview)}
                   </div>
@@ -294,7 +294,7 @@ function ChatMultiPurpose({
                   setShowPinnedList(false);
                 }}
                 className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-slate-100"
-                aria-label="T?y ch�n tin ghim"
+                aria-label="Tùy chọn tin ghim"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </button>
@@ -351,7 +351,7 @@ function ChatMultiPurpose({
           const isMine = m.senderId === user?.id;
           const reactions = reactionMap[m.id] || [];
           const senderMember = activeRoom?.members?.find((x) => x.id === m.senderId);
-          const senderName = senderMember?.fullName || m.senderName || "Ngu?i d�ng";
+          const senderName = senderMember?.fullName || m.senderName || "Người dùng";
           const senderAvatar = isMine
             ? getAvatarUrl(user)
             : (m.senderAvatar || getAvatarUrl(senderMember) || (activeRoom.type === "group" ? GROUP_FALLBACK_AVATAR : headerAvatar));
@@ -416,23 +416,23 @@ function ChatMultiPurpose({
                 )}
                 {messageMenuId === m.id && (
                   <div className={`absolute top-8 z-50 min-w-[120px] rounded-xl border border-slate-200 bg-white py-1 shadow-xl ${isMine ? "right-0" : "left-0"}`}>
-                    <button onClick={() => onReplyMessage(m)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><CornerUpLeft className="h-3.5 w-3.5"/> Ph�n h?"i</button>
-                    <button onClick={() => { setForwardingMessageId?.(m.id); setMessageMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Forward className="h-3.5 w-3.5"/> Chuy?fn ti?p</button>
+                    <button onClick={() => onReplyMessage(m)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><CornerUpLeft className="h-3.5 w-3.5"/> Phản hồi</button>
+                    <button onClick={() => { setForwardingMessageId?.(m.id); setMessageMenuId(null); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Forward className="h-3.5 w-3.5"/> Chuyển tiếp</button>
                     <button
                       onClick={() => doMessageAction("pin", m.id)}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
                     >
                       <Pin className="h-3.5 w-3.5" />
                       {(m.isPinned ?? m.pinned)
-                        ? "B? ghim"
+                        ? "Bỏ ghim"
                         : pinnedCount >= MAX_PINNED_MESSAGES
-                          ? `?? ?'? ${MAX_PINNED_MESSAGES} tin ghim`
-                          : `Ghim tin nh�n (${pinnedCount}/${MAX_PINNED_MESSAGES})`}
+                          ? `Đã đủ ${MAX_PINNED_MESSAGES} tin ghim`
+                          : `Ghim tin nhắn (${pinnedCount}/${MAX_PINNED_MESSAGES})`}
                     </button>
                     {isMine && (
-                      <button onClick={() => doMessageAction("unsend", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Undo2 className="h-3.5 w-3.5"/> Thu h?"i</button>
+                      <button onClick={() => doMessageAction("unsend", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"><Undo2 className="h-3.5 w-3.5"/> Thu hồi</button>
                     )}
-                    <button onClick={() => doMessageAction("delete", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-500 hover:bg-slate-50"><Trash2 className="h-3.5 w-3.5"/> X?a</button>
+                    <button onClick={() => doMessageAction("delete", m.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-500 hover:bg-slate-50"><Trash2 className="h-3.5 w-3.5"/> Xóa</button>
                   </div>
                 )}
               </div>
@@ -445,15 +445,15 @@ function ChatMultiPurpose({
       <div className="shrink-0">
       {replyToMessage && (
         <div className="flex items-center justify-between border-t border-blue-100 bg-blue-50 px-4 py-2">
-          <div className="truncate text-xs text-blue-700">?ang tr? l�i: {replyToMessage.text}</div>
-          <button onClick={clearReply} className="text-xs font-bold text-blue-600">H?y</button>
+          <div className="truncate text-xs text-blue-700">Đang trả lời: {replyToMessage.text}</div>
+          <button onClick={clearReply} className="text-xs font-bold text-blue-600">Hủy</button>
         </div>
       )}
 
       {roomMedia && (
         <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-2 text-xs">
-          <span className="truncate text-slate-600">?? ch�n: {roomMedia.name}</span>
-          <button type="button" className="font-semibold text-red-500" onClick={() => setRoomMedia(null)}>B? ch�n</button>
+          <span className="truncate text-slate-600">Đã chọn: {roomMedia.name}</span>
+          <button type="button" className="font-semibold text-red-500" onClick={() => setRoomMedia(null)}>Bỏ chọn</button>
         </div>
       )}
 
@@ -471,7 +471,7 @@ function ChatMultiPurpose({
           <input
             value={roomInput}
             onChange={(e) => setRoomInput(e.target.value)}
-            placeholder="Nh�p tin nh�n..."
+            placeholder="Nhập tin nhắn..."
             className="flex-1 rounded-xl bg-transparent px-2 py-2 text-sm outline-none"
           />
           <button

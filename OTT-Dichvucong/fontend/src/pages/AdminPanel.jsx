@@ -21,6 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import UserAvatar from "../components/UserAvatar.jsx";
+import AdminDossierWorkspace from "../components/admin/AdminDossierWorkspace.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   getAdminAiHistory,
@@ -54,6 +55,31 @@ const STATUS_META = {
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString("vi-VN") : "-";
+}
+
+function formatChatTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return new Intl.DateTimeFormat("vi-VN", sameDay ? { hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit" }).format(date);
+}
+
+function conversationName(conv) {
+  return conv?.citizenName || conv?.fullName || conv?.user?.fullName || "Người dân";
+}
+
+function conversationAvatar(conv) {
+  return conv?.avatarUrl || conv?.user?.avatarUrl || conv?.sender?.avatarUrl || "";
+}
+
+function conversationUser(conv) {
+  return { fullName: conversationName(conv), email: conv?.email || conv?.user?.email || "" };
+}
+
+function latestConversationMessage(conv) {
+  const messages = Array.isArray(conv?.messages) ? conv.messages.filter(Boolean) : [];
+  return conv?.latestMessage || conv?.lastMessage || messages[messages.length - 1] || null;
 }
 
 function statusLabel(status) {
@@ -106,11 +132,21 @@ export default function AdminPanel() {
   }, [dossiers, query, statusFilter]);
 
   const sortedConversations = useMemo(
-    () => [...conversations].sort((a, b) => String(b.latestMessage?.createdAt || b.latestMessage?.at || "").localeCompare(String(a.latestMessage?.createdAt || a.latestMessage?.at || ""))),
+    () => [...conversations].sort((a, b) => {
+      const am = latestConversationMessage(a);
+      const bm = latestConversationMessage(b);
+      const at = am?.createdAt || am?.at || a.updatedAt || "";
+      const bt = bm?.createdAt || bm?.at || b.updatedAt || "";
+      return String(bt).localeCompare(String(at));
+    }),
     [conversations]
   );
 
   const sortedAiHistory = useMemo(() => [...aiHistory].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))), [aiHistory]);
+  const activeConversation = useMemo(
+    () => conversations.find((conv) => conv.id === activeConversationId) || conversationDetail || null,
+    [activeConversationId, conversationDetail, conversations]
+  );
 
   async function loadDashboard() {
     const [statsRes, dossierRes, convRes] = await Promise.all([getAdminDashboard(), getAdminDossiers(""), getAdminSupportConversations()]);
@@ -267,6 +303,15 @@ export default function AdminPanel() {
           )}
 
           {activeTab === "records" && (
+            <AdminDossierWorkspace
+              dossiers={dossiers}
+              conversations={conversations}
+              onReload={loadDashboard}
+              setMessage={setMessage}
+            />
+          )}
+
+          {activeTab === "records-legacy" && (
             <div className="space-y-5">
               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -334,36 +379,68 @@ export default function AdminPanel() {
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1.5 text-sm font-bold text-red-700"><Bell className="h-4 w-4" />{dashboard.waitingMessages} hội thoại mới</div>
               </div>
-              <div className="mt-4 grid gap-4 lg:grid-cols-12">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 lg:col-span-4">
-                  <div className="mb-2 text-sm font-black text-slate-900">Người dân đang chờ</div>
-                  <div className="space-y-2 overflow-y-auto" style={{ maxHeight: 560 }}>
+              <div className="mt-4 grid h-[calc(100vh-260px)] min-h-[460px] gap-4 overflow-hidden xl:grid-cols-12">
+                <div className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-2 shadow-sm xl:col-span-4">
+                  <div className="flex items-center justify-between px-2 py-2">
+                    <div className="text-sm font-black text-slate-900">Người dân đang chờ</div>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">{sortedConversations.length}</span>
+                  </div>
+                  <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
                     {sortedConversations.map((conv) => {
                       const isActive = activeConversationId === conv.id;
-                      const preview = conv.latestMessage?.text || "-";
+                      const latest = latestConversationMessage(conv);
+                      const preview = latest?.text || latest?.content || "-";
+                      const lastTime = latest?.createdAt || latest?.at || conv.updatedAt;
+                      const unreadCount = Number(conv.unreadCount || 0);
                       return (
-                        <button key={conv.id} type="button" onClick={() => setActiveConversationId(conv.id)} className={`w-full rounded-xl p-3 text-left transition ring-1 ${isActive ? "bg-[#003366] text-white ring-[#003366]/50" : "bg-white text-slate-900 ring-slate-200 hover:bg-slate-50"}`}>
-                          <div className="truncate text-sm font-bold">{conv.citizenName || conv.fullName || "Người dân"}</div>
-                          <div className={`mt-1 truncate text-xs ${isActive ? "text-white/80" : "text-slate-500"}`}>{preview}</div>
+                        <button key={conv.id} type="button" onClick={() => setActiveConversationId(conv.id)} className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${isActive ? "bg-[#003366] text-white shadow-md" : "bg-white text-slate-900 hover:bg-slate-50"}`}>
+                          <UserAvatar user={conversationUser(conv)} src={conversationAvatar(conv)} size={46} className={isActive ? "ring-white/30" : "ring-slate-100"} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="truncate text-sm font-black">{conversationName(conv)}</div>
+                              <div className={`shrink-0 text-[11px] font-semibold ${isActive ? "text-white/70" : "text-slate-400"}`}>{formatChatTime(lastTime)}</div>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between gap-2">
+                              <div className={`truncate text-xs ${isActive ? "text-white/80" : unreadCount ? "font-bold text-slate-900" : "text-slate-500"}`}>{preview}</div>
+                              {unreadCount ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1.5 text-[10px] font-black text-white">{unreadCount}</span> : null}
+                            </div>
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-8">
-                  <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-500">Hội thoại</div>
-                      <div className="text-lg font-black text-slate-900">{conversationDetail?.citizenName || "Chưa chọn hội thoại"}</div>
+                <div className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm xl:col-span-8">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {activeConversation ? (
+                        <UserAvatar user={conversationUser(activeConversation)} src={conversationAvatar(activeConversation)} size={48} className="ring-slate-100" />
+                      ) : (
+                        <div className="grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-400"><MessageCircleMore className="h-5 w-5" /></div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase text-slate-500">Hội thoại</div>
+                        <div className="truncate text-lg font-black text-slate-900">{activeConversation ? conversationName(activeConversation) : "Chưa chọn hội thoại"}</div>
+                        {activeConversation ? <div className="truncate text-xs text-slate-500">{activeConversation.phone || activeConversation.email || "Người dân"}</div> : null}
+                      </div>
                     </div>
                     <button type="button" disabled={!activeConversationId || busy} onClick={markResolved} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Đã giải quyết</button>
                   </div>
-                  <div className="max-h-[420px] overflow-auto">
-                    {Array.isArray(conversationDetail?.messages) ? conversationDetail.messages.map((msg) => (
-                      <div key={msg.id || msg.createdAt} className={`mb-3 flex ${msg.from === "admin" ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm ${msg.from === "admin" ? "bg-[#003366] text-white" : "bg-slate-100 text-slate-900"}`}>{msg.text}</div>
-                      </div>
-                    )) : <div className="text-sm text-slate-500">Chọn một hội thoại để xem nội dung</div>}
+                  <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl bg-slate-50 p-3 md:p-4">
+                    {Array.isArray(conversationDetail?.messages) ? conversationDetail.messages.map((msg) => {
+                      const fromAdmin = msg.from === "admin";
+                      const senderUser = fromAdmin ? { fullName: "Cán bộ hỗ trợ" } : (msg.sender || conversationUser(activeConversation));
+                      return (
+                        <div key={msg.id || msg.createdAt} className={`mb-3 flex items-end gap-2 ${fromAdmin ? "justify-end" : "justify-start"}`}>
+                          {!fromAdmin ? <UserAvatar user={senderUser} src={msg.sender?.avatarUrl || conversationAvatar(activeConversation)} size={32} className="ring-white" /> : null}
+                          <div className={`flex max-w-[82%] flex-col sm:max-w-[72%] ${fromAdmin ? "items-end" : "items-start"}`}>
+                            {!fromAdmin ? <div className="mb-1 px-1 text-[11px] font-bold text-slate-500">{senderUser.fullName || conversationName(activeConversation)}</div> : null}
+                            <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${fromAdmin ? "rounded-br-md bg-[#003366] text-white" : "rounded-bl-md bg-white text-slate-900 ring-1 ring-slate-200"}`}>{msg.text}</div>
+                            <div className="mt-1 px-1 text-[11px] text-slate-400">{formatChatTime(msg.createdAt || msg.at)}</div>
+                          </div>
+                        </div>
+                      );
+                    }) : <div className="flex h-full min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm font-semibold text-slate-500">Chọn một hội thoại để xem nội dung</div>}
                   </div>
                   <div className="mt-4 flex gap-2">
                     <input value={chatText} onChange={(e) => setChatText(e.target.value)} placeholder="Nhập tin nhắn..." className="flex-1 rounded-xl border border-slate-200 px-4 py-3 outline-none" />

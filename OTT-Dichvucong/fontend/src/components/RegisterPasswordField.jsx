@@ -32,14 +32,14 @@ function RequirementRow({ met, label }) {
 }
 
 export default function RegisterPasswordField({
-  label = "Mật khẩu",
+  label = "M�t kh�u",
   name = "password",
   value,
   onChange,
   error,
   required = false,
   autoComplete = "new-password",
-  placeholder = "Nhập mật khẩu của bạn"
+  placeholder = "Nh�p m�t kh�u c?a b?n"
 }) {
   const [visible, setVisible] = useState(false);
   const inputId = useId();
@@ -58,7 +58,7 @@ export default function RegisterPasswordField({
   const strengthMeta = strength
     ? PASSWORD_STRENGTH_META[strength]
     : {
-        label: "Chưa nhập",
+        label: "Chua nh�p",
         barClass: "bg-slate-300",
         textClass: "text-slate-500",
         width: "0%"
@@ -96,7 +96,7 @@ export default function RegisterPasswordField({
             type="button"
             onClick={() => setVisible((v) => !v)}
             className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 transition hover:text-slate-800"
-            aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+            aria-label={visible ? "?n m�t kh�u" : "Hi??n m�t kh�u"}
             tabIndex={-1}
           >
             {visible ? (
@@ -115,7 +115,7 @@ export default function RegisterPasswordField({
 
       <div className="space-y-2" aria-live="polite">
         <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="font-semibold text-slate-600">Độ mạnh mật khẩu</span>
+          <span className="font-semibold text-slate-600">??T m?nh m�t kh�u</span>
           <span className={`font-bold ${strengthMeta.textClass}`}>
             {strengthMeta.label}
           </span>
@@ -126,7 +126,7 @@ export default function RegisterPasswordField({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress.percent}
-          aria-label={`Độ mạnh mật khẩu: ${strengthMeta.label}`}
+          aria-label={`??T m?nh m�t kh�u: ${strengthMeta.label}`}
         >
           <div
             className={`h-full rounded-full transition-all duration-300 ${strengthMeta.barClass}`}
