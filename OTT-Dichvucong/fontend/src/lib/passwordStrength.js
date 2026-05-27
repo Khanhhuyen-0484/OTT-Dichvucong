@@ -18,7 +18,7 @@ export function passwordHasSpecial(value) {
   return SPECIAL_RE.test(value);
 }
 
-/** Ch?? g?"m ch? thu?ng v?/ho?c s?' (kh�ng hoa, kh�ng k? t? ?'?c bi??t). */
+/** Chỉ gồm chữ thường và/hoặc số, không có chữ hoa hoặc ký tự đặc biệt. */
 export function isOnlyLowercaseAndNumbers(value) {
   if (!value) return false;
   return /^[a-z0-9]+$/.test(value);
@@ -34,16 +34,16 @@ export function countPasswordFactors(value) {
 }
 
 /**
- * - Y?u: < 6 k? t? HO?C ch?? ch? thu?ng/s?'
- * - M?nh: ??? 8 k? t?, ?'? hoa + thu?ng + s?' + k? t? ?'?c bi??t
- * - Trung b?nh: ??? 6 k? t?, ??? 2 trong 4 y?u t?' (v? kh�ng ?'?t M?nh)
+ * - Yếu: < 8 ký tự hoặc chỉ có chữ thường/số
+ * - Mạnh: đủ 8 ký tự, có chữ hoa + thường + số + ký tự đặc biệt
+ * - Trung bình: đủ 8 ký tự, có 2 trong 4 yếu tố và chưa đạt Mạnh
  * @param {string} value
  * @returns {PasswordStrengthLevel | null}
  */
 export function getPasswordStrength(value) {
   if (!value) return null;
 
-  if (value.length < 6 || isOnlyLowercaseAndNumbers(value)) {
+  if (value.length < 8 || isOnlyLowercaseAndNumbers(value)) {
     return "weak";
   }
 
@@ -57,7 +57,7 @@ export function getPasswordStrength(value) {
     return "strong";
   }
 
-  if (value.length >= 6 && countPasswordFactors(value) >= 2) {
+  if (value.length >= 8 && countPasswordFactors(value) >= 2) {
     return "medium";
   }
 
@@ -66,19 +66,19 @@ export function getPasswordStrength(value) {
 
 export const PASSWORD_STRENGTH_META = {
   weak: {
-    label: "Y?u",
+    label: "Yếu",
     barClass: "bg-red-500",
     textClass: "text-red-700",
     width: "33%"
   },
   medium: {
-    label: "Trung b?nh",
+    label: "Trung bình",
     barClass: "bg-orange-500",
     textClass: "text-orange-700",
     width: "66%"
   },
   strong: {
-    label: "M?nh",
+    label: "Mạnh",
     barClass: "bg-green-500",
     textClass: "text-green-700",
     width: "100%"
@@ -87,12 +87,13 @@ export const PASSWORD_STRENGTH_META = {
 
 export function getRegisterPasswordError(value) {
   if (!value) return null;
-  const strength = getPasswordStrength(value);
-  if (strength !== "weak") return null;
-  if (value.length < 6) {
-    return "M�t kh�u ph?i c? ?t nh?t 6 k? t?";
+  if (value.length < 8) {
+    return "Mật khẩu phải có ít nhất 8 ký tự";
   }
-  return "M�t kh�u qu? y?u. C?n k�t h�p ?t nh?t 2 lo?i: ch? hoa, ch? thu?ng, s?', k? t? ?'?c bi??t.";
+  if (getPasswordStrength(value) !== "strong") {
+    return "Mật khẩu phải đủ các điều kiện: chữ hoa, chữ thường, chữ số và ký tự đặc biệt.";
+  }
+  return null;
 }
 
 /**
@@ -101,25 +102,17 @@ export function getRegisterPasswordError(value) {
  */
 export function getPasswordRequirementItems(value) {
   const safe = value || "";
-  const hasMinMedium = safe.length >= 6;
   const hasMinStrong = safe.length >= 8;
-
-  let lengthLabel =
-    "T?'i thi?fu 6 k? t? (Trung b?nh) ho?c 8 k? t? (M?nh)";
-  if (hasMinStrong) {
-    lengthLabel = "T?'i thi?fu 8 k? t? (M?nh)";
-  } else if (hasMinMedium) {
-    lengthLabel = "T?'i thi?fu 6 k? t? (Trung b?nh)";
-  }
+  const lengthLabel = "Tối thiểu 8 ký tự";
 
   return [
-    { id: "length", label: lengthLabel, met: hasMinMedium },
-    { id: "uppercase", label: "C? ch?a ch? hoa", met: passwordHasUppercase(safe) },
-    { id: "lowercase", label: "C? ch?a ch? thu?ng", met: passwordHasLowercase(safe) },
-    { id: "digit", label: "C? ch?a ch? s?'", met: passwordHasDigit(safe) },
+    { id: "length", label: lengthLabel, met: hasMinStrong },
+    { id: "uppercase", label: "Có chứa chữ hoa", met: passwordHasUppercase(safe) },
+    { id: "lowercase", label: "Có chứa chữ thường", met: passwordHasLowercase(safe) },
+    { id: "digit", label: "Có chứa chữ số", met: passwordHasDigit(safe) },
     {
       id: "special",
-      label: "C? ch?a ?t nh?t 1 k? t? ?'?c bi??t",
+      label: "Có chứa ít nhất 1 ký tự đặc biệt",
       met: passwordHasSpecial(safe)
     }
   ];

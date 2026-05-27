@@ -101,6 +101,19 @@ function isAiStay(text) {
   return /^(o lai|khong|thoi|tiep tuc).*(ai|tro ly)?|^o lai chat ai$/.test(value);
 }
 
+function getGeolocationErrorMessage(err) {
+  if (err?.code === 1) {
+    return "Bạn đang chặn quyền vị trí. Hãy bấm biểu tượng vị trí/cài đặt cạnh thanh địa chỉ và cho phép localhost:5173 truy cập vị trí.";
+  }
+  if (err?.code === 2) {
+    return "Không lấy được vị trí hiện tại. Hãy kiểm tra GPS/Wi-Fi rồi thử lại.";
+  }
+  if (err?.code === 3) {
+    return "Lấy vị trí quá lâu. Hãy thử lại hoặc bật định vị chính xác hơn.";
+  }
+  return "Không thể lấy vị trí hiện tại.";
+}
+
 function createAiWelcomeMessage() {
   return {
     id: "ai-welcome",
@@ -800,7 +813,7 @@ export default function ChatPage() {
       await loadRooms();
       setTimeout(scrollToBottom, 100);
     } catch (err) {
-      setRoomErr(getApiErrorMessage(err) || "Không thể lấy vị trí hiện tại.");
+      setRoomErr(getGeolocationErrorMessage(err));
     } finally {
       setRoomLoading(false);
     }
