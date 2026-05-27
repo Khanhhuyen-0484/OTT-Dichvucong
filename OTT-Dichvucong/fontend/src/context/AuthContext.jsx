@@ -37,7 +37,7 @@ function writeProfileCache(data) {
   }
 }
 
-/** Chỉ để lấy `id` khi cần khớp cache — không dùng làm hồ sơ thay thế API. */
+/** Ch?? ?'?f l?y `id` khi c?n kh?>p cache ??" kh�ng d�ng l?m h?" so thay th? API. */
 function decodeJwtPayload(token) {
   try {
     const p = token.split(".")[1];
@@ -146,7 +146,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Tự động đăng nhập lại bằng token cũ nếu có
+    // T? ?'?Tng ?'?fng nh�p l�i b?ng token cu n?u c?
     refreshProfile();
   }, [refreshProfile]);
 
@@ -167,7 +167,7 @@ export function AuthProvider({ children }) {
   const deleteAccount = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error("Không tìm thấy token");
+      throw new Error("Kh�ng t?m th?y token");
     }
     const response = await fetch("/api/me", {
       method: "DELETE",
@@ -178,9 +178,9 @@ export function AuthProvider({ children }) {
     });
     if (!response.ok) {
       const msg = await response.text();
-      throw new Error(msg || "Không thể xóa tài khoản");
+      throw new Error(msg || "Kh�ng th?f x?a t�i kho?n");
     }
-    // Logout sau khi xóa thành công
+    // Logout sau khi x?a th�nh c�ng
     logout();
   }, [logout]);
 

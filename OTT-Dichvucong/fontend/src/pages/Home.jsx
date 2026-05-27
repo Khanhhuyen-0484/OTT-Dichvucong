@@ -1,7 +1,5 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import GovHeader from "../components/GovHeader.jsx";
-import HomeChatSection from "../components/HomeChatSection.jsx";
 import {
   Building2,
   CarFront,
@@ -11,81 +9,55 @@ import {
   Landmark,
   MessageCircle,
   Search,
-  SendHorizonal
+  SendHorizonal,
 } from "lucide-react";
+import GovHeader from "../components/GovHeader.jsx";
+import HomeChatSection from "../components/HomeChatSection.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 
-function ServiceCard({ icon: Icon, title, desc }) {
+function ServiceCard({ icon: Icon, title, desc, onClick }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <button type="button" onClick={onClick} className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start gap-4">
         <div className="rounded-xl bg-[#003366]/5 p-2.5 ring-1 ring-[#003366]/10">
-          <Icon className="h-6 w-6 text-[#003366]" aria-hidden="true" />
+          <Icon className="h-6 w-6 text-[#003366]" />
         </div>
         <div className="min-w-0">
           <div className="font-extrabold text-slate-900">{title}</div>
           <div className="mt-1 text-sm text-slate-600">{desc}</div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [q, setQ] = useState("");
 
   const services = useMemo(
     () => [
-      {
-        icon: FileText,
-        title: "Hộ tịch",
-        desc: "Khai sinh, kết hôn, trích lục bản sao theo quy trình điện tử."
-      },
-      {
-        icon: FolderKanban,
-        title: "Đất đai",
-        desc: "Đăng ký biến động đất đai, cấp đổi giấy chứng nhận quyền sử dụng."
-      },
-      {
-        icon: Building2,
-        title: "Xây dựng",
-        desc: "Xin cấp phép xây dựng, điều chỉnh hồ sơ và theo dõi tiến độ."
-      },
-      {
-        icon: Landmark,
-        title: "Hộ chiếu",
-        desc: "Nộp hồ sơ cấp/đổi hộ chiếu và nhận thông báo xử lý trực tuyến."
-      },
-      {
-        icon: CarFront,
-        title: "Giao thông",
-        desc: "Đổi giấy phép lái xe, đăng ký phương tiện và tra cứu vi phạm."
-      },
-      {
-        icon: ClipboardList,
-        title: "Doanh nghiệp",
-        desc: "Đăng ký kinh doanh, thay đổi thông tin và dịch vụ chuyên ngành."
-      }
+      { icon: FileText, title: "Hộ tịch", desc: "Khai sinh, kết hôn, trích lục bản sao theo quy trình điện tử.", id: "demo-ho-tich" },
+      { icon: FolderKanban, title: "Đất đai", desc: "Đăng ký biến động đất đai, cấp đổi giấy chứng nhận quyền sử dụng.", id: "demo-dat-dai" },
+      { icon: Building2, title: "Xây dựng", desc: "Xin cấp phép xây dựng, điều chỉnh hồ sơ và theo dõi tiến độ.", id: "demo-xay-dung" },
+      { icon: Landmark, title: "Hộ chiếu", desc: "Nộp hồ sơ cấp đổi hộ chiếu và nhận thông báo xử lý trực tuyến.", id: "demo-ho-chieu" },
+      { icon: CarFront, title: "Giao thông", desc: "Đổi giấy phép lái xe, đăng ký phương tiện và tra cứu vi phạm.", id: "demo-gplx" },
+      { icon: ClipboardList, title: "Doanh nghiệp", desc: "Đăng ký kinh doanh, thay đổi thông tin và dịch vụ chuyên ngành.", id: "demo-doanh-nghiep" },
     ],
     []
   );
 
   const onSubmit = (e) => {
     e.preventDefault();
-    alert(
-      q.trim()
-        ? `Tìm kiếm: ${q.trim()} (demo UI)`
-        : "Vui lòng nhập từ khóa tìm kiếm."
-    );
+    alert(q.trim() ? `Tìm kiếm: ${q.trim()} (demo UI)` : "Vui lòng nhập từ khóa tìm kiếm.");
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
       <GovHeader />
-
       <main>
         <section className="relative overflow-hidden bg-gradient-to-br from-[#003366] via-[#0a3f74] to-[#003366] text-white">
-          <div className="absolute -right-24 -top-28 h-72 w-72 rounded-full bg-white/10 blur-2xl" />
           <div className="mx-auto max-w-7xl px-4 py-14 md:py-18">
             <div className="grid items-center gap-10 lg:grid-cols-12">
               <div className="lg:col-span-8">
@@ -98,30 +70,22 @@ export default function Home() {
                   <span className="block text-sky-100">Nhanh hơn. Rõ ràng hơn. Minh bạch hơn.</span>
                 </h1>
                 <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/90 sm:text-base">
-                  Nộp hồ sơ, thanh toán lệ phí, theo dõi trạng thái và nhận hỗ trợ tức thời từ trợ lý ảo
-                  hoặc cán bộ chuyên trách, tất cả trong một nền tảng thống nhất.
+                  Nộp hồ sơ, thanh toán lệ phí, theo dõi trạng thái và nhận hỗ trợ tức thời từ trợ lý ảo hoặc cán bộ chuyên trách.
                 </p>
 
                 <form onSubmit={onSubmit} className="mt-6">
                   <div className="rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-200">
                     <div className="flex flex-col gap-3 sm:flex-row">
-                      <label className="sr-only" htmlFor="search">
-                        Tìm kiếm thủ tục hành chính
-                      </label>
                       <div className="flex flex-1 items-center rounded-xl bg-slate-50 px-3 ring-1 ring-slate-200">
                         <Search className="h-4 w-4 text-slate-500" />
                         <input
-                          id="search"
                           value={q}
                           onChange={(e) => setQ(e.target.value)}
-                          placeholder="Ví dụ: Đăng ký khai sinh, đổi GPLX, cấp phép xây dựng..."
+                          placeholder="Ví dụ: đăng ký khai sinh, đổi GPLX, cấp phép xây dựng..."
                           className="h-12 w-full bg-transparent px-2 text-sm text-slate-800 outline-none"
                         />
                       </div>
-                      <button
-                        type="submit"
-                        className="rounded-xl bg-[#003366] px-6 py-3 text-sm font-bold text-white hover:bg-[#052b53]"
-                      >
+                      <button type="submit" className="rounded-xl bg-[#003366] px-6 py-3 text-sm font-bold text-white hover:bg-[#052b53]">
                         Tra cứu ngay
                       </button>
                     </div>
@@ -129,18 +93,19 @@ export default function Home() {
                 </form>
 
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#003366] shadow-sm hover:bg-slate-100">
+                  <button type="button" onClick={() => navigate("/services")} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#003366] shadow-sm hover:bg-slate-100">
                     <SendHorizonal className="h-4 w-4" />
                     Nộp hồ sơ
                   </button>
-                  <button className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
+                  <button type="button" onClick={() => navigate(user ? "/my-applications" : "/auth")} className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/15">
+                    <ClipboardList className="h-4 w-4" />
+                    Xem hồ sơ đã nộp
+                  </button>
+                  <button type="button" onClick={() => navigate("/track")} className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-transparent px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
                     <FileText className="h-4 w-4" />
                     Tra cứu kết quả
                   </button>
-                  <button
-                    onClick={() => navigate("/chat")}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#003366] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#052b53]"
-                  >
+                  <button type="button" onClick={() => navigate("/chat")} className="inline-flex items-center gap-2 rounded-xl bg-[#003366] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#052b53]">
                     <MessageCircle className="h-4 w-4" />
                     Chat đa năng
                   </button>
@@ -167,28 +132,24 @@ export default function Home() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-2xl font-black text-slate-900">Danh mục dịch vụ trọng điểm</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Chọn nhóm dịch vụ để bắt đầu nộp hồ sơ điện tử hoặc xem yêu cầu biểu mẫu chi tiết.
-              </p>
+              <p className="mt-1 text-sm text-slate-600">Các nhóm thủ tục phổ biến nhất để người dân bắt đầu tra cứu nhanh.</p>
             </div>
+            <button type="button" onClick={() => navigate("/services")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+              Xem tất cả dịch vụ
+            </button>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {services.map((s) => (
-              <ServiceCard key={s.title} {...s} />
-            ))}
+            {services.map((s) => <ServiceCard key={s.title} {...s} onClick={() => navigate(`/services/${s.id}`)} />)}
           </div>
         </section>
       </main>
 
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-2 px-4 py-6 text-sm text-slate-600 sm:flex-row sm:items-center">
-          <div className="font-semibold">
-            © {new Date().getFullYear()} Cổng Dịch vụ công
-          </div>
-          <div>Thiết kế UI mới: Portal công dân + hỗ trợ AI + chat cán bộ 1v1.</div>
+          <div className="font-semibold">© {new Date().getFullYear()} Cổng Dịch vụ công</div>
+          <div>Portal công dân với hỗ trợ AI, chat và theo dõi hồ sơ trực tuyến.</div>
         </div>
       </footer>
     </div>
   );
 }
-
