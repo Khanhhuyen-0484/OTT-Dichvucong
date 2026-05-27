@@ -2,6 +2,7 @@ import React from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Home from "./pages/Home.jsx";
 import Auth from "./pages/Auth.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import Profile from "./pages/Profile.jsx";
 import AdminPanel from "./pages/AdminPanel.jsx";
 import AdminServices from "./pages/AdminServices.jsx";
@@ -33,6 +34,7 @@ export default function App() {
       <Route path="/my-applications" element={user ? <MyApplications /> : <Navigate to="/auth" replace />} />
       <Route path="/my-applications/:applicationCode" element={user ? <ApplicationDetail /> : <Navigate to="/auth" replace />} />
       <Route path="/auth" element={<Auth />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/chat" element={<ChatPage />} />
       <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
