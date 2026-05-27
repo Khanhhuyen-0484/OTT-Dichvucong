@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GovHeader from "../components/GovHeader.jsx";
+import RegisterPasswordField from "../components/RegisterPasswordField.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { forgotPassword, getApiErrorMessage, login, register, sendOtp } from "../lib/api.js";
+import { getRegisterPasswordError } from "../lib/passwordStrength.js";
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,6 +33,7 @@ export default function Auth() {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const registerPasswordError = mode === "register" ? getRegisterPasswordError(password) : null;
 
   function reset(nextMode) {
     setMode(nextMode);
@@ -80,7 +83,8 @@ export default function Auth() {
     event.preventDefault();
     if (!emailRe.test(email)) return setMessage("Email không đúng định dạng");
     if (!fullName.trim()) return setMessage("Vui lòng nhập họ tên");
-    if (password.length < 8) return setMessage("Mật khẩu đăng ký phải có ít nhất 8 ký tự");
+    if (!password) return setMessage("Vui lòng nhập mật khẩu");
+    if (registerPasswordError) return setMessage(registerPasswordError);
     if (otp.replace(/\D/g, "").length !== 6) return setMessage("OTP gồm đúng 6 chữ số");
     setLoading(true);
     setMessage("");
@@ -147,7 +151,12 @@ export default function Auth() {
               <Field label="Họ tên" value={fullName} onChange={setFullName} />
               <Field label="Số điện thoại" value={phone} onChange={setPhone} />
               <Field label="Địa chỉ" value={address} onChange={setAddress} />
-              <Field label="Mật khẩu" value={password} onChange={setPassword} type="password" />
+              <RegisterPasswordField
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                error={registerPasswordError}
+                required
+              />
               <SubmitButton loading={loading}>Đăng ký</SubmitButton>
             </form>
           )}

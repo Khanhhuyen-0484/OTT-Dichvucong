@@ -17,6 +17,7 @@ export function getApiErrorMessage(err) { return err?.response?.data?.message ||
 export async function postAiChat(payload) { return api.post("/chat/ai", payload); }
 export async function getMe() { return api.get("/me"); }
 export async function patchProfile(payload) { return api.patch("/me", payload); }
+export async function deleteProfile() { return api.delete("/me"); }
 export async function login(payload) { return api.post("/auth/login", payload); }
 export async function register(payload) { return api.post("/auth/register", payload); }
 export async function sendOtp(email) { return api.post("/auth/send-otp", { email }); }
