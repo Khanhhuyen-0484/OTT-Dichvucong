@@ -1,0 +1,50 @@
+/* frontend/src/index.css */
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Inter:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700&display=swap&subset=vietnamese");
+
+:root {
+  --gov-navy: #003366;
+  --gov-red: #7a1f1f;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: "Noto Sans", "Inter", "Roboto", system-ui, -apple-system, Segoe UI, sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+*:focus-visible {
+  outline: 3px solid rgba(30, 58, 138, 0.35);
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Thanh cu?Tn ngang ??" 4 c?u g�i ? chatbot AI */
+.ai-suggestion-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #e2e8f0;
+}
+.ai-suggestion-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.ai-suggestion-scroll::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+.ai-suggestion-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 999px;
+}
+.ai-suggestion-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
