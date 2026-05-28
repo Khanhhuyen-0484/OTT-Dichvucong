@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const dns = require("dns");
+const dnsPromises = require("dns").promises;
 const { loadEnv } = require("./loadEnv");
 
 // ??m b?o .env ?'u?c n?p tru?>c khi ?'?c EMAIL_* (k?f c? khi mailer ?'u?c require s?>m).
@@ -23,27 +24,48 @@ function gmailAuth() {
   return { user, pass };
 }
 
+async function resolveSmtpHost() {
+  try {
+    const addresses = await dnsPromises.resolve4("smtp.gmail.com");
+    return addresses?.[0] || "smtp.gmail.com";
+  } catch (err) {
+    console.warn("[mailer] resolve4 smtp.gmail.com failed:", err.message);
+    return "smtp.gmail.com";
+  }
+}
+
 /** Hai c?u h?nh Gmail hay d?ng: 465 SSL v? 587 STARTTLS (fallback). */
-function gmailTransports() {
+async function gmailTransports() {
   const auth = gmailAuth();
+  const host = await resolveSmtpHost();
+  const common = {
+    auth,
+    family: 4,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
+    tls: {
+      servername: "smtp.gmail.com"
+    }
+  };
   return [
     {
       name: "465 SSL",
       config: {
-        host: "smtp.gmail.com",
+        host,
         port: 465,
         secure: true,
-        auth
+        ...common
       }
     },
     {
       name: "587 STARTTLS",
       config: {
-        host: "smtp.gmail.com",
+        host,
         port: 587,
         secure: false,
         requireTLS: true,
-        auth
+        ...common
       }
     }
   ];
@@ -88,7 +110,7 @@ async function sendMail({ to, subject, html, text }) {
   const from = user;
   const toNorm = String(to).trim();
 
-  const attempts = gmailTransports();
+  const attempts = await gmailTransports();
   let lastErr;
 
   for (const { name, config } of attempts) {
@@ -111,7 +133,7 @@ async function sendMail({ to, subject, html, text }) {
 }
 
 async function verifyTransport() {
-  const attempts = gmailTransports();
+  const attempts = await gmailTransports();
   for (const { name, config } of attempts) {
     const transport = nodemailer.createTransport(config);
     try {

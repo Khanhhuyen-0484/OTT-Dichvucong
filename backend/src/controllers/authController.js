@@ -448,13 +448,24 @@ exports.forgotPassword = async (req, res) => {
       token
     )}`;
 
-    await sendMail({
-      to: email,
-      subject: "Yêu cầu đặt lại mật khẩu",
-      html: resetPasswordEmail({ resetUrl })
-    });
+    try {
+      await sendMail({
+        to: email,
+        subject: "Yêu cầu đặt lại mật khẩu",
+        html: resetPasswordEmail({ resetUrl })
+      });
+    } catch (mailErr) {
+      console.error("FORGOT PASSWORD MAIL FAILED", mailErr?.message, mailErr);
+      return res.status(202).json({
+        ...safeOk,
+        mailSent: false,
+        resetUrl,
+        message:
+          "Không gửi được email trong môi trường deploy. Bạn có thể mở link đặt lại mật khẩu bên dưới."
+      });
+    }
 
-    return res.json(safeOk);
+    return res.json({ ...safeOk, mailSent: true });
   } catch (err) {
     console.error("FORGOT PASSWORD MAIL FAILED ❌", err?.message, err);
     return res.status(500).json({
@@ -1065,13 +1076,24 @@ exports.forgotPassword = async (req, res) => {
       token
     )}`;
 
-    await sendMail({
-      to: email,
-      subject: "Yêu cầu đặt lại mật khẩu",
-      html: resetPasswordEmail({ resetUrl })
-    });
+    try {
+      await sendMail({
+        to: email,
+        subject: "Yêu cầu đặt lại mật khẩu",
+        html: resetPasswordEmail({ resetUrl })
+      });
+    } catch (mailErr) {
+      console.error("FORGOT PASSWORD MAIL FAILED", mailErr?.message, mailErr);
+      return res.status(202).json({
+        ...safeOk,
+        mailSent: false,
+        resetUrl,
+        message:
+          "Không gửi được email trong môi trường deploy. Bạn có thể mở link đặt lại mật khẩu bên dưới."
+      });
+    }
 
-    return res.json(safeOk);
+    return res.json({ ...safeOk, mailSent: true });
   } catch (err) {
     console.error("FORGOT PASSWORD MAIL FAILED ❌", err?.message, err);
     return res.status(500).json({
