@@ -70,7 +70,7 @@ function buildPublicObjectUrl(key) {
 }
 
 /**
- * Upload t? server ??" tr?nh CORS khi browser PUT th?ng l?n S3.
+ * Upload từ server để tránh CORS khi browser PUT thẳng lên S3.
  */
 async function uploadBuffer({ key, buffer, contentType }) {
   const cfg = getConfig();

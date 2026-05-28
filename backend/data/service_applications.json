@@ -3,7 +3,7 @@
     "id": "1776259199349",
     "applicationCode": "HS-20260415-FHI2PR",
     "serviceId": "tam-tru",
-    "serviceName": "??fng k? t?m tr?",
+    "serviceName": "Đăng ký tạm trú",
     "formData": {
       "fullName": "PHAM THUY TRANG",
       "email": "phamtrangdrhvcsnd@gmail.com",
@@ -40,16 +40,16 @@
       }
     ],
     "fee": 15000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T13:19:59.349Z"
   },
   {
     "id": "1776259356154",
     "applicationCode": "HS-20260415-AFLQAT",
     "serviceId": "doi-gplx",
-    "serviceName": "??.i gi?y ph?p l?i xe",
+    "serviceName": "Đổi giấy phép lái xe",
     "formData": {
-      "fullName": "Trang Ph?m",
+      "fullName": "Trang Phạm",
       "email": "",
       "phone": "0989471415",
       "citizenId": "214353414",
@@ -77,16 +77,16 @@
       }
     ],
     "fee": 135000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T13:22:36.154Z"
   },
   {
     "id": "1776261726419",
     "applicationCode": "HS-20260415-7JUQ1E",
     "serviceId": "tam-tru",
-    "serviceName": "??fng k? t?m tr?",
+    "serviceName": "Đăng ký tạm trú",
     "formData": {
-      "fullName": "Trang Ph?m",
+      "fullName": "Trang Phạm",
       "email": "",
       "phone": "0989471415",
       "citizenId": "213441143",
@@ -121,14 +121,14 @@
       }
     ],
     "fee": 15000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T14:02:06.419Z"
   },
   {
     "id": "1776261795638",
     "applicationCode": "HS-20260415-P2REOL",
     "serviceId": "tam-tru",
-    "serviceName": "??fng k? t?m tr?",
+    "serviceName": "Đăng ký tạm trú",
     "formData": {
       "fullName": "PHAM THUY TRANG",
       "email": "",
@@ -165,7 +165,7 @@
       }
     ],
     "fee": 15000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T14:03:15.638Z"
   },
   {
@@ -173,9 +173,9 @@
     "userId": "u_1776255853223",
     "applicationCode": "HS-20260415-XMYUWP",
     "serviceId": "doi-gplx",
-    "serviceName": "??.i gi?y ph?p l?i xe",
+    "serviceName": "Đổi giấy phép lái xe",
     "formData": {
-      "fullName": "Trang Ph?m",
+      "fullName": "Trang Phạm",
       "email": "phamtrangdrhvcsnd@gmail.com",
       "phone": "0123443215",
       "citizenId": "1341241423",
@@ -203,7 +203,7 @@
       }
     ],
     "fee": 135000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T16:16:52.691Z"
   },
   {
@@ -211,7 +211,7 @@
     "userId": "u_1776255853223",
     "applicationCode": "HS-20260415-OJ7CHK",
     "serviceId": "doi-gplx",
-    "serviceName": "??.i gi?y ph?p l?i xe",
+    "serviceName": "Đổi giấy phép lái xe",
     "formData": {
       "fullName": "PHAM THUY TRANG",
       "email": "",
@@ -241,7 +241,7 @@
       }
     ],
     "fee": 135000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T16:50:23.393Z"
   },
   {
@@ -249,17 +249,17 @@
     "userId": "u_1776255853223",
     "applicationCode": "HS-20260416-1V7DAL",
     "serviceId": "cap-lai-khai-sinh",
-    "serviceName": "C?p l?i gi?y khai sinh",
+    "serviceName": "Cấp lại giấy khai sinh",
     "formData": {
-      "fullName": "Trang Ph?m",
+      "fullName": "Trang Phạm",
       "email": "phamtrangdrhvcsnd@gmail.com",
       "phone": "0124454164",
       "citizenId": "4564564165",
-      "address": "122 ?'u?ng s?' 20",
-      "ward": "phu?ng an nhon",
-      "district": "qu?n g? v?p",
-      "city": "th?nh ph?' h?" ch? minh",
-      "requestContent": "thay ?'?.i "
+      "address": "122 đường số 20",
+      "ward": "phường an nhơn",
+      "district": "quận gò vấp",
+      "city": "thành phố Hồ Chí Minh",
+      "requestContent": "thay đổi "
     },
     "paymentMethod": "MoMo",
     "attachments": [
@@ -279,7 +279,7 @@
       }
     ],
     "fee": 10000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T17:03:22.460Z"
   },
   {
@@ -287,9 +287,9 @@
     "userId": "u_1776255853223",
     "applicationCode": "HS-20260416-ELJXRQ",
     "serviceId": "tam-tru",
-    "serviceName": "??fng k? t?m tr?",
+    "serviceName": "Đăng ký tạm trú",
     "formData": {
-      "fullName": "Trang Ph?m",
+      "fullName": "Trang Phạm",
       "email": "phamtrangdrhvcsnd@gmail.com",
       "phone": "0989471415",
       "citizenId": "1555554564",
@@ -324,7 +324,7 @@
       }
     ],
     "fee": 15000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "createdAt": "2026-04-15T17:06:07.406Z"
   },
   {
@@ -332,9 +332,9 @@
     "userId": "u_1776255853223",
     "applicationCode": "HS-20260416-W3YC4J",
     "serviceId": "tam-tru",
-    "serviceName": "??fng k? t?m tr?",
+    "serviceName": "Đăng ký tạm trú",
     "formData": {
-      "fullName": "Trang Ph?m",
+      "fullName": "Trang Phạm",
       "email": "phamtrangdrhvcsnd@gmail.com",
       "phone": "0989471415",
       "citizenId": "324234342",
@@ -369,20 +369,20 @@
       }
     ],
     "fee": 15000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "paymentStatus": "completed",
     "paymentAmount": 15000,
     "paymentExpireAt": "2026-04-15T18:11:08.884Z",
     "paymentCompletedAt": "2026-04-15T17:13:23.581Z",
     "createdAt": "2026-04-15T17:11:08.870Z",
-    "paymentDescription": "Thanh to?n ph? d?<ch v? ??fng k? t?m tr?"
+    "paymentDescription": "Thanh toán phí dịch vụ Đăng ký tạm trú"
   },
   {
     "id": "1776273265654",
     "userId": "u_1776255853223",
     "applicationCode": "HS-20260416-0G2CQO",
     "serviceId": "doi-gplx",
-    "serviceName": "??.i gi?y ph?p l?i xe",
+    "serviceName": "Đổi giấy phép lái xe",
     "formData": {
       "fullName": "PHAM THUY TRANG",
       "email": "",
@@ -412,26 +412,26 @@
       }
     ],
     "fee": 135000,
-    "status": "?? ti?p nh?n",
+    "status": "Đã tiếp nhận",
     "paymentStatus": "completed",
     "paymentAmount": 135000,
     "paymentExpireAt": "2026-04-15T19:11:57.799Z",
     "paymentCompletedAt": "2026-04-15T18:16:06.977Z",
     "createdAt": "2026-04-15T17:14:25.654Z",
-    "paymentDescription": "Thanh to?n ph? d?<ch v? ??.i gi?y ph?p l?i xe"
+    "paymentDescription": "Thanh toán phí dịch vụ Đổi giấy phép lái xe"
   },
   {
     "applicationCode": "HS-20260508-X8UAGH",
     "applicationId": "HS-20260508-X8UAGH",
     "userId": "u_1776268582525",
     "serviceId": "dat-dai-bien-dong",
-    "serviceName": "??fng k? bi?n ?'?Tng ?'?t ?'ai",
+    "serviceName": "Đăng ký biến động đất đai",
     "formData": {
-      "fullName": "Tr?n Th?< Kh?nh Huy?n",
+      "fullName": "Trần Thị Khánh Huyền",
       "citizenId": "038304010988",
       "email": "tkhanhhuyen0484@gmail.com",
       "phone": "0368965381",
-      "address": "Ti?fu khu 9",
+      "address": "Tiểu khu 9",
       "requestContent": ""
     },
     "attachments": [
@@ -462,7 +462,7 @@
       {
         "at": "2026-05-08T16:25:18.967Z",
         "status": "PENDING",
-        "note": "H?" so ?'? ?'u?c n?Tp"
+        "note": "Hồ sơ đã được nộp"
       }
     ],
     "createdAt": "2026-05-08T16:25:18.967Z",

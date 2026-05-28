@@ -29,7 +29,7 @@ body {
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Thanh cu?Tn ngang ??" 4 c?u g�i ? chatbot AI */
+/* Thanh cuộn ngang cho 4 câu gợi ý ở chatbot AI */
 .ai-suggestion-scroll {
   scrollbar-width: thin;
   scrollbar-color: #94a3b8 #e2e8f0;

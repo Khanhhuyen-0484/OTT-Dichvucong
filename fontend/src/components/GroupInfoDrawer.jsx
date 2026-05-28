@@ -167,13 +167,15 @@ export default function GroupInfoDrawer({
   }, [open, initialTab]);
   const [memberQuery, setMemberQuery] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
+  const [showDissolveConfirm, setShowDissolveConfirm] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const avatarInputRef = useRef(null);
 
+  const isGroupDissolved = Boolean(activeRoom?.dissolvedAt);
   const effectiveRole = resolveMyGroupRole(activeRoom, user?.id) || myGroupRole;
-  const canEditGroup = canManageGroupRoom(activeRoom, user?.id);
-  const canAdminGroup = canAdminGroupRoom(activeRoom, user?.id);
+  const canEditGroup = !isGroupDissolved && canManageGroupRoom(activeRoom, user?.id);
+  const canAdminGroup = !isGroupDissolved && canAdminGroupRoom(activeRoom, user?.id);
   const isOwner = effectiveRole === "owner";
 
   const members = useMemo(
@@ -227,11 +229,11 @@ export default function GroupInfoDrawer({
       <button
         type="button"
         aria-label="Đóng"
-        className="fixed inset-0 z-[64] bg-slate-900/40 backdrop-blur-[2px]"
+        className="fixed inset-0 z-64 bg-slate-900/40 backdrop-blur-[2px]"
         onClick={onClose}
       />
 
-      <aside className="fixed inset-y-0 right-0 z-[65] flex w-full max-w-md flex-col border-l border-slate-200/80 bg-gradient-to-b from-white via-slate-50/80 to-white shadow-2xl">
+      <aside className="fixed inset-y-0 right-0 z-65 flex w-full max-w-md flex-col border-l border-slate-200/80 bg-linear-to-b from-white via-slate-50/80 to-white shadow-2xl">
         {/* Header */}
         <div className="border-b border-slate-100 bg-white/90 px-4 py-4 backdrop-blur">
           <div className="flex items-center justify-between">
@@ -251,7 +253,7 @@ export default function GroupInfoDrawer({
           </div>
 
           {/* Group hero */}
-          <div className="mt-4 rounded-2xl border border-slate-100 bg-gradient-to-r from-[#003366]/5 to-transparent p-3">
+          <div className="mt-4 rounded-2xl border border-slate-100 bg-linear-to-r from-[#003366]/5 to-transparent p-3">
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
                 <img
@@ -425,7 +427,7 @@ export default function GroupInfoDrawer({
                         <div className="truncate text-sm font-medium text-slate-800">
                           {m.fullName}
                           {m.id === user?.id && (
-                            <span className="ml-1 text-[10px] text-slate-400">(B?n)</span>
+                            <span className="ml-1 text-[10px] text-slate-400">(Bạn)</span>
                           )}
                         </div>
                         <div className="text-[10px] text-slate-500">{ROLE_LABELS[m.role] || m.role}</div>
@@ -514,7 +516,7 @@ export default function GroupInfoDrawer({
                           </span>
                           {isSelf && (
                             <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
-                              B?n
+                              Bạn
                             </span>
                           )}
                         </div>
@@ -556,7 +558,7 @@ export default function GroupInfoDrawer({
                         {canRemove && (
                           <button
                             type="button"
-                            title="X?a kh?i nh?m"
+                            title="Xóa khỏi nhóm"
                             disabled={busy}
                             onClick={() => performGroupAction("remove", m.id)}
                             className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100"
@@ -600,7 +602,7 @@ export default function GroupInfoDrawer({
                           alt=""
                           className="h-full w-full object-cover transition group-hover:scale-105"
                         />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 text-left">
+                        <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent p-1.5 text-left">
                           <p className="truncate text-[9px] font-medium text-white">
                             {item.senderName}
                           </p>
@@ -650,6 +652,12 @@ export default function GroupInfoDrawer({
 
         {/* Footer actions */}
         <div className="border-t border-slate-100 bg-white p-4">
+          {isGroupDissolved ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
+              Trưởng nhóm đã giải tán nhóm
+            </div>
+          ) : (
+          <>
           <button
             type="button"
             disabled={busy}
@@ -663,23 +671,21 @@ export default function GroupInfoDrawer({
             <button
               type="button"
               disabled={busy}
-              onClick={() => {
-                if (window.confirm("Giải tán nhóm? Hành động này không thể hoàn tác.")) {
-                  performGroupAction("dissolve");
-                }
-              }}
+              onClick={() => setShowDissolveConfirm(true)}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
             >
               <Trash2 className="h-4 w-4" />
               Giải tán nhóm
             </button>
           )}
+          </>
+          )}
         </div>
       </aside>
 
       {previewUrl && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-70 flex items-center justify-center bg-black/80 p-4"
           onClick={() => setPreviewUrl("")}
         >
           <button
@@ -695,6 +701,41 @@ export default function GroupInfoDrawer({
             className="max-h-[90vh] max-w-full rounded-lg object-contain"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {showDissolveConfirm && (
+        <div className="fixed inset-0 z-80 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-red-50 text-red-600">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <h3 className="mt-4 text-lg font-black text-slate-950">Giải tán nhóm</h3>
+            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
+              Bạn có chắc chắn muốn giải tán nhóm
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setShowDissolveConfirm(false)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setShowDissolveConfirm(false);
+                  performGroupAction("dissolve");
+                }}
+                className="rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Giải tán
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

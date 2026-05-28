@@ -1,5 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  Download,
+  FileText,
+  Landmark,
+  ReceiptText,
+  ShieldCheck,
+  WalletCards,
+} from "lucide-react";
 import GovHeader from "../components/GovHeader.jsx";
 import {
   downloadApplicationResult,
@@ -27,6 +41,27 @@ const STATUS_LABELS = {
   COMPLETED: "Đã hoàn thành",
   REJECTED: "Đã từ chối",
 };
+
+const STATUS_STYLES = {
+  PENDING: "border-amber-200 bg-amber-50 text-amber-700",
+  PROCESSING: "border-blue-200 bg-blue-50 text-blue-700",
+  NEED_MORE: "border-orange-200 bg-orange-50 text-orange-700",
+  SUPPLEMENTED: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  COMPLETED: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  REJECTED: "border-red-200 bg-red-50 text-red-700",
+};
+
+const PAYMENT_LABELS = {
+  BANK_TRANSFER: "Chuyển khoản ngân hàng",
+  MOMO: "MoMo",
+  ZALOPAY: "ZaloPay",
+  PAID: "Đã thanh toán",
+  COMPLETED: "Đã thanh toán",
+  PENDING: "Chờ thanh toán",
+  UNPAID: "Chưa thanh toán",
+};
+
+const currency = new Intl.NumberFormat("vi-VN");
 
 function formatDate(dateStr) {
   return dateStr ? new Date(dateStr).toLocaleString("vi-VN") : "";
@@ -168,80 +203,164 @@ export default function ApplicationDetail() {
     }
   }
 
+  const statusKey = String(item?.status || "").toUpperCase();
+  const statusLabel = STATUS_LABELS[statusKey] || item?.status || "-";
+  const paymentMethodKey = String(item?.paymentMethod || "").toUpperCase();
+  const paymentStatusKey = String(item?.paymentStatus || "").toUpperCase();
+  const feeText = `${currency.format(item?.fee || 0)} VNĐ`;
+  const formData = item?.formData || {};
+  const timeline = item?.timeline || item?.history || [];
+  const applicantInfo = [
+    { label: "Họ tên", value: item?.citizenName || formData.fullName },
+    { label: "CCCD/CMND", value: item?.citizenId || formData.citizenId },
+    { label: "Email", value: item?.email || formData.email },
+    { label: "Số điện thoại", value: item?.phone || formData.phone },
+    { label: "Địa chỉ", value: item?.address || formData.address, wide: true },
+    { label: "Nội dung hồ sơ", value: formData.requestContent || formData.note, wide: true },
+  ].filter((info) => info.value);
+
   return (
     <div className="min-h-screen">
       <GovHeader />
-      <main className="mx-auto max-w-5xl px-4 py-10">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link to="/my-applications" className="inline-flex rounded-xl bg-white px-4 py-2 text-sm font-bold text-[var(--gov-navy)] ring-1 ring-slate-200 hover:ring-slate-300">
-            ← Quay lại danh sách
-          </Link>
-        </div>
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <Link
+          to="/my-applications"
+          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-(--gov-navy) shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Quay lại danh sách
+        </Link>
 
-        {loading && <div className="mt-6 rounded-2xl bg-white p-6 ring-1 ring-slate-200">Đang tải chi tiết hồ sơ...</div>}
-        {!loading && err && <div className="mt-6 rounded-2xl bg-red-50 p-6 text-red-700 ring-1 ring-red-200">{err}</div>}
+        {loading && (
+          <div className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="h-6 w-48 animate-pulse rounded-full bg-slate-100" />
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+              ))}
+            </div>
+          </div>
+        )}
+        {!loading && err && <div className="mt-6 rounded-3xl bg-red-50 p-6 font-semibold text-red-700 ring-1 ring-red-200">{err}</div>}
 
         {!loading && !err && item && (
-          <>
-            <section className="mt-6 rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-              <h1 className="text-2xl font-black text-slate-900">Chi tiết hồ sơ</h1>
-              <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
-                <Info label="Mã hồ sơ" value={applicationCodeOf(item)} />
-                <Info label="Dịch vụ" value={item.serviceName} />
-                <Info label="Trạng thái" value={STATUS_LABELS[item.status] || item.status} />
-                <Info label="Ngày nộp" value={formatDate(item.createdAt)} />
-                <Info label="Lệ phí" value={`${new Intl.NumberFormat("vi-VN").format(item.fee || 0)} VNĐ`} />
-                <Info label="Phương thức thanh toán" value={item.paymentMethod || "-"} />
+          <div className="mt-6 space-y-6">
+            <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-xl shadow-blue-950/8">
+              <div className="bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-6 text-white">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/85 ring-1 ring-white/20">
+                      <FileText className="h-3.5 w-3.5" />
+                      Chi tiết hồ sơ
+                    </div>
+                    <h1 className="mt-4 text-2xl font-black leading-tight md:text-3xl">{item.serviceName || "Dịch vụ công"}</h1>
+                    <p className="mt-2 break-all text-sm font-semibold text-blue-50">Mã hồ sơ: {applicationCodeOf(item)}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                    <StatusBadge status={statusKey} label={statusLabel} />
+                    {item.status === "COMPLETED" ? (
+                      <button
+                        type="button"
+                        onClick={handleDownloadResult}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-black text-white shadow-lg shadow-emerald-950/20 transition hover:-translate-y-0.5 hover:bg-emerald-600"
+                      >
+                        <Download className="h-4 w-4" />
+                        Tải kết quả
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
 
-              {item.status === "COMPLETED" && <button onClick={handleDownloadResult} className="mt-4 inline-flex rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white">Tải kết quả</button>}
+              <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+                <Info icon={<ShieldCheck />} label="Trạng thái" value={statusLabel} accent="blue" />
+                <Info icon={<CalendarDays />} label="Ngày nộp" value={formatDate(item.createdAt)} accent="slate" />
+                <Info icon={<ReceiptText />} label="Lệ phí" value={feeText} accent="emerald" />
+                <Info icon={<CreditCard />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatusKey] || PAYMENT_LABELS[paymentMethodKey] || item.paymentMethod || "-"} accent="amber" />
+              </div>
+
               {item.status === "PENDING" && (
-                <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                  <p className="mb-3 text-sm text-amber-800">Hồ sơ chưa thanh toán.</p>
-                  <button onClick={handlePaymentClick} className="inline-flex rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white">Thanh toán ngay</button>
+                <div className="mx-5 mb-5 rounded-3xl border border-amber-200 bg-linear-to-r from-amber-50 to-orange-50 p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-700">
+                        <WalletCards className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-black text-amber-900">Hồ sơ chưa thanh toán</p>
+                        <p className="mt-1 text-sm font-semibold text-amber-800">Vui lòng hoàn tất thanh toán để hồ sơ được tiếp nhận xử lý.</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePaymentClick}
+                      className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 transition hover:-translate-y-0.5 hover:bg-red-700"
+                    >
+                      Thanh toán ngay
+                    </button>
+                  </div>
                 </div>
               )}
             </section>
 
+            <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+              <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <SectionTitle icon={<Landmark />} title="Thông tin hồ sơ" subtitle="Các thông tin chính người dân đã nộp" />
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <Info label="Mã hồ sơ" value={applicationCodeOf(item)} />
+                  <Info label="Phương thức thanh toán" value={PAYMENT_LABELS[paymentMethodKey] || item.paymentMethod || "-"} />
+                  {applicantInfo.length ? (
+                    applicantInfo.map((info) => (
+                      <Info key={info.label} label={info.label} value={info.value} wide={info.wide} />
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm font-semibold text-slate-500 sm:col-span-2">
+                      Chưa có thông tin công dân chi tiết.
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <SectionTitle icon={<Clock3 />} title="Timeline xử lý" subtitle="Theo dõi các mốc xử lý hồ sơ" />
+                <div className="mt-5 space-y-4">
+                  {timeline.map((t, idx) => (
+                    <TimelineItem key={`${t.createdAt || idx}`} item={t} isLast={idx === timeline.length - 1} />
+                  ))}
+                  {!timeline.length && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm font-semibold text-slate-500">
+                      Chưa có lịch sử xử lý.
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+
             {(item.status === "NEED_MORE" || item.status === "REJECTED") && (
-              <section className="mt-6 rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-                <h2 className="text-xl font-black text-slate-900">{item.status === "NEED_MORE" ? "Bổ sung hồ sơ" : "Lý do từ chối"}</h2>
-                <div className="mt-4 rounded-xl bg-orange-50 p-4 text-sm text-orange-900 ring-1 ring-orange-200">
+              <section className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+                <SectionTitle
+                  icon={<AlertTriangle />}
+                  title={item.status === "NEED_MORE" ? "Bổ sung hồ sơ" : "Lý do từ chối"}
+                  subtitle="Ghi chú phản hồi từ cán bộ xử lý"
+                />
+                <div className="mt-5 rounded-2xl bg-orange-50 p-4 text-sm text-orange-900 ring-1 ring-orange-200">
                   <div className="font-black">Ghi chú của admin</div>
-                  <div className="mt-1">{adminNote || "-"}</div>
+                  <div className="mt-1 font-semibold">{adminNote || "-"}</div>
                 </div>
 
                 {item.status === "NEED_MORE" && (
-                  <div className="mt-4 space-y-4">
+                  <div className="mt-5 space-y-4">
                     <SupplementForm form={supplementForm} setForm={setSupplementForm} />
-                    <textarea value={supplementText} onChange={(e) => setSupplementText(e.target.value)} rows={4} className="w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" placeholder="Nhập nội dung bổ sung theo ghi chú của admin..." />
-                    <input type="file" multiple onChange={(e) => setSupplementFiles([...(e.target.files || [])])} className="block w-full text-sm" />
-                    <button disabled={busy || !supplementText.trim()} onClick={handleSupplementSubmit} className="inline-flex rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                    <textarea value={supplementText} onChange={(e) => setSupplementText(e.target.value)} rows={4} className="w-full rounded-2xl border border-slate-200 p-4 text-sm font-semibold outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="Nhập nội dung bổ sung theo ghi chú của admin..." />
+                    <input type="file" multiple onChange={(e) => setSupplementFiles([...(e.target.files || [])])} className="block w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold" />
+                    <button disabled={busy || !supplementText.trim()} onClick={handleSupplementSubmit} className="inline-flex rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-600/20 transition hover:-translate-y-0.5 hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50">
                       Gửi bổ sung hồ sơ
                     </button>
                   </div>
                 )}
               </section>
             )}
-
-            <section className="mt-6 rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-              <h2 className="text-xl font-black text-slate-900">Timeline xử lý</h2>
-              <div className="mt-4 space-y-3">
-                {(item.timeline || item.history || []).map((t, idx) => (
-                  <div key={`${t.createdAt || idx}`} className="rounded-xl border border-slate-200 p-4">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="rounded-full bg-slate-100 px-2 py-1 font-bold">{STATUS_LABELS[t.status] || t.status}</span>
-                      <span className="font-semibold">{t.action}</span>
-                      <span className="text-slate-500">{formatDate(t.createdAt)}</span>
-                    </div>
-                    <div className="mt-2 text-sm text-slate-700">{t.note || "-"}</div>
-                    <div className="mt-1 text-xs text-slate-500">Bởi: {t.actor || "-"}</div>
-                  </div>
-                ))}
-                {!(item.timeline || item.history || []).length && <div className="text-sm text-slate-500">Chưa có lịch sử xử lý.</div>}
-              </div>
-            </section>
-          </>
+          </div>
         )}
       </main>
 
@@ -279,11 +398,77 @@ export default function ApplicationDetail() {
   );
 }
 
-function Info({ label, value }) {
+function SectionTitle({ icon, title, subtitle }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100">
-      <div className="text-xs font-bold uppercase text-slate-500">{label}</div>
-      <div className="mt-1 font-semibold text-slate-900">{value || "-"}</div>
+    <div className="flex items-start gap-3">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-blue-50 text-(--gov-navy) ring-1 ring-blue-100">
+        {React.cloneElement(icon, { className: "h-5 w-5" })}
+      </div>
+      <div>
+        <h2 className="text-xl font-black text-slate-950">{title}</h2>
+        {subtitle ? <p className="mt-1 text-sm font-semibold text-slate-500">{subtitle}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status, label }) {
+  const className = STATUS_STYLES[status] || "border-slate-200 bg-slate-50 text-slate-700";
+  return (
+    <span className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${className}`}>
+      <CheckCircle2 className="h-4 w-4" />
+      {label}
+    </span>
+  );
+}
+
+function Info({ label, value, icon, accent = "slate", wide = false }) {
+  const accentClass = {
+    blue: "bg-blue-50 text-(--gov-navy) ring-blue-100",
+    emerald: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    amber: "bg-amber-50 text-amber-700 ring-amber-100",
+    slate: "bg-slate-50 text-slate-600 ring-slate-100",
+  }[accent] || "bg-slate-50 text-slate-600 ring-slate-100";
+
+  return (
+    <div className={`rounded-2xl border border-slate-100 bg-slate-50/70 p-4 shadow-sm ${wide ? "sm:col-span-2" : ""}`}>
+      <div className="flex items-start gap-3">
+        {icon ? (
+          <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ring-1 ${accentClass}`}>
+            {React.cloneElement(icon, { className: "h-5 w-5" })}
+          </div>
+        ) : null}
+        <div className="min-w-0">
+          <div className="text-[11px] font-black uppercase tracking-wide text-slate-500">{label}</div>
+          <div className="mt-1 wrap-break-word text-sm font-black text-slate-950">{value || "-"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TimelineItem({ item, isLast }) {
+  const status = String(item.status || "").toUpperCase();
+  const label = STATUS_LABELS[status] || item.status || "Cập nhật";
+  const className = STATUS_STYLES[status] || "border-slate-200 bg-slate-50 text-slate-700";
+
+  return (
+    <div className="relative pl-8">
+      {!isLast ? <div className="absolute left-[11px] top-7 h-full w-px bg-slate-200" /> : null}
+      <div className="absolute left-0 top-1 grid h-6 w-6 place-items-center rounded-full bg-white ring-4 ring-blue-50">
+        <div className="h-2.5 w-2.5 rounded-full bg-(--gov-navy)" />
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className={`rounded-full border px-3 py-1 text-xs font-black ${className}`}>{label}</span>
+          {item.action ? <span className="font-black text-slate-900">{item.action}</span> : null}
+        </div>
+        <div className="mt-2 text-sm font-semibold text-slate-700">{item.note || "-"}</div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
+          <span>{formatDate(item.createdAt)}</span>
+          <span>Bởi: {item.actor || "-"}</span>
+        </div>
+      </div>
     </div>
   );
 }

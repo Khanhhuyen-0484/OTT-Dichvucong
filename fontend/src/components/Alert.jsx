@@ -19,7 +19,7 @@ export default function Alert({ variant = "info", title, message, onClose }) {
         <div className="min-w-0 flex-1">
           {title ? <div className="font-bold">{title}</div> : null}
           {message ? (
-            <div className="text-sm mt-0.5 break-words">{message}</div>
+            <div className="text-sm mt-0.5 wrap-break-word">{message}</div>
           ) : null}
         </div>
         {onClose ? (
@@ -28,7 +28,7 @@ export default function Alert({ variant = "info", title, message, onClose }) {
             className="text-sm font-semibold underline underline-offset-2"
             onClick={onClose}
           >
-            ??ng
+            Đóng
           </button>
         ) : null}
       </div>

@@ -1311,6 +1311,23 @@ exports.deleteRoomMessageForMe = async (req, res) => {
   }
 };
 
+exports.clearRoomHistoryForMe = async (req, res) => {
+  try {
+    const room = await multiChatStore.clearRoomHistoryForUser({
+      roomId: req.params.roomId,
+      userId: req.user.id,
+    });
+
+    const hydrated = await multiChatStore.hydrateRoomForUser(room, req.user.id);
+    return res.json({
+      message: "Đã xóa lịch sử cuộc trò chuyện",
+      room: hydrated
+    });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "Không thể xóa lịch sử cuộc trò chuyện" });
+  }
+};
+
 exports.togglePinRoomMessage = async (req, res) => {
   try {
     const room = await multiChatStore.togglePinMessage({
@@ -1451,10 +1468,11 @@ exports.updateGroupChat = async (req, res) => {
 
 exports.dissolveGroup = async (req, res) => {
   try {
-    await multiChatStore.dissolveGroup({
+    const room = await multiChatStore.dissolveGroup({
       roomId: req.params.roomId,
       requesterId: req.user.id,
     });
+    await emitToRoomMembers(room, { roomId: req.params.roomId, action: "group-dissolved" });
     return res.json({ ok: true });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Không thể giải tán nhóm" });

@@ -1,5 +1,15 @@
-import React, { useMemo } from "react";
-import { ContactRound, Search, UserPlus, Users } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import {
+  ContactRound,
+  MessageCircle,
+  MoreHorizontal,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  UserPlus,
+  Users
+} from "lucide-react";
 
 const AVATAR_BG = ["bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
 
@@ -85,33 +95,58 @@ function ContactList({
   contactCount = 0,
   staffLatestMessage,
   staffUnread = 0,
+  onRequestDeleteRoom,
 }) {
+  const [openRoomMenuId, setOpenRoomMenuId] = useState(null);
+
   const listItems = useMemo(() => {
-    if (chatModeTab === "contacts") return contacts;
-    return [...rooms].sort((a, b) => {
+    const query = String(contactQuery || "").trim().toLowerCase();
+    if (chatModeTab === "contacts") {
+      return contacts.filter((contact) =>
+        [contact.fullName, contact.email, contact.phone].join(" ").toLowerCase().includes(query)
+      );
+    }
+    return [...rooms]
+      .filter((room) => {
+        if (!query) return true;
+        const partner = room.members?.find((m) => m.id !== user?.id);
+        return [
+          room.name,
+          partner?.fullName,
+          partner?.email,
+          roomPreview(room, user)
+        ].join(" ").toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
       const am = latestMessageOf(a);
       const bm = latestMessageOf(b);
       const at = am?.createdAt || am?.at || a.updatedAt || "";
       const bt = bm?.createdAt || bm?.at || b.updatedAt || "";
       return String(bt).localeCompare(String(at));
     });
-  }, [chatModeTab, contacts, rooms]);
+  }, [chatModeTab, contactQuery, contacts, rooms, user]);
 
   const shellClass = embedded
-    ? "flex h-full min-h-0 flex-col p-2"
-    : "flex h-full min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm";
+    ? "flex h-full min-h-0 flex-col bg-linear-to-b from-white via-blue-50/30 to-white p-3"
+    : "flex h-full min-h-0 flex-col rounded-3xl border border-slate-200 bg-linear-to-b from-white via-blue-50/30 to-white p-4 shadow-xl shadow-blue-950/8";
 
   return (
     <aside className={shellClass}>
-      <div className="mb-2 flex items-center justify-between gap-1">
-        <h2 className="text-xs font-bold text-slate-800">Danh sách chat</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#003366] ring-1 ring-blue-100">
+            <Sparkles className="h-3 w-3" />
+            Trò chuyện
+          </div>
+          <h2 className="mt-2 text-base font-black text-slate-950">Danh sách chat</h2>
+        </div>
         <button
           type="button"
           onClick={onOpenFriendHub}
-          className="relative rounded-lg bg-[#eef4ff] p-1.5 text-[#0d5bd7] hover:bg-[#dfeafe]"
+          className="relative rounded-2xl bg-white p-2.5 text-[#003366] shadow-sm ring-1 ring-blue-100 transition hover:-translate-y-0.5 hover:bg-blue-50"
           title="Trung tâm bạn bè"
         >
-          <ContactRound className="h-3.5 w-3.5" />
+          <ContactRound className="h-4 w-4" />
           {pendingHubCount > 0 ? (
             <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
               {pendingHubCount > 9 ? "9+" : pendingHubCount}
@@ -120,12 +155,12 @@ function ContactList({
         </button>
       </div>
 
-      <div className="mb-2 flex gap-1 rounded-lg bg-slate-100 p-0.5">
+      <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl bg-slate-100/80 p-1 ring-1 ring-slate-200/60">
         <button
           type="button"
           onClick={() => setChatModeTab("rooms")}
-          className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
-            chatModeTab === "rooms" ? "bg-white text-[#003366] shadow-sm" : "text-slate-600"
+          className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+            chatModeTab === "rooms" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:text-slate-800"
           }`}
         >
           Hội thoại {roomCount > 0 ? `(${roomCount})` : ""}
@@ -133,63 +168,68 @@ function ContactList({
         <button
           type="button"
           onClick={() => setChatModeTab("contacts")}
-          className={`flex-1 rounded-md py-1 text-[11px] font-semibold transition ${
-            chatModeTab === "contacts" ? "bg-white text-[#003366] shadow-sm" : "text-slate-600"
+          className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+            chatModeTab === "contacts" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500 hover:text-slate-800"
           }`}
         >
           Bạn bè {contactCount > 0 ? `(${contactCount})` : ""}
         </button>
       </div>
 
-      <div className="mb-2 flex items-center gap-1.5">
+      <div className="mb-3 flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={contactQuery}
             onChange={(e) => setContactQuery(e.target.value)}
             placeholder={chatModeTab === "contacts" ? "Tìm bạn" : "Tìm hội thoại"}
-            className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-7 pr-2 text-[11px] focus:border-[#003366] focus:outline-none"
+            className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
           />
         </div>
         <button
           type="button"
           onClick={onOpenAddFriend}
-          className="shrink-0 rounded-lg border border-slate-200 bg-white p-1.5 text-[#113a72] hover:bg-slate-50"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-blue-100 bg-white text-[#003366] shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-50"
           title="Thêm bạn"
         >
-          <UserPlus className="h-4 w-4" />
+          <UserPlus className="h-5 w-5" />
         </button>
         <button
           type="button"
           onClick={() => setShowGroupModal(true)}
-          className="shrink-0 rounded-lg border border-slate-200 bg-white p-1.5 text-[#113a72] hover:bg-slate-50"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-blue-100 bg-white text-[#003366] shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-50"
           title="Tạo nhóm"
         >
-          <Users className="h-4 w-4" />
+          <Users className="h-5 w-5" />
         </button>
       </div>
 
       <button
         type="button"
         onClick={openStaffChat}
-        className="mb-2 flex w-full items-center gap-2 rounded-lg border border-[#003366]/15 bg-[#003366]/5 px-2.5 py-2 text-left hover:bg-[#003366]/10"
+        className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-white px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
       >
-        <Avatar src="" name="Cán bộ" className="h-8 w-8 shrink-0 rounded-full border border-[#003366]/10 object-cover" />
+        <div className="relative">
+          <Avatar src="" name="Cán bộ" className="h-11 w-11 shrink-0 rounded-2xl border border-[#003366]/10 object-cover" />
+          <span className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full bg-emerald-500 text-white ring-2 ring-white">
+            <ShieldCheck className="h-3 w-3" />
+          </span>
+        </div>
         <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-bold text-[#003366]">Cán bộ hỗ trợ</span>
-          <span className="block truncate text-[10px] text-slate-500">{messageText(staffLatestMessage, "Hỗ trợ dịch vụ công")}</span>
+          <span className="block text-sm font-black text-slate-900">Cán bộ hỗ trợ</span>
+          <span className="block truncate text-xs font-semibold text-slate-500">{messageText(staffLatestMessage, "Hỗ trợ dịch vụ công")}</span>
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1">
           <span className="text-[9px] font-semibold text-slate-400">{messageTime(staffLatestMessage)}</span>
           {staffUnread > 0 ? (
             <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{staffUnread > 99 ? "99+" : staffUnread}</span>
           ) : (
-            <span className="rounded-full bg-[#003366] px-1.5 py-px text-[9px] font-semibold text-white">DVCT</span>
+            <span className="rounded-full bg-[#003366] px-2 py-0.5 text-[9px] font-black text-white">DVCT</span>
           )}
         </span>
       </button>
 
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto rounded-lg bg-white/80 p-1">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-3xl bg-white/70 p-1.5 shadow-inner shadow-slate-200/50">
         {listItems.length === 0 && (
           <div className="rounded-lg border border-dashed border-slate-200 px-2 py-8 text-center text-[11px] leading-relaxed text-slate-500">
             {chatModeTab === "contacts"
@@ -200,15 +240,21 @@ function ContactList({
         {listItems.map((item) => {
           if (chatModeTab === "contacts") {
             return (
-              <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-2">
-                <div className="truncate text-xs font-semibold text-slate-800">{item.fullName}</div>
-                <div className="truncate text-[10px] text-slate-500">{item.phone || item.email}</div>
+              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center gap-3">
+                  <Avatar src={getAvatarUrl(item)} name={item.fullName} className="h-11 w-11 shrink-0 rounded-2xl border border-slate-100 object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-black text-slate-900">{item.fullName}</div>
+                    <div className="truncate text-xs font-semibold text-slate-500">{item.phone || item.email}</div>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => openDirectChat(item.id)}
-                  className="mt-1.5 w-full rounded-md bg-[#003366] py-1 text-[10px] font-semibold text-white hover:bg-[#00284f]"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#003366] py-2 text-xs font-black text-white shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-[#06477f]"
                 >
-                  Chat
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Nhắn tin
                 </button>
               </div>
             );
@@ -218,52 +264,85 @@ function ContactList({
           const latest = latestMessageOf(item);
           const lastPreview = roomPreview(item, user);
           return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setActiveRoomId(item.id);
-                onSelectRoom?.(item.id);
-              }}
-              className={`w-full rounded-lg px-2 py-1.5 text-left transition ${
-                isActive ? "bg-[#003366] text-white shadow-sm" : "bg-white hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Avatar
-                  src={
-                    item.type === "group"
-                      ? getAvatarUrl(item) || "https://cdn-icons-png.flaticon.com/512/681/681494.png"
-                      : getAvatarUrl(partner)
-                  }
-                  name={item.type === "group" ? item.name || "Nhóm" : partner?.fullName || "Người dùng"}
-                  className="h-9 w-9 shrink-0 rounded-full border border-slate-200 object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-semibold">
-                    {item.type === "group" ? item.name || "Nhóm chat" : partner?.fullName || "Hội thoại"}
+            <div key={item.id} className="group relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveRoomId(item.id);
+                  onSelectRoom?.(item.id);
+                  setOpenRoomMenuId(null);
+                }}
+                className={`w-full rounded-2xl px-3 py-3 pr-10 text-left transition ${
+                  isActive
+                    ? "bg-linear-to-r from-[#003366] to-[#075b99] text-white shadow-lg shadow-blue-950/20"
+                    : "bg-white text-slate-900 shadow-sm ring-1 ring-slate-100 hover:-translate-y-0.5 hover:bg-blue-50/60 hover:ring-blue-100 hover:shadow-md"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    src={
+                      item.type === "group"
+                        ? getAvatarUrl(item) || "https://cdn-icons-png.flaticon.com/512/681/681494.png"
+                        : getAvatarUrl(partner)
+                    }
+                    name={item.type === "group" ? item.name || "Nhóm" : partner?.fullName || "Người dùng"}
+                    className={`h-12 w-12 shrink-0 rounded-2xl border object-cover ${isActive ? "border-white/30" : "border-slate-100"}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-black">
+                      {item.type === "group" ? item.name || "Nhóm chat" : partner?.fullName || "Hội thoại"}
+                    </div>
+                    <div className={`mt-0.5 truncate text-xs font-semibold ${isActive ? "text-white/78" : "text-slate-500"}`}>
+                      {lastPreview}
+                    </div>
                   </div>
-                  <div className={`truncate text-[10px] ${isActive ? "text-white/75" : "text-slate-500"}`}>
-                    {lastPreview}
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className={`text-[10px] font-bold ${isActive ? "text-white/70" : "text-slate-400"}`}>{messageTime(latest)}</span>
+                    {(item.unreadCount || item.unread || 0) > 0 ? (
+                      <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                        {(item.unreadCount || item.unread || 0) > 99 ? "99+" : item.unreadCount || item.unread}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className={`text-[9px] font-semibold ${isActive ? "text-white/65" : "text-slate-400"}`}>{messageTime(latest)}</span>
-                  {(item.unreadCount || item.unread || 0) > 0 ? (
-                    <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                      {(item.unreadCount || item.unread || 0) > 99 ? "99+" : item.unreadCount || item.unread}
-                    </span>
-                  ) : null}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOpenRoomMenuId((current) => (current === item.id ? null : item.id))}
+                className={`pointer-events-none absolute right-2 top-3 grid h-8 w-8 place-items-center rounded-full transition group-hover:pointer-events-auto ${
+                  isActive
+                    ? "bg-white/12 text-white opacity-0 hover:bg-white/20 group-hover:opacity-100"
+                    : "bg-white text-slate-500 opacity-0 shadow-sm ring-1 ring-slate-100 hover:bg-slate-50 hover:text-slate-900 group-hover:opacity-100"
+                } ${openRoomMenuId === item.id ? "pointer-events-auto opacity-100" : ""}`}
+                title="Tùy chọn"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+
+              {openRoomMenuId === item.id ? (
+                <div className="absolute right-2 top-12 z-30 w-44 rounded-2xl border border-slate-100 bg-white p-1.5 shadow-xl shadow-slate-900/12">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenRoomMenuId(null);
+                      onRequestDeleteRoom?.(item);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-red-600 transition hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Xóa tin nhắn
+                  </button>
                 </div>
-              </div>
-            </button>
+              ) : null}
+            </div>
           );
         })}
       </div>
 
       {embedded && (
-        <p className="mt-2 shrink-0 text-center text-[10px] text-slate-400">
-          {roomCount} Hội thoại ? {contactCount} bạn bè
+        <p className="mt-3 shrink-0 text-center text-xs font-semibold text-slate-400">
+          {roomCount} hội thoại · {contactCount} bạn bè
         </p>
       )}
     </aside>

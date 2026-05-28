@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
 export default function BackToDashboardButton({
-  to: _to,
+  to,
   label = "Quay lại",
   variant = "default",
   className = "",
   showBackIcon: _showBackIcon,
+  replace = false,
   ...props
 }) {
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ export default function BackToDashboardButton({
   return (
     <button
       type="button"
-      onClick={() => navigate(-1)}
+      onClick={() => (to ? navigate(to, { replace }) : navigate(-1))}
       className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition focus-visible:outline-none ${styles[variant] || styles.default} ${className}`}
       {...props}
     >

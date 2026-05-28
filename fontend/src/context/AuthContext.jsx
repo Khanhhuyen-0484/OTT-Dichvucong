@@ -38,7 +38,7 @@ function writeProfileCache(data) {
   }
 }
 
-/** Ch?? ?'?f l?y `id` khi c?n kh?>p cache ??" kh�ng d�ng l?m h?" so thay th? API. */
+/** Chỉ để lấy `id` khi cần khớp cache, không dùng làm hồ sơ thay thế API. */
 function decodeJwtPayload(token) {
   try {
     const p = token.split(".")[1];
@@ -147,7 +147,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // T? ?'?Tng ?'?fng nh�p l�i b?ng token cu n?u c?
+    // Tự động đăng nhập lại bằng token cũ nếu có.
     refreshProfile();
   }, [refreshProfile]);
 

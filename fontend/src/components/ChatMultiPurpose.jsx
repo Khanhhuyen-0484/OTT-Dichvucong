@@ -20,9 +20,11 @@ import {
   MapPinned,
   UserPlus,
   Video,
+  Info,
 } from "lucide-react";
 import Bubble from "./Bubble.jsx";
 import GroupInfoDrawer from "./GroupInfoDrawer.jsx";
+import DirectChatInfoDrawer from "./DirectChatInfoDrawer.jsx";
 import { canManageGroupRoom } from "../lib/groupRoles.js";
 import {
   MAX_PINNED_MESSAGES,
@@ -101,15 +103,18 @@ function ChatMultiPurpose({
   onUpdateGroupMeta,
   setForwardingMessageId,
   groupActionBusy = false,
+  onClearDirectHistory,
 }) {
   const [reactionMap, setReactionMap] = useState({});
   const [hoverMessageId, setHoverMessageId] = useState(null);
   const [reactionHoverId, setReactionHoverId] = useState(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [showDirectInfo, setShowDirectInfo] = useState(false);
   const [groupInfoInitialTab, setGroupInfoInitialTab] = useState("overview");
 
   const canEditGroup = canManageGroupRoom(activeRoom, user?.id);
   const canManageGroup = canEditGroup;
+  const isGroupDissolved = activeRoom?.type === "group" && Boolean(activeRoom?.dissolvedAt);
 
   const openGroupInfo = useCallback((tab = "overview") => {
     setGroupInfoInitialTab(tab);
@@ -219,20 +224,32 @@ function ChatMultiPurpose({
               {activeRoom.type === "group" ? activeRoom.name || "Nhóm chat" : partner?.fullName || "Hội thoại"}
             </div>
             <div className="text-[11px] text-slate-500">
-              {activeRoom.type === "group" ? `${(activeRoom.members || []).length} thành viên` : "Đang hoạt động"}
+              {activeRoom.type === "group" ? (
+                isGroupDissolved ? (
+                  <span className="inline-flex rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-orange-700">
+                    [ ĐÃ GIẢI TÁN ]
+                  </span>
+                ) : (
+                  `${(activeRoom.members || []).length} thành viên`
+                )
+              ) : (
+                "Đang hoạt động"
+              )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onStartVideoCall}
-            title="Gọi video"
-            className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100"
-          >
-            <Video className="h-5 w-5" />
-          </button>
-          {activeRoom.type === "group" && (
+          {!isGroupDissolved && (
+            <button
+              type="button"
+              onClick={onStartVideoCall}
+              title="Gọi video"
+              className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100"
+            >
+              <Video className="h-5 w-5" />
+            </button>
+          )}
+          {activeRoom.type === "group" && !isGroupDissolved && (
             <>
               {canEditGroup && (
                 <button
@@ -253,12 +270,23 @@ function ChatMultiPurpose({
               </button>
             </>
           )}
+          {activeRoom.type !== "group" && (
+            <button
+              type="button"
+              onClick={() => setShowDirectInfo(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-[#003366] shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-100"
+              title="Thông tin hội thoại"
+            >
+              <Info className="h-4 w-4" />
+              Thông tin
+            </button>
+          )}
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#F5F7FA] px-4 pb-4 pt-2">
         {pinnedCount > 0 && (
-          <div className="relative sticky top-0 z-30 -mx-4 mb-2 border-b border-slate-200 bg-white px-3 py-1">
+          <div className="sticky top-0 z-30 -mx-4 mb-2 border-b border-slate-200 bg-white px-3 py-1">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -351,6 +379,17 @@ function ChatMultiPurpose({
           </div>
         )}
         {messages.map((m, index) => {
+          const isSystemMessage = m.messageType === "system" || m.type === "system";
+          if (isSystemMessage) {
+            return (
+              <div key={m.id} className="flex justify-center">
+                <div className="max-w-[86%] rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-800 shadow-sm">
+                  {m.text || "Trưởng nhóm đã giải tán nhóm"}
+                </div>
+              </div>
+            );
+          }
+
           const isMine = m.senderId === user?.id;
           const reactions = reactionMap[m.id] || [];
           const senderMember = activeRoom?.members?.find((x) => x.id === m.senderId);
@@ -428,7 +467,7 @@ function ChatMultiPurpose({
                   </div>
                 )}
                 {reactionHoverId === m.id && (
-                  <div className={`absolute top-0 z-20 flex gap-1 rounded-full border border-slate-100 bg-white px-2 py-1 shadow-md ${isMine ? "-left-[210px]" : "left-0 -top-9"}`} onMouseLeave={() => setReactionHoverId(null)}>
+                  <div className={`absolute top-0 z-20 flex gap-1 rounded-full border border-slate-100 bg-white px-2 py-1 shadow-md ${isMine ? "left-[-210px]" : "left-0 -top-9"}`} onMouseLeave={() => setReactionHoverId(null)}>
                     {reactionOptions.map((emoji) => (
                       <button key={emoji} type="button" onClick={() => toggleReaction(m.id, emoji)} className="text-xs transition hover:scale-125">
                         {emoji}
@@ -465,20 +504,25 @@ function ChatMultiPurpose({
       </div>
 
       <div className="shrink-0">
-      {replyToMessage && (
+      {replyToMessage && !isGroupDissolved && (
         <div className="flex items-center justify-between border-t border-blue-100 bg-blue-50 px-4 py-2">
           <div className="truncate text-xs text-blue-700">Đang trả lời: {replyToMessage.text}</div>
           <button onClick={clearReply} className="text-xs font-bold text-blue-600">Hủy</button>
         </div>
       )}
 
-      {roomMedia && (
+      {roomMedia && !isGroupDissolved && (
         <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-2 text-xs">
           <span className="truncate text-slate-600">Đã chọn: {roomMedia.name}</span>
           <button type="button" className="font-semibold text-red-500" onClick={() => setRoomMedia(null)}>Bỏ chọn</button>
         </div>
       )}
 
+      {isGroupDissolved ? (
+        <div className="shrink-0 border-t border-amber-100 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800">
+          Trưởng nhóm đã giải tán nhóm. Bạn không thể gửi thêm tin nhắn trong hội thoại này.
+        </div>
+      ) : (
       <form onSubmit={sendRoom} className="shrink-0 border-t border-slate-100 bg-white p-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]">
         <div className="mb-2 flex items-center gap-3 border-b border-slate-100 pb-2 text-slate-500">
           <button type="button" className="hover:text-slate-700" onClick={() => imageInputRef.current?.click()}><FileImage className="h-5 w-5" /></button>
@@ -517,10 +561,11 @@ function ChatMultiPurpose({
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleMediaPick(e.target.files?.[0], "image")} />
         <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => handleMediaPick(e.target.files?.[0], "file")} />
       </form>
+      )}
       </div>
 
       <GroupInfoDrawer
-        open={showGroupInfo}
+        open={showGroupInfo && !isGroupDissolved}
         initialTab={groupInfoInitialTab}
         onClose={() => setShowGroupInfo(false)}
         activeRoom={activeRoom}
@@ -532,6 +577,14 @@ function ChatMultiPurpose({
         performGroupAction={performGroupAction}
         onUpdateGroupMeta={onUpdateGroupMeta}
         busy={groupActionBusy}
+      />
+      <DirectChatInfoDrawer
+        open={showDirectInfo}
+        onClose={() => setShowDirectInfo(false)}
+        activeRoom={activeRoom}
+        user={user}
+        onClearHistory={onClearDirectHistory}
+        busy={roomLoading}
       />
     </div>
   );

@@ -6,21 +6,21 @@ function isPersistableUrl(url) {
 }
 
 /**
- * Upload file qua backend (server ??' S3), tr?nh l?-i CORS khi PUT tr?c ti?p t? browser.
+ * Upload file qua backend (server đẩy lên S3), tránh lỗi CORS khi PUT trực tiếp từ browser.
  */
 export async function uploadToS3(file) {
-  if (!file) throw new Error("Kh�ng c? file ?'?f upload.");
+  if (!file) throw new Error("Không có file để upload.");
 
   const formData = new FormData();
   formData.append("file", file);
 
   try {
-    // Kh�ng set Content-Type th? c�ng ??" axios t? g?n boundary cho multipart
+    // Không set Content-Type thủ công để axios tự gắn boundary cho multipart.
     const res = await api.post("/chat/media/upload", formData);
 
     const publicUrl = res.data?.publicUrl || res.data?.url || "";
     if (!isPersistableUrl(publicUrl)) {
-      throw new Error(res.data?.message || "Kh�ng l?y ?'u?c link ?nh sau khi t�i l?n");
+      throw new Error(res.data?.message || "Không lấy được link ảnh sau khi tải lên");
     }
 
     return {
@@ -30,7 +30,7 @@ export async function uploadToS3(file) {
       contentType: res.data?.contentType || file.type || "application/octet-stream",
     };
   } catch (err) {
-    throw new Error(getApiErrorMessage(err) || "Kh�ng th?f t�i file l?n server");
+    throw new Error(getApiErrorMessage(err) || "Không thể tải file lên server");
   }
 }
 

@@ -49,6 +49,7 @@ export async function getChatRooms() { return api.get("/chat/rooms"); }
 export async function ensureDirectRoom(contactId) { return api.post("/chat/direct/ensure", { userId: contactId }); }
 export async function createGroupRoom(payload) { return api.post("/chat/groups", { name: payload?.name, avatarUrl: payload?.avatarUrl || payload?.avatar || "", memberIds: payload?.memberIds || [] }); }
 export async function postRoomMessage(roomId, payload) { return api.post(`/chat/rooms/${roomId}/messages`, payload); }
+export async function clearRoomHistory(roomId) { return api.post(`/chat/rooms/${roomId}/clear-history`); }
 export async function deleteRoomMessageForMe(roomId, messageId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/delete`); }
 export async function unsendRoomMessage(roomId, messageId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/unsend`); }
 export async function togglePinRoomMessage(roomId, messageId) { return api.post(`/chat/rooms/${roomId}/messages/${messageId}/pin`); }

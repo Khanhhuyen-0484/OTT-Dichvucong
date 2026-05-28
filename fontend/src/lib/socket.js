@@ -8,7 +8,7 @@ let socket = null;
  * khi socket đang trong trạng thái "connecting".
  */
 export const connectSocket = () => {
-  if (socket) return socket; // ??? FIX: tr? v? instance cu d? chua connected
+  if (socket) return socket; // Trả về instance cũ, kể cả khi đang connecting.
 
   const token = localStorage.getItem("token");
   if (!token) {
@@ -46,7 +46,7 @@ export const connectSocket = () => {
 };
 
 /**
- * Ng?t k�t n?'i khi Logout
+ * Ngắt kết nối khi logout.
  */
 export const disconnectSocket = () => {
   if (socket) {
