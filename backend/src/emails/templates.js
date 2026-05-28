@@ -73,6 +73,21 @@ function otpEmail({ otp, minutes = 5 }) {
   });
 }
 
+function resetPasswordOtpEmail({ otp, minutes = 5 }) {
+  const title = "Mã OTP đặt lại mật khẩu";
+  return layout({
+    title,
+    preheader: `Mã OTP đặt lại mật khẩu có hiệu lực ${minutes} phút`,
+    bodyHtml: `
+      <h1>${escapeHtml(title)}</h1>
+      <p>Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản dịch vụ công của bạn.</p>
+      <p class="muted">Mã OTP (hiệu lực ${escapeHtml(String(minutes))} phút):</p>
+      <div class="otp">${escapeHtml(String(otp))}</div>
+      <p class="muted" style="margin-top:12px;">Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
+    `
+  });
+}
+
 function resetPasswordEmail({ resetUrl }) {
   const title = "Yêu cầu đặt lại mật khẩu";
   return layout({
@@ -104,4 +119,4 @@ function escapeAttr(input) {
   return escapeHtml(input).replace(/`/g, "&#096;");
 }
 
-module.exports = { otpEmail, resetPasswordEmail };
+module.exports = { otpEmail, resetPasswordEmail, resetPasswordOtpEmail };

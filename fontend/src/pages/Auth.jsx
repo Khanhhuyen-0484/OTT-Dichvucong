@@ -59,6 +59,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("info");
+  const [resetLink, setResetLink] = useState("");
 
   function showMessage(text, type = "error") {
     setMessage(text);
@@ -77,6 +78,7 @@ export default function Auth() {
     setAcceptedTerms(false);
     setMessage("");
     setMessageType("info");
+    setResetLink("");
   }
 
   function validateLogin() {
@@ -166,9 +168,67 @@ export default function Auth() {
     if (!emailRe.test(email.trim())) return showMessage("Email không đúng định dạng");
     setLoading(true);
     setMessage("");
+    setResetLink("");
     try {
-      await forgotPassword(email.trim());
-      showMessage("Nếu email tồn tại, hệ thống đã gửi hướng dẫn đặt lại mật khẩu.", "success");
+      const res = await forgotPassword(email.trim());
+      const link = res?.data?.resetUrl || "";
+      if (link) {
+        setResetLink(link);
+        showMessage("Không gửi được email từ máy chủ deploy. Bạn có thể mở link đặt lại mật khẩu bên dưới.", "success");
+      } else {
+        showMessage("Nếu email tồn tại, hệ thống đã gửi hướng dẫn đặt lại mật khẩu.", "success");
+      }
+    } catch (error) {
+      showMessage(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotOtp(event) {
+    event.preventDefault();
+    if (!emailRe.test(email.trim())) return showMessage("Email không đúng định dạng");
+    setLoading(true);
+    setMessage("");
+    setResetLink("");
+    try {
+      const emailNorm = email.trim().toLowerCase();
+      await forgotPassword(emailNorm);
+      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}`, { replace: true });
+    } catch (error) {
+      showMessage(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotOtpClean(event) {
+    event.preventDefault();
+    if (!emailRe.test(email.trim())) return showMessage("Email không đúng định dạng");
+    setLoading(true);
+    setMessage("");
+    setResetLink("");
+    try {
+      const emailNorm = email.trim().toLowerCase();
+      await forgotPassword(emailNorm);
+      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}`, { replace: true });
+    } catch (error) {
+      showMessage(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotOtpFallback(event) {
+    event.preventDefault();
+    if (!emailRe.test(email.trim())) return showMessage("Email không đúng định dạng");
+    setLoading(true);
+    setMessage("");
+    setResetLink("");
+    try {
+      const emailNorm = email.trim().toLowerCase();
+      await forgotPassword(emailNorm);
+      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}`, { replace: true });
     } catch (error) {
       showMessage(getApiErrorMessage(error));
     } finally {
@@ -206,11 +266,19 @@ export default function Auth() {
                     ? "Truy cập tài khoản để nộp hồ sơ, theo dõi tiến độ và nhận hỗ trợ trực tuyến."
                     : isRegister
                       ? "Đăng ký tài khoản để sử dụng các dịch vụ công trực tuyến."
-                      : "Nhập email đã đăng ký để nhận hướng dẫn đặt lại mật khẩu."}
+                      : "Nhập email đã đăng ký để nhận mã OTP đặt lại mật khẩu."}
                 </p>
               </div>
 
               {message ? <MessageBox type={messageType} text={message} /> : null}
+              {resetLink ? (
+                <a
+                  href={resetLink}
+                  className="mb-4 inline-flex h-11 w-full items-center justify-center rounded-[14px] bg-emerald-600 px-4 text-sm font-black text-white shadow-lg shadow-emerald-900/10 transition hover:-translate-y-0.5 hover:bg-emerald-700"
+                >
+                  Mở trang đặt lại mật khẩu
+                </a>
+              ) : null}
 
               {isLogin ? (
                 <form onSubmit={handleLogin} className="space-y-4">
@@ -261,9 +329,9 @@ export default function Auth() {
               ) : null}
 
               {isForgot ? (
-                <form onSubmit={handleForgot} className="space-y-4">
+                <form onSubmit={handleForgotOtpFallback} className="space-y-4">
                   <Field icon={Mail} label="Email đã đăng ký" value={email} onChange={setEmail} type="email" placeholder="email@domain.vn" />
-                  <SubmitButton loading={loading}>Gửi hướng dẫn</SubmitButton>
+                  <SubmitButton loading={loading}>Gửi OTP</SubmitButton>
                 </form>
               ) : null}
 
