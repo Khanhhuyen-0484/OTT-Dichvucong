@@ -1287,3 +1287,50 @@ exports.resetPassword = async (req, res) => {
     return res.status(500).json({ message: err.message || "Lỗi đặt lại mật khẩu" });
   }
 };
+
+// Final production override: Railway may block outbound SMTP. Keep OTP flow usable by
+// returning a temporary OTP when email delivery times out.
+exports.forgotPassword = async (req, res) => {
+  try {
+    const emailNorm = String(req.body?.email || "").trim().toLowerCase();
+    if (!emailNorm) {
+      return res.status(400).json({ message: "Email không hợp lệ" });
+    }
+
+    const user = await findByEmail(emailNorm);
+    if (!user) {
+      return res.status(404).json({ message: "Email chưa tồn tại trong hệ thống" });
+    }
+
+    const otp = generateOtp();
+    try {
+      await sendMail({
+        to: emailNorm,
+        subject: "Mã OTP đặt lại mật khẩu",
+        html: resetPasswordOtpEmail({ otp, minutes: 5 }),
+        text: `Mã OTP đặt lại mật khẩu của bạn: ${otp} (hiệu lực 5 phút).`
+      });
+      setOtp(emailNorm, otp, 5 * 60_000);
+      return res.json({
+        message: "OTP đặt lại mật khẩu đã được gửi tới email",
+        email: emailNorm,
+        mailSent: true,
+        expiresInMinutes: 5
+      });
+    } catch (mailErr) {
+      console.error("FORGOT PASSWORD OTP MAIL FAILED", mailErr?.message, mailErr);
+      setOtp(emailNorm, otp, 5 * 60_000);
+      return res.status(202).json({
+        message: "SMTP đang bị chặn trên server deploy. Hệ thống đã tạo OTP tạm thời để đặt lại mật khẩu.",
+        email: emailNorm,
+        otp,
+        mailSent: false,
+        expiresInMinutes: 5,
+        smtp: serializeSmtpError(mailErr)
+      });
+    }
+  } catch (err) {
+    console.error("FORGOT PASSWORD OTP FAILED", err?.message, err);
+    return res.status(500).json({ message: err.message || "Lỗi hệ thống" });
+  }
+};

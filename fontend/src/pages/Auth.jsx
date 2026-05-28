@@ -219,6 +219,24 @@ export default function Auth() {
     }
   }
 
+  async function handleForgotOtpFallback(event) {
+    event.preventDefault();
+    if (!emailRe.test(email.trim())) return showMessage("Email không đúng định dạng");
+    setLoading(true);
+    setMessage("");
+    setResetLink("");
+    try {
+      const emailNorm = email.trim().toLowerCase();
+      const res = await forgotPassword(emailNorm);
+      const otpQuery = res?.data?.otp ? `&otp=${encodeURIComponent(res.data.otp)}` : "";
+      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}${otpQuery}`, { replace: true });
+    } catch (error) {
+      showMessage(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const isLogin = mode === "login";
   const isRegister = mode === "register";
   const isForgot = mode === "forgot";
@@ -249,7 +267,7 @@ export default function Auth() {
                     ? "Truy cập tài khoản để nộp hồ sơ, theo dõi tiến độ và nhận hỗ trợ trực tuyến."
                     : isRegister
                       ? "Đăng ký tài khoản để sử dụng các dịch vụ công trực tuyến."
-                      : "Nhập email đã đăng ký để nhận hướng dẫn đặt lại mật khẩu."}
+                      : "Nhập email đã đăng ký để nhận mã OTP đặt lại mật khẩu."}
                 </p>
               </div>
 
@@ -312,9 +330,9 @@ export default function Auth() {
               ) : null}
 
               {isForgot ? (
-                <form onSubmit={handleForgotOtpClean} className="space-y-4">
+                <form onSubmit={handleForgotOtpFallback} className="space-y-4">
                   <Field icon={Mail} label="Email đã đăng ký" value={email} onChange={setEmail} type="email" placeholder="email@domain.vn" />
-                  <SubmitButton loading={loading}>Gửi hướng dẫn</SubmitButton>
+                  <SubmitButton loading={loading}>Gửi OTP</SubmitButton>
                 </form>
               ) : null}
 

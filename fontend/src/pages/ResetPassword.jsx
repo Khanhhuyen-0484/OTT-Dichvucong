@@ -24,12 +24,19 @@ export default function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialEmail = useMemo(() => searchParams.get("email") || "", [searchParams]);
+  const initialOtp = useMemo(() => searchParams.get("otp") || "", [searchParams]);
   const [email, setEmail] = useState(initialEmail);
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState(initialOtp);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [message, setMessage] = useState(initialEmail ? "Mã OTP đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư." : "");
+  const [message, setMessage] = useState(
+    initialOtp
+      ? `SMTP đang bị chặn trên server deploy. Dùng OTP tạm thời: ${initialOtp}`
+      : initialEmail
+        ? "Mã OTP đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư."
+        : ""
+  );
   const [success, setSuccess] = useState(Boolean(initialEmail));
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -41,9 +48,14 @@ export default function ResetPassword() {
     setSuccess(false);
     try {
       const emailNorm = email.trim().toLowerCase();
-      await forgotPassword(emailNorm);
+      const res = await forgotPassword(emailNorm);
       setEmail(emailNorm);
-      setMessage("Đã gửi lại mã OTP đặt lại mật khẩu tới email.");
+      if (res?.data?.otp) {
+        setOtp(String(res.data.otp));
+        setMessage(`SMTP đang bị chặn trên server deploy. Dùng OTP tạm thời: ${res.data.otp}`);
+      } else {
+        setMessage("Đã gửi lại mã OTP đặt lại mật khẩu tới email.");
+      }
       setSuccess(true);
     } catch (error) {
       setMessage(getApiErrorMessage(error));
