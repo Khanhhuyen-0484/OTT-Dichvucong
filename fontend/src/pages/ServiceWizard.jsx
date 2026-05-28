@@ -364,7 +364,7 @@ export default function ServiceWizard() {
   if (error || !service) return <PageState text={error || "Không tìm thấy dịch vụ"} />;
 
   return (
-    <div className="min-h-screen bg-[#f4f8fd] pb-12 text-slate-800">
+    <div className="min-h-screen bg-[#f4f8fd] pb-[120px] text-slate-800">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
           <Link to="/" className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900"><ArrowLeft className="h-4 w-4" /> Trang chủ</Link>
@@ -535,20 +535,29 @@ export default function ServiceWizard() {
           </aside>
         </div>
 
-        {user ? (
-          <div className="sticky bottom-4 z-20 mx-auto mt-6 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#e5edf5] bg-white/95 p-3 shadow-2xl shadow-blue-950/10 backdrop-blur">
-            <button type="button" onClick={saveDraft} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-slate-100 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-200">
-              <Save className="h-4 w-4" /> Lưu nháp
-            </button>
-            <div className="flex flex-wrap gap-3">
-              {step > 1 ? <button type="button" onClick={() => setStep((current) => Math.max(1, current - 1))} className="h-12 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50">Quay lại</button> : null}
-              {step < 3 ? <button type="button" onClick={handleNext} className="h-12 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-blue-800">Tiếp tục</button> : null}
-              {step === 3 ? <button type="button" onClick={submitApplication} disabled={submitting} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-70">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />} Nộp hồ sơ</button> : null}
-              {step === 4 && !isPaid && !isFree ? <button type="button" onClick={checkPaymentStatus} className="h-12 rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-700">Thanh toán ngay</button> : null}
+      </div>
+      {user ? (
+        <div className="fixed bottom-3 left-1/2 z-50 w-[calc(100%-24px)] -translate-x-1/2 rounded-3xl border border-[#e5edf5] bg-white/96 p-3 shadow-2xl shadow-blue-950/15 backdrop-blur md:bottom-6 md:w-[calc(100%-64px)] md:max-w-[1200px]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="text-xs font-black uppercase tracking-wide text-slate-400">Trạng thái hồ sơ</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm font-black text-[#0f2f57]">
+                <span>Bước {step}/4: {wizardSteps.find((item) => item.id === step)?.title}</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">Nháp lưu trên trình duyệt</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 md:justify-end">
+              {step > 1 ? <button type="button" onClick={() => setStep((current) => Math.max(1, current - 1))} className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50">Quay lại</button> : null}
+              <button type="button" onClick={saveDraft} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-slate-100 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-200">
+                <Save className="h-4 w-4" /> Lưu nháp
+              </button>
+              {step < 3 ? <button type="button" onClick={handleNext} className="h-11 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-blue-800">Tiếp tục</button> : null}
+              {step === 3 ? <button type="button" onClick={submitApplication} disabled={submitting} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-70">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />} Nộp hồ sơ</button> : null}
+              {step === 4 && !isPaid && !isFree ? <button type="button" onClick={checkPaymentStatus} className="h-11 rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-700">Thanh toán ngay</button> : null}
             </div>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
