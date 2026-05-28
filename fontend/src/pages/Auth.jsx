@@ -185,6 +185,40 @@ export default function Auth() {
     }
   }
 
+  async function handleForgotOtp(event) {
+    event.preventDefault();
+    if (!emailRe.test(email.trim())) return showMessage("Email không đúng định dạng");
+    setLoading(true);
+    setMessage("");
+    setResetLink("");
+    try {
+      const emailNorm = email.trim().toLowerCase();
+      await forgotPassword(emailNorm);
+      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}`, { replace: true });
+    } catch (error) {
+      showMessage(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotOtpClean(event) {
+    event.preventDefault();
+    if (!emailRe.test(email.trim())) return showMessage("Email không đúng định dạng");
+    setLoading(true);
+    setMessage("");
+    setResetLink("");
+    try {
+      const emailNorm = email.trim().toLowerCase();
+      await forgotPassword(emailNorm);
+      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}`, { replace: true });
+    } catch (error) {
+      showMessage(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const isLogin = mode === "login";
   const isRegister = mode === "register";
   const isForgot = mode === "forgot";
@@ -278,7 +312,7 @@ export default function Auth() {
               ) : null}
 
               {isForgot ? (
-                <form onSubmit={handleForgot} className="space-y-4">
+                <form onSubmit={handleForgotOtpClean} className="space-y-4">
                   <Field icon={Mail} label="Email đã đăng ký" value={email} onChange={setEmail} type="email" placeholder="email@domain.vn" />
                   <SubmitButton loading={loading}>Gửi hướng dẫn</SubmitButton>
                 </form>

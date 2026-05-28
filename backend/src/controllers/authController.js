@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { sendMail, serializeSmtpError } = require("../config/mailer");
-const { otpEmail, resetPasswordEmail } = require("../emails/templates");
+const { otpEmail, resetPasswordOtpEmail } = require("../emails/templates");
 const { validateRegisterPassword } = require("../utils/passwordStrength");
 const { generateOtp, setOtp, verifyOtp, consumeOtp } = require("../store/otpStore");
 const {
@@ -1203,3 +1203,87 @@ exports.deleteMe = async (req, res) => {
     res.status(500).json({ message: err.message || "Không thể xóa tài khoản" });
   }
 }};
+
+// Override password reset flow: email must exist, then send OTP; reset uses email + OTP.
+exports.forgotPassword = async (req, res) => {
+  try {
+    const emailNorm = String(req.body?.email || "").trim().toLowerCase();
+    if (!emailNorm) {
+      return res.status(400).json({ message: "Email không hợp lệ" });
+    }
+
+    const user = await findByEmail(emailNorm);
+    if (!user) {
+      return res.status(404).json({ message: "Email chưa tồn tại trong hệ thống" });
+    }
+
+    const otp = generateOtp();
+    try {
+      await sendMail({
+        to: emailNorm,
+        subject: "Mã OTP đặt lại mật khẩu",
+        html: resetPasswordOtpEmail({ otp, minutes: 5 }),
+        text: `Mã OTP đặt lại mật khẩu của bạn: ${otp} (hiệu lực 5 phút).`
+      });
+    } catch (mailErr) {
+      console.error("FORGOT PASSWORD OTP MAIL FAILED", mailErr?.message, mailErr);
+      return res.status(500).json({
+        message: "Không gửi được OTP đặt lại mật khẩu. Vui lòng thử lại sau.",
+        smtp: serializeSmtpError(mailErr)
+      });
+    }
+
+    setOtp(emailNorm, otp, 5 * 60_000);
+    return res.json({
+      message: "OTP đặt lại mật khẩu đã được gửi tới email",
+      email: emailNorm,
+      expiresInMinutes: 5
+    });
+  } catch (err) {
+    console.error("FORGOT PASSWORD OTP FAILED", err?.message, err);
+    return res.status(500).json({ message: err.message || "Lỗi hệ thống" });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const emailNorm = String(req.body?.email || "").trim().toLowerCase();
+    const otp = String(req.body?.otp || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (!emailNorm) {
+      return res.status(400).json({ message: "Email không hợp lệ" });
+    }
+    if (otp.replace(/\D/g, "").length !== 6) {
+      return res.status(400).json({ message: "OTP gồm đúng 6 chữ số" });
+    }
+
+    const passwordCheck = validateRegisterPassword(password);
+    if (!passwordCheck.ok) {
+      return res.status(400).json({ message: passwordCheck.message });
+    }
+
+    const user = await findByEmail(emailNorm);
+    if (!user) {
+      return res.status(404).json({ message: "Email chưa tồn tại trong hệ thống" });
+    }
+
+    const result = verifyOtp(emailNorm, otp);
+    if (!result.ok) {
+      return res.status(400).json({
+        message: result.reason === "NOT_FOUND" ? "OTP không tồn tại hoặc đã hết hạn" : "OTP không đúng"
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const updated = await updatePasswordHashById(user.id, passwordHash);
+    if (!updated) {
+      return res.status(500).json({ message: "Không thể cập nhật mật khẩu" });
+    }
+
+    consumeOtp(emailNorm);
+    return res.json({ message: "Đặt lại mật khẩu thành công" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi đặt lại mật khẩu" });
+  }
+};
