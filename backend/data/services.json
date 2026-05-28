@@ -1,37 +1,69 @@
 [
   {
     "id": "tam-tru",
-    "name": "??fng k? t?m tr?",
-    "processingTime": "03 ng?y l?m vi??c",
+    "name": "Đăng ký tạm trú",
+    "processingTime": "03 ngày làm việc",
     "fee": 15000,
-    "description": "Th?c hi??n ?'?fng k? t?m tr? cho c?ng d?n.",
+    "description": "Thực hiện đăng ký tạm trú cho công dân.",
     "documents": [
-      { "key": "cccd", "label": "CCCD/CMND", "required": true },
-      { "key": "residenceProof", "label": "Gi?y t? ch?ng minh ch?- ?Y h?p ph?p", "required": true },
-      { "key": "residenceForm", "label": "T? khai cu tr?", "required": true }
+      {
+        "key": "cccd",
+        "label": "CCCD/CMND",
+        "required": true
+      },
+      {
+        "key": "residenceProof",
+        "label": "Giấy tờ chứng minh chỗ ở hợp pháp",
+        "required": true
+      },
+      {
+        "key": "residenceForm",
+        "label": "Tờ khai cư trú",
+        "required": true
+      }
     ]
   },
   {
     "id": "doi-gplx",
-    "name": "??.i gi?y ph?p l?i xe",
-    "processingTime": "05 ng?y l?m vi??c",
+    "name": "Đổi giấy phép lái xe",
+    "processingTime": "05 ngày làm việc",
     "fee": 135000,
-    "description": "??.i gi?y ph?p l?i xe tr?c tuy?n.",
+    "description": "Đổi giấy phép lái xe trực tuyến.",
     "documents": [
-      { "key": "oldLicense", "label": "Gi?y ph?p l?i xe cu", "required": true },
-      { "key": "cccd", "label": "CCCD/CMND", "required": true },
-      { "key": "healthCheck", "label": "Gi?y kh?m s?c kh?e", "required": false }
+      {
+        "key": "oldLicense",
+        "label": "Giấy phép lái xe cũ",
+        "required": true
+      },
+      {
+        "key": "cccd",
+        "label": "CCCD/CMND",
+        "required": true
+      },
+      {
+        "key": "healthCheck",
+        "label": "Giấy khám sức khỏe",
+        "required": false
+      }
     ]
   },
   {
     "id": "cap-lai-khai-sinh",
-    "name": "C?p l?i gi?y khai sinh",
-    "processingTime": "05 ng?y l?m vi??c",
+    "name": "Cấp lại giấy khai sinh",
+    "processingTime": "05 ngày làm việc",
     "fee": 10000,
-    "description": "Y?u c?u c?p l?i b?n sao ho?c c?p l?i gi?y khai sinh.",
+    "description": "Yêu cầu cấp lại bản sao hoặc cấp lại giấy khai sinh.",
     "documents": [
-      { "key": "cccd", "label": "CCCD/CMND", "required": true },
-      { "key": "requestForm", "label": "?on y?u c?u c?p l?i", "required": true }
+      {
+        "key": "cccd",
+        "label": "CCCD/CMND",
+        "required": true
+      },
+      {
+        "key": "requestForm",
+        "label": "Đơn yêu cầu cấp lại",
+        "required": true
+      }
     ]
   }
 ]

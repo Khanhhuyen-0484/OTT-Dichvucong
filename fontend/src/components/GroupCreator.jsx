@@ -45,6 +45,7 @@ export default function GroupCreator({
   createGroup,
 }) {
   const [memberQuery, setMemberQuery] = useState("");
+  const canCreateGroup = groupName.trim().length > 0 && groupMemberIds.length >= 2;
 
   const filteredContacts = useMemo(() => {
     const q = String(memberQuery || "").trim().toLowerCase();
@@ -82,7 +83,7 @@ export default function GroupCreator({
   if (!showGroupModal) return null;
 
   return (
-    <div className="fixed inset-0 z-[82] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-82 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[2px]">
       <div className="flex h-[min(90vh,960px)] w-full max-w-[980px] flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)]">
         <div className="flex items-center justify-between border-b border-slate-200 px-8 py-5">
           <div className="text-3xl font-black tracking-tight text-slate-900">Tạo nhóm</div>
@@ -188,7 +189,13 @@ export default function GroupCreator({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-4 border-t border-slate-200 px-8 py-5">
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-8 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className={`text-sm font-semibold ${canCreateGroup ? "text-emerald-600" : "text-slate-500"}`}>
+            {canCreateGroup
+              ? "Đã đủ điều kiện tạo nhóm"
+              : "Nhập tên nhóm và chọn ít nhất 2 thành viên"}
+          </div>
+          <div className="flex items-center justify-end gap-4">
           <button
             type="button"
             onClick={() => setShowGroupModal(false)}
@@ -199,11 +206,16 @@ export default function GroupCreator({
           <button
             type="button"
             onClick={createGroup}
-            className="rounded-2xl bg-[#9dc5ff] px-8 py-4 text-[18px] font-bold text-white hover:bg-[#7fb4ff] disabled:cursor-not-allowed disabled:bg-[#cfe1ff]"
-            disabled={!groupName.trim() || groupMemberIds.length === 0}
+            className={`rounded-2xl px-8 py-4 text-[18px] font-bold text-white shadow-lg transition ${
+              canCreateGroup
+                ? "bg-[#0d5bd7] shadow-blue-500/25 hover:bg-[#084bb8]"
+                : "cursor-not-allowed bg-[#cfe1ff] text-white/80 shadow-none"
+            }`}
+            disabled={!canCreateGroup}
           >
             Tạo nhóm
           </button>
+          </div>
         </div>
       </div>
     </div>

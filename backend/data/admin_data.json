@@ -2,17 +2,17 @@
   "dossiers": [
     {
       "id": "HS-2026-001",
-      "procedureName": "C?p ?'?.i gi?y ph?p l?i xe",
-      "citizenName": "Nguy?.n V?fn A",
+      "procedureName": "Cấp đổi giấy phép lái xe",
+      "citizenName": "Nguyễn Văn A",
       "phone": "0912345678",
       "submittedAt": "2026-04-10T08:00:00.000Z",
       "dueAt": "2026-04-15T08:00:00.000Z",
       "status": "need_more",
       "eform": {
-        "fullName": "Nguy?.n V?fn A",
+        "fullName": "Nguyễn Văn A",
         "citizenId": "079123456789",
         "email": "vana@example.com",
-        "address": "Qu?n 1, TP.HCM"
+        "address": "Quận 1, TP.HCM"
       },
       "attachments": [
         {
@@ -32,29 +32,29 @@
         {
           "at": "2026-04-10T08:00:00.000Z",
           "by": "system",
-          "action": "Tiep nhan ho so"
+          "action": "Tiếp nhận hồ sơ"
         },
         {
           "at": "2026-04-14T09:24:28.704Z",
           "by": "kimmlienn04@gmail.com",
           "action": "request_more",
-          "note": "b?. sung"
+          "note": "bổ sung"
         }
       ]
     },
     {
       "id": "HS-2026-002",
-      "procedureName": "??fng k? t?m tr?",
-      "citizenName": "Tr?n Th?< B",
+      "procedureName": "Đăng ký tạm trú",
+      "citizenName": "Trần Thị B",
       "phone": "0987123456",
       "submittedAt": "2026-04-09T09:30:00.000Z",
       "dueAt": "2026-04-12T09:30:00.000Z",
       "status": "overdue",
       "eform": {
-        "fullName": "Tr?n Th?< B",
+        "fullName": "Trần Thị B",
         "citizenId": "079222233334",
         "email": "thib@example.com",
-        "address": "Th? ??c, TP.HCM"
+        "address": "Thủ Đức, TP.HCM"
       },
       "attachments": [
         {
@@ -68,23 +68,23 @@
         {
           "at": "2026-04-09T09:30:00.000Z",
           "by": "system",
-          "action": "Tiep nhan ho so"
+          "action": "Tiếp nhận hồ sơ"
         }
       ]
     },
     {
       "id": "HS-2026-003",
-      "procedureName": "C?p h?T chi?u ph?. th?ng",
-      "citizenName": "L? V?fn C",
+      "procedureName": "Cấp hộ chiếu phổ thông",
+      "citizenName": "Lê Văn C",
       "phone": "0933123987",
       "submittedAt": "2026-04-13T10:30:00.000Z",
       "dueAt": "2026-04-20T10:30:00.000Z",
       "status": "rejected",
       "eform": {
-        "fullName": "L? V?fn C",
+        "fullName": "Lê Văn C",
         "citizenId": "079111122223",
         "email": "vanc@example.com",
-        "address": "G? V?p, TP.HCM"
+        "address": "Gò Vấp, TP.HCM"
       },
       "attachments": [
         {
@@ -98,13 +98,13 @@
         {
           "at": "2026-04-13T10:30:00.000Z",
           "by": "system",
-          "action": "Tiep nhan ho so"
+          "action": "Tiếp nhận hồ sơ"
         },
         {
           "at": "2026-04-14T09:29:28.902Z",
           "by": "kimmlienn04@gmail.com",
           "action": "reject",
-          "note": "t? ch?'i"
+          "note": "từ chối"
         }
       ]
     }
@@ -135,19 +135,19 @@
         {
           "id": "msg-1776261194665",
           "from": "citizen",
-          "text": "t?i mu?'n h?i v? gi?y ph?p l?i xe",
+          "text": "tôi muốn hỏi về giấy phép lái xe",
           "at": "2026-04-15T13:53:14.665Z"
         },
         {
           "id": "msg-1776262447147",
           "from": "citizen",
-          "text": "T?i mu?'n h?i v? ti?n ?'?T h?" so c?a m?nh.",
+          "text": "Tôi muốn hỏi về tiến độ hồ sơ của mình.",
           "at": "2026-04-15T14:14:07.148Z"
         },
         {
           "id": "msg-1776263131621",
           "from": "citizen",
-          "text": "t?i mu?'n khi?u n?i",
+          "text": "tôi muốn khiếu nại",
           "at": "2026-04-15T14:25:31.621Z"
         }
       ]
@@ -168,113 +168,89 @@
         {
           "id": "msg-1776260064746",
           "from": "admin",
-          "text": "Ch?o b?n, t?i l? c?n b?T x? l? h?" so. T?i ?'ang ki?fm tra th?ng tin b?n cung c?p.",
+          "text": "Chào bạn, tôi là cán bộ xử lý hồ sơ. Tôi đang kiểm tra thông tin bạn cung cấp.",
           "at": "2026-04-15T13:34:24.746Z"
         },
         {
           "id": "msg-1776260104656",
           "from": "citizen",
-          "text": "t?i",
+          "text": "tôi",
           "at": "2026-04-15T13:35:04.656Z"
         },
         {
           "id": "msg-1776263167040",
           "from": "admin",
-          "text": "C?m on b?n ?'? ph?n h?"i, h?" so ?'ang ?'u?c c?p nh?t tr?ng th?i.",
+          "text": "Cảm ơn bạn đã phản hồi, hồ sơ đang được cập nhật trạng thái.",
           "at": "2026-04-15T14:26:07.040Z"
-        },
-        {
-          "id": "msg-1776263259360",
-          "from": "admin",
-          "text": "Ch?o b?n, t?i l? c?n b?T x? l? h?" so. T?i ?'ang ki?fm tra th?ng tin b?n cung c?p.",
-          "at": "2026-04-15T14:27:39.360Z"
         }
       ]
     },
     {
       "id": "sup-1",
       "dossierId": "HS-2026-001",
-      "citizenName": "Nguy?.n V?fn A",
+      "citizenName": "Nguyễn Văn A",
       "status": "resolved",
       "messages": [
         {
           "id": "msg-1",
           "from": "citizen",
-          "text": "Em ?'? n?Tp h?" so r?"i ?.",
+          "text": "Em đã nộp hồ sơ rồi ạ.",
           "at": "2026-04-10T08:20:00.000Z"
-        },
-        {
-          "id": "msg-1776158309237",
-          "from": "admin",
-          "text": "Ch?o b?n, t?i l? c?n b?T x? l? h?" so. T?i ?'ang ki?fm tra th?ng tin b?n cung c?p.",
-          "at": "2026-04-14T09:18:29.237Z"
         },
         {
           "id": "msg-1776158312778",
           "from": "admin",
-          "text": "B?n vui l?ng g?i b?. sung ?nh gi?y t? r? n?t hon ?'?f ti?p t?c x? l?.",
+          "text": "Bạn vui lòng gửi bổ sung ảnh giấy tờ rõ nét hơn để tiếp tục xử lý.",
           "at": "2026-04-14T09:18:32.778Z"
         },
         {
           "id": "msg-1776158366886",
           "from": "admin",
-          "text": "Th?ng tin ?'? ?'?y ?'?. Ch?ng t?i s? s?>m g?i k?t qu? qua h?? th?'ng.",
+          "text": "Thông tin đã đầy đủ. Chúng tôi sẽ sớm gửi kết quả qua hệ thống.",
           "at": "2026-04-14T09:19:26.886Z"
-        },
-        {
-          "id": "msg-1776158439402",
-          "from": "admin",
-          "text": "Th?ng tin ?'? ?'?y ?'?. Ch?ng t?i s? s?>m g?i k?t qu? qua h?? th?'ng.",
-          "at": "2026-04-14T09:20:39.402Z"
         },
         {
           "id": "msg-1776158441046",
           "from": "admin",
-          "text": "C?m on b?n ?'? ph?n h?"i, h?" so ?'ang ?'u?c c?p nh?t tr?ng th?i.",
+          "text": "Cảm ơn bạn đã phản hồi, hồ sơ đang được cập nhật trạng thái.",
           "at": "2026-04-14T09:20:41.046Z"
-        },
-        {
-          "id": "msg-1776158719168",
-          "from": "admin",
-          "text": "Ch?o b?n, t?i l? c?n b?T x? l? h?" so. T?i ?'ang ki?fm tra th?ng tin b?n cung c?p.",
-          "at": "2026-04-14T09:25:19.168Z"
         }
       ]
     },
     {
       "id": "sup-2",
       "dossierId": "HS-2026-002",
-      "citizenName": "Tr?n Th?< B",
+      "citizenName": "Trần Thị B",
       "status": "resolved",
       "messages": [
         {
           "id": "msg-2",
           "from": "citizen",
-          "text": "Nh? ki?fm tra h?" so gi?p t?i.",
+          "text": "Nhờ kiểm tra hồ sơ giúp tôi.",
           "at": "2026-04-11T09:20:00.000Z"
         },
         {
           "id": "msg-3",
           "from": "admin",
-          "text": "H?" so ?'? ?'?, vui l?ng ch? x? l?.",
+          "text": "Hồ sơ đã đủ, vui lòng chờ xử lý.",
           "at": "2026-04-11T09:25:00.000Z"
         }
       ]
     }
   ],
   "ai": {
-    "rulesText": "1) Tr? l?i ng?n g?n, b?m ?'?ng quy ?'?<nh hi??n h?nh.\n2) N?u thi?u th?ng tin, y?u c?u b?. sung r? r?ng.\n3) Kh?ng suy di?.n khi chua c? c?fn c? ph?p l?.",
+    "rulesText": "1) Trả lời ngắn gọn, bám đúng quy định hiện hành.\n2) Nếu thiếu thông tin, yêu cầu bổ sung rõ ràng.\n3) Không suy diễn khi chưa có căn cứ pháp lý.",
     "history": [
       {
         "id": "ai-1",
-        "question": "L?? ph? ?'?.i GPLX l? bao nhi?u?",
-        "answer": "M?c l?? ph? hi??n h?nh l? 135.000?'/h?" so.",
+        "question": "Lệ phí đổi GPLX là bao nhiêu?",
+        "answer": "Mức lệ phí hiện hành là 135.000đ/hồ sơ.",
         "at": "2026-04-13T09:10:00.000Z"
       },
       {
         "id": "ai-2",
-        "question": "??fng k? t?m tr? c?n gi?y t? g??",
-        "answer": "CCCD, bi?fu m?u cu tr? v? gi?y t? ch?- ?Y h?p ph?p.",
+        "question": "Đăng ký tạm trú cần giấy tờ gì?",
+        "answer": "CCCD, biểu mẫu cư trú và giấy tờ chỗ ở hợp pháp.",
         "at": "2026-04-13T10:15:00.000Z"
       }
     ]

@@ -29,6 +29,7 @@ const {
   sendRoomMessage,
   unsendRoomMessage,
   deleteRoomMessageForMe,
+  clearRoomHistoryForMe,
   togglePinRoomMessage,
   forwardRoomMessage,
   addGroupMember,
@@ -62,6 +63,7 @@ router.post("/groups/:roomId/invites", authMiddleware, inviteGroupMembers);
 router.post("/groups/:roomId/invites/respond", authMiddleware, respondGroupInvite);
 router.post("/media/presign", authMiddleware, presignChatMediaUpload);
 router.post("/rooms/:roomId/messages", authMiddleware, sendRoomMessage);
+router.post("/rooms/:roomId/clear-history", authMiddleware, clearRoomHistoryForMe);
 router.post("/rooms/:roomId/messages/:messageId/unsend", authMiddleware, unsendRoomMessage);
 router.post("/rooms/:roomId/messages/:messageId/delete", authMiddleware, deleteRoomMessageForMe);
 router.post("/rooms/:roomId/messages/:messageId/pin", authMiddleware, togglePinRoomMessage);

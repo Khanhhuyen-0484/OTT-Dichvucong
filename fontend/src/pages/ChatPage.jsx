@@ -9,6 +9,7 @@ import {
   Video,
   VideoOff,
   PhoneOff,
+  Trash2,
   X
 } from "lucide-react";
 import ContactList from "../components/ContactList.jsx";
@@ -24,6 +25,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   addGroupMember,
   assignGroupDeputy,
+  clearRoomHistory,
   createGroupRoom,
   deleteFriend,
   deleteFriendRequest,
@@ -150,7 +152,7 @@ function LoadingScreen() {
 
 function ForwardModal({ rooms, activeRoomId, userId, doForward, onClose }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-slate-800">Chuyển tiếp</h3>
@@ -226,6 +228,8 @@ export default function ChatPage() {
   const [friendSearchNotice, setFriendSearchNotice] = useState("");
   const [toast, setToast] = useState(null);
   const [mobileRoomOpen, setMobileRoomOpen] = useState(false);
+  const [deleteRoomTarget, setDeleteRoomTarget] = useState(null);
+  const [deleteRoomBusy, setDeleteRoomBusy] = useState(false);
 
   // Staff chat states
   const [staffMessages, setStaffMessages] = useState([]);
@@ -987,9 +991,46 @@ export default function ChatPage() {
     }
   }, [activeRoomId, loadRooms, rooms]);
 
+  const clearDirectChatHistory = useCallback(async () => {
+    if (!activeRoomId || activeRoom?.type !== "direct") return;
+
+    setRoomLoading(true);
+    try {
+      await clearRoomHistory(activeRoomId);
+      await loadRooms();
+      setActiveRoomId(null);
+      setToast({ type: "success", message: "Đã xóa lịch sử cuộc trò chuyện" });
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err) || "Không thể xóa lịch sử cuộc trò chuyện");
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [activeRoom, activeRoomId, loadRooms]);
+
+  const deleteConversationFromList = useCallback(async () => {
+    if (!deleteRoomTarget?.id) return;
+
+    setDeleteRoomBusy(true);
+    try {
+      await clearRoomHistory(deleteRoomTarget.id);
+      setRooms((prev) => prev.filter((room) => room.id !== deleteRoomTarget.id));
+      if (activeRoomId === deleteRoomTarget.id) {
+        setActiveRoomId(null);
+        setMobileRoomOpen(false);
+      }
+      setDeleteRoomTarget(null);
+      await loadRooms();
+      setToast({ type: "success", message: "Đã xóa hội thoại" });
+    } catch (err) {
+      setRoomErr(getApiErrorMessage(err));
+    } finally {
+      setDeleteRoomBusy(false);
+    }
+  }, [activeRoomId, deleteRoomTarget, loadRooms]);
+
   const createGroup = useCallback(async () => {
-    if (!groupName.trim() || groupMemberIds.length === 0) {
-      setRoomErr("Vui lòng nhập tên nhóm và chọn thành viên");
+    if (!groupName.trim() || groupMemberIds.length < 2) {
+      setRoomErr("Vui lòng nhập tên nhóm và chọn ít nhất 2 thành viên");
       return;
     }
     setRoomLoading(true);
@@ -1185,7 +1226,7 @@ export default function ChatPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
       <GovHeader />
 
-      <main className="mx-auto flex w-full max-w-[96rem] min-h-0 flex-1 flex-col overflow-hidden px-3 pt-3 sm:px-4">
+      <main className="mx-auto flex w-full max-w-384 min-h-0 flex-1 flex-col overflow-hidden px-3 pt-3 sm:px-4">
         <div className="mb-2 flex w-full shrink-0 items-center gap-2">
           <button
             type="button"
@@ -1275,6 +1316,7 @@ export default function ChatPage() {
                     contactCount={contacts.length}
                     staffLatestMessage={staffLatestMessage}
                     staffUnread={staffUnread}
+                    onRequestDeleteRoom={setDeleteRoomTarget}
                   />
                 </div>
 
@@ -1315,6 +1357,7 @@ export default function ChatPage() {
                     chatEndRef={chatEndRef}
                     onUpdateGroupMeta={onUpdateGroupMeta}
                     groupActionBusy={friendLoading}
+                    onClearDirectHistory={clearDirectChatHistory}
                   />
                 </div>
               </div>
@@ -1566,15 +1609,47 @@ export default function ChatPage() {
       />
 
       {toast ? (
-        <div className="fixed right-4 top-4 z-[110]">
+        <div className="fixed right-4 top-4 z-110">
           <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(15,23,42,0.28)]">
             {toast.message}
           </div>
         </div>
       ) : null}
 
+      {deleteRoomTarget ? (
+        <div className="fixed inset-0 z-120 flex items-center justify-center bg-slate-950/25 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-2xl">
+            <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-red-50 text-red-500">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <h3 className="mt-3 text-sm font-black text-slate-950">Xóa hội thoại này?</h3>
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600">
+              Bạn sẽ không còn thấy lịch sử trò chuyện trên thiết bị này.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteRoomTarget(null)}
+                disabled={deleteRoomBusy}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={deleteConversationFromList}
+                disabled={deleteRoomBusy}
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleteRoomBusy ? "Đang xóa..." : "Xóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {forwardingMessageId && (
-        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-black/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-4">
             <div className="text-sm font-bold mb-2">Chọn nơi chuyển tiếp</div>
             <div className="space-y-1 max-h-52 overflow-y-auto">
@@ -1613,7 +1688,7 @@ export default function ChatPage() {
       )}
 
       {roomErr && (
-        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-[100] animate-in slide-in-from-right-10 flex items-center gap-3">
+        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl z-100 animate-in slide-in-from-right-10 flex items-center gap-3">
           <div className="bg-white/20 p-1.5 rounded-full"><X size={16} /></div>
           <span className="text-sm font-bold">{roomErr}</span>
           <button onClick={() => setRoomErr(null)} className="ml-4 text-xs underline opacity-80">Đóng</button>

@@ -22,6 +22,25 @@ function normalizeRole(role) {
   return "member";
 }
 
+function getMemberId(member) {
+  if (typeof member === "string" || typeof member === "number") return String(member).trim();
+  return String(member?.id || member?.userId || "").trim();
+}
+
+function inferGroupCreator(room) {
+  const explicit = String(
+    room?.createdBy || room?.ownerId || room?.creatorId || room?.createdById || ""
+  ).trim();
+  if (explicit) return explicit;
+
+  const rawMembers = Array.isArray(room?.members) ? room.members : [];
+  const owner = rawMembers.find((member) => {
+    if (!member || typeof member !== "object") return false;
+    return member.role === "owner";
+  });
+  return getMemberId(owner || rawMembers[0]);
+}
+
 function normalizeMember(member, createdBy = "") {
   if (typeof member === "string" || typeof member === "number") {
     const id = String(member).trim();
@@ -79,13 +98,13 @@ function getMemberRole(room, userId) {
   return member?.role || null;
 }
 
-/** Tru?Yng/ph? nh?m ??" x?a th?nh vi?n, phong ph? nh?m, gi?i t?n. */
+/** Trưởng/phó nhóm được xóa thành viên, phong phó nhóm, giải tán. */
 function canManageGroup(room, userId) {
   const role = getMemberRole(room, userId);
   return role === "owner" || role === "deputy";
 }
 
-/** M?i th?nh vi?n trong nh?m (gi?'ng Zalo): ?'?.i t?n, ?'?.i ?nh, th?m b?n. */
+/** Mọi thành viên trong nhóm được đổi tên, đổi ảnh, thêm bạn. */
 function canEditGroupSettings(room, userId) {
   return isRoomMember(room, userId);
 }
@@ -177,9 +196,14 @@ function sanitizeMessage(message) {
 }
 
 function sanitizeRoom(room) {
-  const createdBy = String(room?.createdBy || "").trim();
+  const createdBy = room?.type === "group"
+    ? inferGroupCreator(room)
+    : String(room?.createdBy || "").trim();
   const members = normalizeMembersList(room?.members, createdBy);
   const messages = Array.isArray(room?.messages) ? room.messages.map(sanitizeMessage) : [];
+  const hiddenFor = Array.isArray(room?.hiddenFor)
+    ? Array.from(new Set(room.hiddenFor.map(String).filter(Boolean)))
+    : [];
   const pendingInvites = Array.isArray(room?.pendingInvites)
     ? room.pendingInvites
         .map((invite) => ({
@@ -199,9 +223,12 @@ function sanitizeRoom(room) {
     })(),
     createdBy,
     members,
+    hiddenFor,
     pendingInvites,
     messages,
     lastMessage: messages[messages.length - 1] || null,
+    dissolvedAt: room?.dissolvedAt || null,
+    dissolvedBy: String(room?.dissolvedBy || "").trim(),
     updatedAt: room?.updatedAt || nowIso(),
     createdAt: room?.createdAt || nowIso()
   };
@@ -236,7 +263,10 @@ async function listRoomsForUser(userId) {
   if (!uid) return [];
   try {
     const rs = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
-    const rooms = (rs.Items || []).map(sanitizeRoom).filter((room) => isRoomMember(room, uid));
+    const rooms = (rs.Items || [])
+      .map(sanitizeRoom)
+      .filter((room) => isRoomMember(room, uid))
+      .filter((room) => !(room.hiddenFor || []).includes(uid));
     return rooms.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   } catch (error) {
     console.error("[multiChatStore.listRoomsForUser]", error?.name, error?.message, error);
@@ -248,15 +278,23 @@ async function ensureDirectRoom(userA, userB) {
   const a = String(userA || "").trim();
   const b = String(userB || "").trim();
   if (!a || !b || a === b) {
-    throw new Error("Kh?ng th?f t?o h?Ti tho?i v?>i ngu?i d?ng n?y");
+    throw new Error("Không thể tạo hội thoại với người dùng này");
   }
-  const existing = await listRoomsForUser(a);
+  const rs = await dynamo.send(new ScanCommand({ TableName: MULTI_CHAT_ROOMS_TABLE }));
+  const existing = (rs.Items || []).map(sanitizeRoom).filter((room) => isRoomMember(room, a));
   const found = existing.find((room) => {
     if (room.type !== "direct" || room.members.length !== 2) return false;
     const ids = room.members.map((m) => m.id).sort();
     return ids[0] === [a, b].sort()[0] && ids[1] === [a, b].sort()[1];
   });
-  if (found) return found;
+  if (found) {
+    const next = {
+      ...found,
+      hiddenFor: (found.hiddenFor || []).filter((id) => id !== a),
+      updatedAt: nowIso()
+    };
+    return saveRoom(next);
+  }
 
   const room = {
     id: makeId("direct"),
@@ -266,6 +304,7 @@ async function ensureDirectRoom(userA, userB) {
       { id: a, role: "member" },
       { id: b, role: "member" }
     ],
+    hiddenFor: [],
     messages: [],
     updatedAt: nowIso(),
     createdAt: nowIso()
@@ -277,7 +316,7 @@ async function createGroupRoom({ ownerId, name, avatarUrl, memberIds }) {
   const owner = String(ownerId || "").trim();
   const groupName = String(name || "").trim();
   const ids = Array.from(new Set((memberIds || []).map(String).filter(Boolean)));
-  if (!owner || !groupName) throw new Error("Thi?u th?ng tin t?o nh?m");
+  if (!owner || !groupName) throw new Error("Thiếu thông tin tạo nhóm");
   const finalIds = Array.from(new Set([owner, ...ids]));
   const members = finalIds.map((id) => ({
     id,
@@ -300,6 +339,7 @@ async function createGroupRoom({ ownerId, name, avatarUrl, memberIds }) {
 async function appendMessage({ roomId, senderId, text, media, location, replyToMessageId }) {
   const room = await getRoomById(roomId);
   if (!room) throw new Error("Không tìm thấy phòng chat");
+  if (room.dissolvedAt) throw new Error("Nhóm đã được giải tán");
   const sid = String(senderId || "").trim();
   if (!isRoomMember(room, sid)) throw new Error("Bạn không phải là thành viên của phòng chat");
   const replyId = String(replyToMessageId || "").trim();
@@ -325,6 +365,7 @@ async function appendMessage({ roomId, senderId, text, media, location, replyToM
   });
   const next = {
     ...room,
+    hiddenFor: [],
     messages: [...room.messages, message],
     lastMessage: message,
     updatedAt: message.createdAt
@@ -343,9 +384,10 @@ async function appendCallLogMessage({
   endedBy = ""
 }) {
   const room = await getRoomById(roomId);
-  if (!room) throw new Error("Kh?ng t?m th?y ph?ng chat");
+  if (!room) throw new Error("Không tìm thấy phòng chat");
+  if (room.dissolvedAt) throw new Error("Nhóm đã được giải tán");
   const sid = String(actorUserId || "").trim();
-  if (!sid || !isRoomMember(room, sid)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a ph?ng chat");
+  if (!sid || !isRoomMember(room, sid)) throw new Error("Bạn không phải là thành viên của phòng chat");
 
   const message = sanitizeMessage({
     id: makeId("msg"),
@@ -377,10 +419,11 @@ async function appendCallLogMessage({
 
 async function inviteMembersToGroup({ roomId, requesterId, memberIds }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
-  if (!canEditGroupSettings(room, requesterId)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a nh?m");
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (room.dissolvedAt) throw new Error("Nhóm đã được giải tán");
+  if (!canEditGroupSettings(room, requesterId)) throw new Error("Bạn không phải là thành viên của nhóm");
   const ids = uniqueIds(memberIds);
-  if (!ids.length) throw new Error("Chua ch?n b?n b? ?'?f m?i");
+  if (!ids.length) throw new Error("Chưa chọn bạn bè để mời");
 
   const existingMemberIds = room.members.map((member) => member.id);
   const pendingMap = new Map((room.pendingInvites || []).map((invite) => [invite.userId, invite]));
@@ -413,9 +456,10 @@ async function listGroupInvitesForUser(userId) {
 
 async function respondToGroupInvite({ roomId, userId, action }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (room.dissolvedAt) throw new Error("Nhóm đã được giải tán");
   const invite = (room.pendingInvites || []).find((item) => item.userId === userId);
-  if (!invite) throw new Error("Kh?ng t?m th?y l?i m?i v?o nh?m");
+  if (!invite) throw new Error("Không tìm thấy lời mời vào nhóm");
 
   const next = {
     ...room,
@@ -430,7 +474,7 @@ async function respondToGroupInvite({ roomId, userId, action }) {
 
 async function unsendMessage({ roomId, messageId, requesterId }) {
   const room = await getRoomById(roomId);
-  if (!room) throw new Error("Kh?ng t?m th?y ph?ng chat");
+  if (!room) throw new Error("Không tìm thấy phòng chat");
   const rid = String(requesterId || "").trim();
   const nextMessages = room.messages.map((m) => {
     if (m.id !== messageId) return m;
@@ -455,11 +499,11 @@ async function unsendMessage({ roomId, messageId, requesterId }) {
 
 async function deleteMessageForUser({ roomId, messageId, userId }) {
   const room = await getRoomById(roomId);
-  if (!room) throw new Error("Kh?ng t?m th?y ph?ng chat");
+  if (!room) throw new Error("Không tìm thấy phòng chat");
   const uid = String(userId || "").trim();
-  if (!isRoomMember(room, uid)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a ph?ng chat");
+  if (!isRoomMember(room, uid)) throw new Error("Bạn không phải là thành viên của phòng chat");
   const target = room.messages.find((m) => m.id === messageId);
-  if (!target) throw new Error("Kh?ng t?m th?y tin nh?n");
+  if (!target) throw new Error("Không tìm thấy tin nhắn");
   const nextMessages = room.messages.map((m) => {
     if (m.id !== messageId) return m;
     const deletedFor = Array.from(new Set([...(m.deletedFor || []), uid]));
@@ -477,6 +521,30 @@ async function deleteMessageForUser({ roomId, messageId, userId }) {
   return saveRoom(next);
 }
 
+async function clearRoomHistoryForUser({ roomId, userId }) {
+  const room = await getRoomById(roomId);
+  if (!room) throw new Error("Không tìm thấy phòng chat");
+  const uid = String(userId || "").trim();
+  if (!isRoomMember(room, uid)) throw new Error("Bạn không phải là thành viên của phòng chat");
+
+  const nextMessages = room.messages.map((message) => ({
+    ...message,
+    deletedFor: Array.from(new Set([...(message.deletedFor || []), uid])),
+    pinned: (message.pinned || message.isPinned) && message.pinnedBy === uid ? false : message.pinned,
+    isPinned: (message.pinned || message.isPinned) && message.pinnedBy === uid ? false : message.isPinned,
+    pinnedAt: (message.pinned || message.isPinned) && message.pinnedBy === uid ? null : message.pinnedAt,
+    pinnedBy: (message.pinned || message.isPinned) && message.pinnedBy === uid ? "" : message.pinnedBy
+  }));
+  const next = {
+    ...room,
+    messages: nextMessages,
+    hiddenFor: Array.from(new Set([...(room.hiddenFor || []), uid])),
+    updatedAt: nowIso()
+  };
+  next.lastMessage = next.messages[next.messages.length - 1] || null;
+  return saveRoom(next);
+}
+
 const MAX_PINNED_MESSAGES = 3;
 
 async function togglePinMessage({ roomId, messageId, requesterId }) {
@@ -486,7 +554,7 @@ async function togglePinMessage({ roomId, messageId, requesterId }) {
   if (!isRoomMember(room, rid)) throw new Error("Bạn không phải là thành viên của phòng chat");
 
   const target = room.messages.find((m) => m.id === messageId);
-  if (!target) throw new Error("Kh?ng t?m th?y tin nh?n");
+  if (!target) throw new Error("Không tìm thấy tin nhắn");
   if (target.unsentForAll) throw new Error("Không thể ghim tin nhắn đã thu hồi");
 
   const isCurrentlyPinned = Boolean(target.pinned || target.isPinned);
@@ -494,7 +562,7 @@ async function togglePinMessage({ roomId, messageId, requesterId }) {
   const pinnedCount = room.messages.filter((m) => m.pinned || m.isPinned).length;
 
   if (nextPinnedState && pinnedCount >= MAX_PINNED_MESSAGES) {
-    throw new Error(`Ch?? ghim t?'i ?'a ${MAX_PINNED_MESSAGES} tin nh?n`);
+    throw new Error(`Chỉ ghim tối đa ${MAX_PINNED_MESSAGES} tin nhắn`);
   }
 
   const nextMessages = room.messages.map((m) => {
@@ -532,10 +600,11 @@ async function forwardMessage({ sourceRoomId, messageId, targetRoomId, senderId 
 
 async function addGroupMember({ roomId, requesterId, memberId }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
-  if (!canEditGroupSettings(room, requesterId)) throw new Error("B?n kh?ng ph?i th?nh vi?n c?a nh?m");
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (room.dissolvedAt) throw new Error("Nhóm đã được giải tán");
+  if (!canEditGroupSettings(room, requesterId)) throw new Error("Bạn không phải là thành viên của nhóm");
   const uid = String(memberId || "").trim();
-  if (!uid) throw new Error("Th?nh vi?n kh?ng h?p l??");
+  if (!uid) throw new Error("Thành viên không hợp lệ");
   if (room.members.some((m) => m.id === uid)) return room;
   const next = {
     ...room,
@@ -558,10 +627,19 @@ async function removeGroupMember({ roomId, requesterId, memberId }) {
   }
   const target = room.members.find((m) => m.id === targetId);
   if (!target) return room;
-  if (target.role === "owner") throw new Error("Không thể xóa trưởng nhóm");
+  if (target.role === "owner" && !isSelfLeave) throw new Error("Không thể xóa trưởng nhóm");
+  const remainingMembers = room.members.filter((m) => m.id !== targetId);
+  const nextOwnerId = target.role === "owner" ? remainingMembers[0]?.id || "" : room.createdBy;
   const next = {
     ...room,
-    members: room.members.filter((m) => m.id !== targetId),
+    createdBy: nextOwnerId,
+    members: remainingMembers.map((member, index) => {
+      if (target.role !== "owner") return member;
+      return {
+        ...member,
+        role: index === 0 ? "owner" : member.role === "owner" ? "member" : member.role
+      };
+    }),
     updatedAt: nowIso()
   };
   return saveRoom(next);
@@ -569,9 +647,10 @@ async function removeGroupMember({ roomId, requesterId, memberId }) {
 
 async function assignDeputy({ roomId, requesterId, memberId, enabled }) {
   const room = await getRoomById(roomId);
-  if (!room || room.type !== "group") throw new Error("Kh?ng t?m th?y nh?m chat");
+  if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (room.dissolvedAt) throw new Error("Nhóm đã được giải tán");
   const ownerRole = getMemberRole(room, requesterId);
-  if (ownerRole !== "owner") throw new Error("Ch?? tru?Yng nh?m c? th?f g?n ph? nh?m");
+  if (ownerRole !== "owner") throw new Error("Chỉ trưởng nhóm có thể gán phó nhóm");
   const targetId = String(memberId || "").trim();
   const nextMembers = room.members.map((m) => {
     if (m.id !== targetId) return m;
@@ -585,6 +664,7 @@ async function assignDeputy({ roomId, requesterId, memberId, enabled }) {
 async function updateGroupRoom({ roomId, requesterId, name, avatarUrl }) {
   const room = await getRoomById(roomId);
   if (!room || room.type !== "group") throw new Error("Không tìm thấy nhóm chat");
+  if (room.dissolvedAt) throw new Error("Nhóm đã được giải tán");
   if (!canEditGroupSettings(room, requesterId)) {
     throw new Error("Bạn không phải là thành viên của nhóm");
   }
@@ -608,21 +688,26 @@ async function dissolveGroup({ roomId, requesterId }) {
   if (getMemberRole(room, requesterId) !== "owner") {
     throw new Error("Chỉ trưởng nhóm được phép giải tán nhóm");
   }
+  if (room.dissolvedAt) return room;
+  const dissolvedAt = nowIso();
   const next = {
     ...room,
-    members: [],
+    hiddenFor: Array.from(new Set([...(room.hiddenFor || []), String(requesterId || "").trim()])),
+    pendingInvites: [],
     messages: [
-      ...room.messages,
       sanitizeMessage({
         id: makeId("sys"),
         senderId: requesterId,
-        text: "Nhóm đã được giải tán",
-        createdAt: nowIso(),
+        messageType: "system",
+        text: "Trưởng nhóm đã giải tán nhóm",
+        createdAt: dissolvedAt,
         unsentForAll: false,
         deletedFor: []
       })
     ],
-    updatedAt: nowIso()
+    dissolvedAt,
+    dissolvedBy: requesterId,
+    updatedAt: dissolvedAt
   };
   next.lastMessage = next.messages[next.messages.length - 1] || null;
   return saveRoom(next);
@@ -642,7 +727,7 @@ async function hydrateRoomForUser(room, currentUserId) {
     const user = userMap[m.id];
     return {
       ...m,
-      fullName: user?.fullName || "Ngu?i d?ng",
+      fullName: user?.fullName || "Người dùng",
       avatarUrl:
         user?.avatarUrl ||
         `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || "Nguoi dung")}&size=128`
@@ -654,7 +739,7 @@ async function hydrateRoomForUser(room, currentUserId) {
       ...m,
       sender: members.find((x) => x.id === m.senderId) || {
         id: m.senderId,
-        fullName: "Ngu?i d?ng",
+        fullName: "Người dùng",
         avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent("Nguoi dung")}&size=128`
       }
     }));
@@ -669,7 +754,7 @@ async function hydrateRoomForUser(room, currentUserId) {
             text: replied.text,
             media: replied.media,
             senderId: replied.senderId,
-            senderName: replied.sender?.fullName || "Ngu?i d?ng",
+            senderName: replied.sender?.fullName || "Người dùng",
             unsentForAll: Boolean(replied.unsentForAll)
           }
         : null
@@ -691,6 +776,7 @@ module.exports = {
   appendCallLogMessage,
   unsendMessage,
   deleteMessageForUser,
+  clearRoomHistoryForUser,
   togglePinMessage,
   forwardMessage,
   addGroupMember,

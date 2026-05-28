@@ -266,8 +266,11 @@ exports.getServices = async (req, res) => {
   const category = String(req.query.category || "").toLowerCase();
   const items = await listServices();
   const filtered = items.filter((s) => {
-    const text = `${s.name || ""} ${s.description || ""} ${s.categoryName || ""}`.toLowerCase();
-    return (!q || text.includes(q)) && (!category || String(s.categoryId || s.categoryName || "").toLowerCase() === category);
+    const text = `${s.name || ""} ${s.description || ""} ${s.categoryName || ""} ${s.category || ""}`.toLowerCase();
+    const categoryValues = [s.categoryId, s.categoryName, s.category]
+      .map((value) => String(value || "").toLowerCase())
+      .filter(Boolean);
+    return (!q || text.includes(q)) && (!category || categoryValues.includes(category));
   });
   res.json({ services: filtered });
 };

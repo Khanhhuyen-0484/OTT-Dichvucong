@@ -89,7 +89,7 @@ function sanitizePublicUser(user) {
   if (!safe) return null;
   return {
     id: safe.id,
-    fullName: safe.fullName || "Ngu?i d?ng",
+    fullName: safe.fullName || "Người dùng",
     email: safe.email || "",
     phone: safe.phone || "",
     avatarUrl:
@@ -231,10 +231,10 @@ async function listBlockedUsers(userId) {
 async function sendFriendRequest(senderId, targetId) {
   const sender = withFriendFields(await findById(senderId));
   const target = withFriendFields(await findById(targetId));
-  if (!sender || !target) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
-  if (sender.id === target.id) throw new Error("Kh?ng th?f k?t b?n v?>i ch?nh m?nh");
+  if (!sender || !target) throw new Error("Không tìm thấy người dùng");
+  if (sender.id === target.id) throw new Error("Không thể kết bạn với chính mình");
   if (sender.blockedUserIds.includes(target.id) || target.blockedUserIds.includes(sender.id)) {
-    throw new Error("Kh?ng th?f k?t b?n v?>i ngu?i d?ng n?y");
+    throw new Error("Không thể kết bạn với người dùng này");
   }
 
   if (sender.friendIds.includes(target.id)) {
@@ -289,7 +289,7 @@ async function revokeFriendRequest(senderId, targetUserId) {
 async function removeFriend(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
   const target = withFriendFields(await findById(targetUserId));
-  if (!current || !target) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
+  if (!current || !target) throw new Error("Không tìm thấy người dùng");
 
   current.friendIds = current.friendIds.filter((id) => id !== target.id);
   target.friendIds = target.friendIds.filter((id) => id !== current.id);
@@ -322,7 +322,7 @@ async function blockUser(userId, targetUserId) {
 
 async function unblockUser(userId, targetUserId) {
   const current = withFriendFields(await findById(userId));
-  if (!current) throw new Error("Kh?ng t?m th?y ngu?i d?ng");
+  if (!current) throw new Error("Không tìm thấy người dùng");
   current.blockedUserIds = current.blockedUserIds.filter((id) => id !== String(targetUserId || "").trim());
   await saveUserRecord(current);
   return { ok: true };

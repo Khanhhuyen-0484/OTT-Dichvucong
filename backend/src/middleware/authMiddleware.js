@@ -5,7 +5,7 @@ module.exports = (req, res, next) => {
     let token = req.headers.authorization;
 
     if (!token) {
-      return res.status(401).json({ message: "Kh?ng c? token" });
+      return res.status(401).json({ message: "Không có token" });
     }
 
     if (typeof token === "string" && token.startsWith("Bearer ")) {
@@ -24,6 +24,6 @@ module.exports = (req, res, next) => {
 
     next();
   } catch (err) {
-    return res.status(401).json({ message: "Token kh?ng h?p l??" });
+    return res.status(401).json({ message: "Token không hợp lệ" });
   }
 };

@@ -31,7 +31,7 @@ async function getMediaStream() {
     return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   } catch (err) {
     if (["NotReadableError", "NotFoundError", "OverconstrainedError"].includes(err.name)) {
-      console.warn("[VideoCall] Camera kh�ng kh? d�ng, th? audio-only:", err.name);
+      console.warn("[VideoCall] Camera không khả dụng, thử audio-only:", err.name);
       return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
     }
     throw err;
@@ -51,7 +51,7 @@ async function checkMediaPermissions() {
   }
 }
 
-// ?"??"??"? RemoteVideo: 1 khung h�nh cho 1 peer ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+// RemoteVideo: 1 khung hình cho 1 peer.
 function RemoteVideo({ stream, label }) {
   return (
     <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
@@ -63,20 +63,20 @@ function RemoteVideo({ stream, label }) {
         />
       ) : (
         <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-3">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-2xl font-bold text-slate-400">
+          <div className="w-16 h-16 rounded-full bg-linear-to-br from-slate-700 to-slate-800 flex items-center justify-center text-2xl font-bold text-slate-400">
             {label?.[0]?.toUpperCase() || "?"}
           </div>
-          <p className="text-sm italic text-slate-500">?ang ch? k�t n?'i...</p>
+          <p className="text-sm italic text-slate-500">Đang chờ kết nối...</p>
         </div>
       )}
       <div className="absolute bottom-3 left-3 bg-black/60 px-2.5 py-1 rounded-lg text-xs text-white font-medium">
-        {label || "Th�nh vi?n"}
+        {label || "Thành viên"}
       </div>
     </div>
   );
 }
 
-// ?"??"??"? Main component ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+// Main component.
 export default function VideoCall({
   roomId,
   targetUserId,
@@ -120,7 +120,7 @@ export default function VideoCall({
   useEffect(() => { isGroupRef.current      = isGroup;      }, [isGroup]);
   useEffect(() => { activeRoomRef.current   = activeRoom;   }, [activeRoom]);
 
-  // ?"??"? Helpers ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+  // Helpers.
   const destroyPeer = useCallback((userId) => {
     const pc = pcsRef.current[userId];
     if (!pc) return;
@@ -190,7 +190,7 @@ export default function VideoCall({
         callStartedAtRef.current = Date.now();
       }
       if (state === "failed" || state === "closed") {
-        // FIX 1: ch?? x?a peer n?y, kh�ng ?'?ng to?n b?T cu?Tc g�i
+        // Chỉ xóa peer này, không đóng toàn bộ cuộc gọi.
         setTimeout(() => { if (activeRef.current) destroyPeer(userId); }, 1500);
       }
       if (state === "disconnected") {
@@ -204,7 +204,7 @@ export default function VideoCall({
     return pc;
   }, [roomId, destroyPeer]);
 
-  // ?"??"? Main effect ?"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"??"?
+  // Main effect.
   useEffect(() => {
     activeRef.current = true;
     const socket = socketRef.current;
@@ -244,30 +244,30 @@ export default function VideoCall({
       } catch (e) { console.error("[VideoCall] group-call-offer:", e); }
     };
 
-    // FIX 2: call-ended nh�n fromUserId ??' ch?? x?a peer ?'? trong nh?m
+    // call-ended nhận fromUserId để chỉ xóa peer đó trong nhóm.
     const handleCallEnded = ({ fromUserId } = {}) => {
       if (!activeRef.current) return;
       console.log("[VideoCall] call-ended", fromUserId);
       if (fromUserId && isGroupRef.current) {
         destroyPeer(fromUserId);
-        // ??ng h�n n?u kh�ng c?n ai
+        // Đóng hẳn nếu không còn ai.
         if (Object.keys(pcsRef.current).length === 0) cleanup();
       } else {
         cleanup();
       }
     };
 
-    // FIX 3: call-rejected trong nh?m ??' ch?? hi??n toast 3s, x?a peer, KH?"NG ?'?ng cu?Tc g�i
+    // call-rejected trong nhóm chỉ hiện toast 3s, xóa peer, không đóng cuộc gọi.
     const handleCallRejected = ({ fromUserId } = {}) => {
       if (!activeRef.current) return;
       console.log("[VideoCall] call-rejected from", fromUserId);
       if (fromUserId && isGroupRef.current) {
-        const name = activeRoomRef.current?.members?.find((m) => m.id === fromUserId)?.fullName || "Th�nh vi?n";
-        setErrorMsg(`${name} t? ch?'i cu?Tc g�i`);
+        const name = activeRoomRef.current?.members?.find((m) => m.id === fromUserId)?.fullName || "Thành viên";
+        setErrorMsg(`${name} từ chối cuộc gọi`);
         setTimeout(() => setErrorMsg(null), 3000);
         destroyPeer(fromUserId);
       } else {
-        setErrorMsg("Cu?Tc g�i b?< t? ch?'i.");
+        setErrorMsg("Cuộc gọi bị từ chối.");
         setTimeout(() => { if (activeRef.current) cleanup(); }, 2000);
       }
     };
@@ -322,7 +322,7 @@ export default function VideoCall({
           const offersMap   = callerOffersRef.current || {};
 
           if (!currentIsGroup && singleOffer && currentTargets.length === 1) {
-            // G?i ?'on callee
+            // Gọi đơn callee.
             const uid = currentTargets[0];
             const pc  = createPeer(uid, stream);
             await pc.setRemoteDescription(new RTCSessionDescription(singleOffer));
@@ -331,10 +331,9 @@ export default function VideoCall({
             socket.emit("call-accepted", { toUserId: uid, answer, roomId });
             await processQueue(uid);
           } else {
-            // G?i nh?m callee
-            // FIX 4: callee ph?i x? l? C? 2 chi?u:
-            // - Answer cho ngu?i ?'? g�i offer
-            // - G?i offer ?'?n ngu?i trong nh?m chua g�i offer cho m?nh
+            // Gọi nhóm callee: xử lý cả 2 chiều.
+            // - Answer cho người đã gửi offer.
+            // - Gửi offer đến người trong nhóm chưa gửi offer cho mình.
             const offeredSet = new Set(Object.keys(offersMap));
 
             for (const [uid, offer] of Object.entries(offersMap)) {
@@ -359,7 +358,7 @@ export default function VideoCall({
             }
           }
         } else {
-          // Caller: g�i offer ?'?n t?ng target
+          // Caller: gửi offer đến từng target.
           for (const uid of currentTargets) {
             if (!activeRef.current) break;
             const pc    = createPeer(uid, stream);
@@ -380,11 +379,11 @@ export default function VideoCall({
       } catch (err) {
         if (!activeRef.current) return;
         const msgs = {
-          NotAllowedError:  "Tr?nh duy??t ch�n camera/micro. H?y c?p quy?n.",
-          NotFoundError:    "Kh�ng t?m th?y thi?t b?< ?m thanh/video.",
-          NotReadableError: "Camera/micro ?'ang d�ng b?Yi ?ng d�ng kh?c.",
+          NotAllowedError:  "Trình duyệt chặn camera/micro. Hãy cấp quyền.",
+          NotFoundError:    "Không tìm thấy thiết bị âm thanh/video.",
+          NotReadableError: "Camera/micro đang dùng bởi ứng dụng khác.",
         };
-        setErrorMsg(msgs[err.name] ?? `L?-i: ${err.name} ??" ${err.message}`);
+        setErrorMsg(msgs[err.name] ?? `Lỗi: ${err.name} - ${err.message}`);
       }
     };
 
@@ -433,18 +432,18 @@ export default function VideoCall({
 
   const total    = 1 + targets.length;
   const gridCols = total <= 2 ? "md:grid-cols-2" : total <= 4 ? "md:grid-cols-2" : "md:grid-cols-3";
-  const getMemberName = (uid) => activeRoom?.members?.find((m) => m.id === uid)?.fullName || "Th�nh vi?n";
+  const getMemberName = (uid) => activeRoom?.members?.find((m) => m.id === uid)?.fullName || "Thành viên";
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col items-center justify-center p-4 md:p-6">
+    <div className="fixed inset-0 z-9999 bg-slate-950 flex flex-col items-center justify-center p-4 md:p-6">
 
       {/* Header */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 text-slate-300 text-sm bg-slate-800/70 px-4 py-2 rounded-full border border-white/10 backdrop-blur-sm">
         {isGroup ? <Users size={15} /> : <Video size={15} />}
         <span>
           {isGroup
-            ? `Cu?Tc g�i nh?m ? ${activeRoom?.name || "Nh?m"} ? ${targets.length + 1} ngu?i`
-            : `Cu?Tc g�i v?>i ${getMemberName(targets[0])}`}
+            ? `Cuộc gọi nhóm • ${activeRoom?.name || "Nhóm"} • ${targets.length + 1} người`
+            : `Cuộc gọi với ${getMemberName(targets[0])}`}
         </span>
         <span className={`ml-1 h-2 w-2 rounded-full ${status === "connected" ? "bg-emerald-400 animate-pulse" : "bg-yellow-400 animate-bounce"}`} />
       </div>
@@ -457,7 +456,7 @@ export default function VideoCall({
       )}
 
       {audioOnly && (
-        <div className="absolute top-[4.5rem] left-1/2 -translate-x-1/2 bg-yellow-500/20 text-yellow-300 px-4 py-1.5 rounded-full border border-yellow-500/40 text-xs z-10">
+        <div className="absolute top-18 left-1/2 -translate-x-1/2 bg-yellow-500/20 text-yellow-300 px-4 py-1.5 rounded-full border border-yellow-500/40 text-xs z-10">
           Camera không khả dụng — chỉ dùng âm thanh
         </div>
       )}
@@ -472,7 +471,7 @@ export default function VideoCall({
               ref={(el) => { if (el) el.srcObject = localStream; }} />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-3xl font-bold text-white">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-blue-600 to-blue-800 flex items-center justify-center text-3xl font-bold text-white">
                 {currentUserName?.[0]?.toUpperCase() || "B"}
               </div>
               <p className="text-sm">{localStream ? "Có âm thanh" : "Đang khởi tạo..."}</p>
@@ -483,7 +482,7 @@ export default function VideoCall({
           </div>
         </div>
 
-        {/* Remote slots ??" lu?n render t?t c? targets */}
+        {/* Remote slots: luôn render tất cả targets */}
         {targets.map((uid) => (
           <RemoteVideo key={uid} stream={remoteStreams[uid] || null} label={getMemberName(uid)} />
         ))}
@@ -491,17 +490,17 @@ export default function VideoCall({
 
       {/* Controls */}
       <div className="mt-6 md:mt-8 flex items-center gap-5 md:gap-6">
-        <button onClick={toggleMic} title={isMuted ? "B?t mic" : "T?t mic"}
+        <button onClick={toggleMic} title={isMuted ? "Bật mic" : "Tắt mic"}
           className={`p-4 rounded-full text-white transition-all active:scale-90 shadow-lg ${isMuted ? "bg-slate-600 hover:bg-slate-500" : "bg-slate-700 hover:bg-slate-600"}`}>
           {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
         </button>
 
-        <button onClick={handleEndCall} title="K?t th?c"
+        <button onClick={handleEndCall} title="Kết thúc"
           className="p-5 md:p-6 bg-red-600 hover:bg-red-700 rounded-full text-white shadow-lg shadow-red-600/30 transition-all active:scale-90">
           <PhoneOff size={28} />
         </button>
 
-        <button onClick={toggleVideo} title={isVideoOff ? "B?t camera" : "T?t camera"} disabled={audioOnly}
+        <button onClick={toggleVideo} title={isVideoOff ? "Bật camera" : "Tắt camera"} disabled={audioOnly}
           className={`p-4 rounded-full text-white transition-all active:scale-90 shadow-lg ${audioOnly ? "opacity-30 cursor-not-allowed bg-slate-800" : isVideoOff ? "bg-slate-600 hover:bg-slate-500" : "bg-slate-700 hover:bg-slate-600"}`}>
           {isVideoOff ? <VideoOff size={22} /> : <Video size={22} />}
         </button>
