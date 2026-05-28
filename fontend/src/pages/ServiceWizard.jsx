@@ -1,11 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle,
   ArrowLeft,
-  BadgeCheck,
   Banknote,
-  Bot,
   Building2,
   CheckCircle2,
   ChevronDown,
@@ -13,22 +11,17 @@ import {
   Clock3,
   Copy,
   CreditCard,
-  FileCheck2,
   FileText,
-  Headphones,
-  Home,
   Info,
   Loader2,
   LogIn,
   MapPin,
-  MessageSquareText,
   Paperclip,
   RefreshCw,
   Save,
-  ShieldCheck,
-  Sparkles,
   UploadCloud,
   UserRound,
+  X,
 } from "lucide-react";
 import {
   createBankTransferPayment,
@@ -43,9 +36,18 @@ import { uploadToS3 } from "../lib/uploadToS3.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const defaultFaq = [
-  { q: "Hồ sơ thiếu giấy tờ thì xử lý thế nào?", a: "Hệ thống sẽ cảnh báo giấy tờ bắt buộc còn thiếu trước khi bạn nộp hồ sơ. Sau khi tiếp nhận, cán bộ có thể yêu cầu bổ sung nếu tài liệu chưa hợp lệ." },
-  { q: "Tôi có thể thanh toán trực tuyến không?", a: "Có. Sau khi hồ sơ được tạo, hệ thống hiển thị mã QR VietQR/SePay, nội dung chuyển khoản và trạng thái thanh toán realtime." },
-  { q: "Sau khi nộp hồ sơ tôi tra cứu ở đâu?", a: "Bạn có thể vào mục Hồ sơ đã nộp hoặc dùng mã hồ sơ để tra cứu tiến độ xử lý." },
+  {
+    q: "Hồ sơ thiếu giấy tờ thì xử lý thế nào?",
+    a: "Hệ thống sẽ cảnh báo giấy tờ bắt buộc còn thiếu trước khi nộp. Cán bộ có thể yêu cầu bổ sung nếu tài liệu chưa hợp lệ.",
+  },
+  {
+    q: "Tôi có thể thanh toán trực tuyến không?",
+    a: "Có. Sau khi tạo hồ sơ, hệ thống hiển thị thông tin VietQR/SePay và trạng thái thanh toán để bạn kiểm tra.",
+  },
+  {
+    q: "Sau khi nộp hồ sơ tôi tra cứu ở đâu?",
+    a: "Bạn có thể vào mục Hồ sơ đã nộp hoặc dùng mã hồ sơ để tra cứu tiến độ xử lý.",
+  },
 ];
 
 const demoServices = {
@@ -54,6 +56,7 @@ const demoServices = {
     description: "Nộp hồ sơ khai sinh trực tuyến, theo dõi trạng thái và nhận thông báo xử lý.",
     categoryName: "Hộ tịch",
     processingTime: "3 ngày làm việc",
+    agency: "UBND cấp xã",
     fee: 0,
     documents: [
       { key: "idCard", label: "CCCD/CMND người nộp", required: true },
@@ -65,6 +68,7 @@ const demoServices = {
     description: "Tiếp nhận hồ sơ, đính kèm giấy tờ và theo dõi tiến độ xử lý biến động đất đai.",
     categoryName: "Đất đai",
     processingTime: "5 ngày làm việc",
+    agency: "Văn phòng đăng ký đất đai",
     fee: 20000,
     documents: [
       { key: "landPaper", label: "Giấy chứng nhận quyền sử dụng đất", required: true },
@@ -76,6 +80,7 @@ const demoServices = {
     description: "Tra cứu điều kiện, giấy tờ cần nộp và thanh toán phí dịch vụ trực tuyến.",
     categoryName: "Xây dựng",
     processingTime: "7 ngày làm việc",
+    agency: "Phòng Quản lý đô thị",
     fee: 50000,
     documents: [
       { key: "landPaper", label: "Giấy tờ đất", required: true },
@@ -87,6 +92,7 @@ const demoServices = {
     description: "Điền thông tin, tải hồ sơ và nhận mã tra cứu sau khi nộp.",
     categoryName: "Giao thông",
     processingTime: "4 ngày làm việc",
+    agency: "Sở Giao thông vận tải",
     fee: 150000,
     documents: [
       { key: "oldLicense", label: "Giấy phép lái xe cũ", required: true },
@@ -113,7 +119,8 @@ export default function ServiceWizard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [step, setStep] = useState(1);
-  const [openFaq, setOpenFaq] = useState(0);
+  const [openFaq, setOpenFaq] = useState(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("PENDING");
   const [paymentInfo, setPaymentInfo] = useState(null);
@@ -134,28 +141,28 @@ export default function ServiceWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [dragKey, setDragKey] = useState("");
-  const pollRef = useRef(null);
 
   useEffect(() => {
+    let ignore = false;
+
     async function loadService() {
       try {
         const { data } = await getServiceById(serviceId);
-        setService(data);
+        if (!ignore) setService(data);
       } catch (e) {
         const demo = demoServices[serviceId];
-        if (demo) setService({ serviceId, id: serviceId, faq: defaultFaq, ...demo });
-        else setError(getApiErrorMessage(e) || "Không tìm thấy dịch vụ");
+        if (demo && !ignore) setService({ serviceId, id: serviceId, faq: defaultFaq, ...demo });
+        else if (!ignore) setError(getApiErrorMessage(e) || "Không tìm thấy dịch vụ");
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     }
-    loadService();
-  }, [serviceId]);
 
-  useEffect(() => () => {
-    Object.values(fileItems).forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
-    if (pollRef.current) clearInterval(pollRef.current);
-  }, [fileItems]);
+    loadService();
+    return () => {
+      ignore = true;
+    };
+  }, [serviceId]);
 
   const docs = useMemo(() => service?.documents || [], [service]);
   const requiredDocs = useMemo(() => docs.filter((doc) => doc.required), [docs]);
@@ -165,18 +172,7 @@ export default function ServiceWizard() {
   const currentDossierId = getSubmitDossierId(submitResult) || paymentInfo?.dossierId;
   const isPaid = String(paymentStatus).toUpperCase() === "PAID";
   const faq = service?.faq?.length ? service.faq : defaultFaq;
-
-  const aiTips = useMemo(() => {
-    const tips = [];
-    if (missingDocs.length) tips.push(`Còn thiếu ${missingDocs.length} giấy tờ bắt buộc trước khi nộp.`);
-    Object.values(fileItems).forEach((item) => {
-      if (item.file?.size > MAX_FILE_SIZE) tips.push(`File ${item.name} vượt quá 10MB, nên nén hoặc chọn file khác.`);
-      if (!item.type) tips.push(`File ${item.name} chưa xác định định dạng, hãy kiểm tra trước khi gửi.`);
-    });
-    if (!formData.phone || !formData.address) tips.push("Nên điền đầy đủ số điện thoại và nơi cư trú để cán bộ liên hệ khi cần.");
-    if (!tips.length) tips.push("Hồ sơ đang đầy đủ thông tin cơ bản. Bạn có thể chuyển sang bước xác nhận.");
-    return tips;
-  }, [fileItems, formData.address, formData.phone, missingDocs.length]);
+  const currentStep = wizardSteps.find((item) => item.id === step) || wizardSteps[0];
 
   function getSubmitDossierId(result = {}) {
     return String(
@@ -232,6 +228,12 @@ export default function ServiceWizard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function handlePrimaryAction() {
+    if (step < 3) return handleNext();
+    if (step === 3) return submitApplication();
+    return checkPaymentStatus();
+  }
+
   function onChange(event) {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -278,10 +280,12 @@ export default function ServiceWizard() {
 
   async function submitApplication() {
     if (!user) return navigate("/auth");
-    if (!validatePersonal() || !validateFiles()) return;
+    if (!validatePersonal() || !validateFiles()) {
+      setStep(1);
+      return;
+    }
     try {
       setSubmitting(true);
-      setStep(3);
       const uploaded = [];
 
       for (const [key, item] of Object.entries(fileItems)) {
@@ -328,6 +332,7 @@ export default function ServiceWizard() {
       setSubmitResult((prev) => ({ ...(prev || {}), dossierId, bankPayment: bankTransfer || {} }));
       setPaymentStatus(bankTransfer?.paymentStatus || bankTransfer?.status || "PENDING");
       setStep(4);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       alert(getApiErrorMessage(e));
     } finally {
@@ -365,224 +370,304 @@ export default function ServiceWizard() {
 
   return (
     <div className="min-h-screen bg-[#f4f8fd] pb-[120px] text-slate-800">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-          <Link to="/" className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900"><ArrowLeft className="h-4 w-4" /> Trang chủ</Link>
+      <main className="mx-auto max-w-[1200px] px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+          <Link to="/" className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
+            <ArrowLeft className="h-4 w-4" /> Trang chủ
+          </Link>
           <span>/</span>
           <Link to="/services" className="text-blue-700 hover:text-blue-900">Dịch vụ công</Link>
           <span>/</span>
-          <span>{service.name}</span>
+          <span className="truncate">{service.name}</span>
         </div>
 
-        <section className="mb-5 overflow-hidden rounded-[28px] border border-blue-100 bg-gradient-to-br from-[#073763] via-[#0b5c9a] to-[#1687c7] text-white shadow-2xl shadow-blue-950/10">
-          <div className="grid gap-6 p-6 lg:grid-cols-[1fr_330px] lg:p-8">
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/14 px-3 py-1 text-xs font-black ring-1 ring-white/20">
-                <Sparkles className="h-4 w-4" /> Nộp hồ sơ trực tuyến
+        <section className="mb-4 rounded-[24px] border border-blue-100 bg-gradient-to-br from-[#073763] via-[#0b5c9a] to-[#1687c7] p-4 text-white shadow-xl shadow-blue-950/10 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <span className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-black ring-1 ring-white/20">
+                <FileText className="h-4 w-4" /> Nộp hồ sơ trực tuyến
               </span>
-              <h1 className="mt-4 max-w-3xl text-3xl font-black leading-tight sm:text-4xl">{service.name}</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-white/82">{service.description || "Hoàn thiện thông tin, tải giấy tờ, xác nhận và thanh toán trên một quy trình thống nhất."}</p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <Meta icon={Clock3} label={service.processingTime || "Đang cập nhật"} />
-                <Meta icon={Banknote} label={`${currency.format(feeAmount)} VNĐ`} />
-                <Meta icon={Building2} label={service.categoryName || service.category || "Hành chính công"} />
+              <h1 className="text-2xl font-black leading-tight sm:text-3xl">{service.name}</h1>
+              <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold">
+                <MetaPill icon={Clock3} text={service.processingTime || "Theo quy định"} />
+                <MetaPill icon={Banknote} text={isFree ? "Miễn phí" : `${currency.format(feeAmount)}đ`} />
+                <MetaPill icon={ClipboardCheck} text={service.categoryName || service.category || "Dịch vụ công"} />
               </div>
             </div>
-            <div className="relative min-h-[190px] rounded-3xl bg-white/12 p-5 ring-1 ring-white/18 backdrop-blur">
-              <div className="absolute right-5 top-5 grid h-14 w-14 place-items-center rounded-2xl bg-white text-[#0b5c9a] shadow-lg">
-                <FileCheck2 className="h-7 w-7" />
-              </div>
-              <div className="pr-16">
-                <div className="text-sm font-black text-white/70">Trợ lý hồ sơ</div>
-                <div className="mt-2 text-2xl font-black">Kiểm tra trước khi gửi</div>
-                <p className="mt-3 text-sm leading-6 text-white/72">AI helper sẽ nhắc giấy tờ còn thiếu, file quá dung lượng và các thông tin nên bổ sung.</p>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowInfoModal(true)}
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-blue-800 shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5"
+            >
+              <Info className="h-4 w-4" /> Xem thông tin dịch vụ
+            </button>
           </div>
         </section>
 
-        <div className="sticky top-0 z-20 mb-5 rounded-3xl border border-[#e5edf5] bg-white/92 p-3 shadow-lg shadow-blue-950/5 backdrop-blur">
-          <div className="grid gap-2 sm:grid-cols-4">
-            {wizardSteps.map((item) => {
-              const Icon = item.icon;
-              const active = step === item.id;
-              const done = step > item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => item.id < step && setStep(item.id)}
-                  className={`flex min-h-14 items-center gap-3 rounded-2xl px-3 text-left transition ${active ? "bg-blue-700 text-white shadow-lg shadow-blue-900/15" : done ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-500"}`}
-                >
-                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${active ? "bg-white/16" : "bg-white"}`}>
-                    {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                  </span>
-                  <span>
-                    <span className="block text-xs font-black opacity-70">Bước {item.id}</span>
-                    <span className="block text-sm font-black">{item.title}</span>
-                  </span>
-                </button>
-              );
-            })}
+        <ProgressSteps step={step} />
+
+        {!user && <LoginGate navigate={navigate} />}
+
+        <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            <Card>
+              <StepHeader step={step} currentStep={currentStep} />
+              {step === 1 && (
+                <PersonalStep formData={formData} formErrors={formErrors} onChange={onChange} />
+              )}
+              {step === 2 && (
+                <FilesStep
+                  docs={docs}
+                  fileItems={fileItems}
+                  formErrors={formErrors}
+                  dragKey={dragKey}
+                  onFile={addFile}
+                  onRemove={removeFile}
+                  onDragState={setDragKey}
+                />
+              )}
+              {step === 3 && (
+                <ReviewStep service={service} formData={formData} docs={docs} fileItems={fileItems} feeAmount={feeAmount} isFree={isFree} />
+              )}
+              {step === 4 && (
+                <PaymentStep
+                  isFree={isFree}
+                  isPaid={isPaid}
+                  paymentInfo={paymentInfo}
+                  paymentStatus={paymentStatus}
+                  paymentExpireAt={paymentExpireAt}
+                  currentDossierId={currentDossierId}
+                  feeAmount={feeAmount}
+                  checkingPayment={checkingPayment}
+                  onCopy={copyTransferContent}
+                  onCheck={checkPaymentStatus}
+                  onDemoPaid={markDemoPaid}
+                />
+              )}
+            </Card>
+            <CompactFaq faq={faq} openFaq={openFaq} setOpenFaq={setOpenFaq} />
           </div>
-        </div>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-          <main className="space-y-5">
-            {!user ? <LoginGate navigate={navigate} /> : null}
-            {user && step === 1 ? (
-              <Card>
-                <SectionHeader icon={UserRound} title="Thông tin người nộp hồ sơ" subtitle="Thông tin này dùng để tiếp nhận, liên hệ và trả kết quả hồ sơ." />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Họ và tên" name="fullName" value={formData.fullName} onChange={onChange} error={formErrors.fullName} />
-                  <Field label="CCCD/CMND" name="citizenId" value={formData.citizenId} onChange={onChange} error={formErrors.citizenId} />
-                  <Field label="Email" name="email" value={formData.email} onChange={onChange} error={formErrors.email} />
-                  <Field label="Số điện thoại" name="phone" value={formData.phone} onChange={onChange} error={formErrors.phone} />
-                </div>
-                <div className="mt-6 border-t border-slate-100 pt-6">
-                  <SectionHeader icon={MapPin} title="Thông tin cư trú" subtitle="Nhập địa chỉ hiện tại hoặc nơi nhận kết quả theo yêu cầu dịch vụ." compact />
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <Field label="Tỉnh/Thành phố" name="province" value={formData.province} onChange={onChange} />
-                    <Field label="Quận/Huyện" name="district" value={formData.district} onChange={onChange} />
-                    <Field label="Phường/Xã" name="ward" value={formData.ward} onChange={onChange} />
-                    <Field label="Địa chỉ chi tiết" name="address" value={formData.address} onChange={onChange} error={formErrors.address} className="md:col-span-3" />
-                  </div>
-                </div>
-                <div className="mt-6 border-t border-slate-100 pt-6">
-                  <SectionHeader icon={MessageSquareText} title="Ghi chú bổ sung" subtitle="Mô tả ngắn yêu cầu xử lý hoặc thông tin cán bộ cần lưu ý." compact />
-                  <textarea
-                    name="note"
-                    value={formData.note}
-                    onChange={onChange}
-                    rows={5}
-                    className="mt-3 w-full rounded-2xl border border-[#dbe3ee] bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                    placeholder="Ví dụ: Tôi muốn nhận kết quả qua bưu chính..."
-                  />
-                </div>
-              </Card>
-            ) : null}
-
-            {user && step === 2 ? (
-              <Card>
-                <SectionHeader icon={UploadCloud} title="Giấy tờ đính kèm" subtitle="Kéo thả file hoặc bấm để chọn. Hỗ trợ ảnh, PDF, DOC/DOCX; khuyến nghị dưới 10MB/file." />
-                {formErrors.files ? <InlineAlert text={formErrors.files} /> : null}
-                <div className="grid gap-4">
-                  {docs.length ? docs.map((doc) => (
-                    <UploadZone
-                      key={doc.key}
-                      doc={doc}
-                      item={fileItems[doc.key]}
-                      error={formErrors[doc.key]}
-                      active={dragKey === doc.key}
-                      onFile={(file) => addFile(doc.key, file)}
-                      onRemove={() => removeFile(doc.key)}
-                      onDragState={setDragKey}
-                    />
-                  )) : <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-slate-500">Dịch vụ này chưa cấu hình danh sách giấy tờ.</div>}
-                </div>
-              </Card>
-            ) : null}
-
-            {user && step === 3 ? (
-              <Card>
-                <SectionHeader icon={ClipboardCheck} title="Xác nhận hồ sơ" subtitle="Kiểm tra lại thông tin trước khi nộp. Sau khi nộp, hệ thống sẽ tạo mã hồ sơ và chuyển sang thanh toán nếu có lệ phí." />
-                <ReviewBlock title="Thông tin cá nhân" rows={[
-                  ["Họ tên", formData.fullName],
-                  ["CCCD/CMND", formData.citizenId],
-                  ["Email", formData.email || "Chưa cung cấp"],
-                  ["Số điện thoại", formData.phone],
-                ]} />
-                <ReviewBlock title="Thông tin cư trú" rows={[
-                  ["Địa chỉ", [formData.address, formData.ward, formData.district, formData.province].filter(Boolean).join(", ") || "Chưa cung cấp"],
-                  ["Ghi chú", formData.note || "Không có"],
-                ]} />
-                <ReviewBlock title="Giấy tờ đính kèm" rows={docs.map((doc) => [doc.label, fileItems[doc.key]?.name || (doc.required ? "Chưa đính kèm" : "Không có")])} />
-                {submitting ? <InlineAlert tone="info" text="Đang tải file và nộp hồ sơ. Vui lòng không đóng trang." /> : null}
-              </Card>
-            ) : null}
-
-            {user && step === 4 ? (
-              <PaymentPanel
-                isFree={isFree}
-                isPaid={isPaid}
-                paymentInfo={paymentInfo}
-                paymentStatus={paymentStatus}
-                paymentExpireAt={paymentExpireAt}
-                currentDossierId={currentDossierId}
-                feeAmount={feeAmount}
-                checkingPayment={checkingPayment}
-                onCopy={copyTransferContent}
-                onCheck={checkPaymentStatus}
-                onDemoPaid={markDemoPaid}
-              />
-            ) : null}
-
-            <FAQ faq={faq} openFaq={openFaq} setOpenFaq={setOpenFaq} />
-          </main>
-
-          <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
-            <ServiceInfo service={service} feeAmount={feeAmount} docs={docs} />
-            <AiHelper tips={aiTips} />
-            <div className="rounded-[24px] border border-[#e5edf5] bg-white p-5 shadow-lg shadow-blue-950/5">
-              <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-50 text-blue-700"><Headphones className="h-5 w-5" /></div>
-                <div>
-                  <div className="font-black text-[#0f2f57]">Hỗ trợ trực tuyến</div>
-                  <div className="text-sm font-semibold text-slate-500">Hotline: 1900 1022</div>
-                </div>
-              </div>
-            </div>
+          <aside className="lg:sticky lg:top-5 lg:self-start">
+            <ServiceInfoCard service={service} feeAmount={feeAmount} />
           </aside>
         </div>
+      </main>
 
-      </div>
-      {user ? (
-        <div className="fixed bottom-3 left-1/2 z-50 w-[calc(100%-24px)] -translate-x-1/2 rounded-3xl border border-[#e5edf5] bg-white/96 p-3 shadow-2xl shadow-blue-950/15 backdrop-blur md:bottom-6 md:w-[calc(100%-64px)] md:max-w-[1200px]">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <div className="text-xs font-black uppercase tracking-wide text-slate-400">Trạng thái hồ sơ</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm font-black text-[#0f2f57]">
-                <span>Bước {step}/4: {wizardSteps.find((item) => item.id === step)?.title}</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">Nháp lưu trên trình duyệt</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 md:justify-end">
-              {step > 1 ? <button type="button" onClick={() => setStep((current) => Math.max(1, current - 1))} className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50">Quay lại</button> : null}
-              <button type="button" onClick={saveDraft} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-slate-100 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-200">
-                <Save className="h-4 w-4" /> Lưu nháp
-              </button>
-              {step < 3 ? <button type="button" onClick={handleNext} className="h-11 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-blue-800">Tiếp tục</button> : null}
-              {step === 3 ? <button type="button" onClick={submitApplication} disabled={submitting} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-70">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />} Nộp hồ sơ</button> : null}
-              {step === 4 && !isPaid && !isFree ? <button type="button" onClick={checkPaymentStatus} className="h-11 rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-700">Thanh toán ngay</button> : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ActionBar
+        step={step}
+        currentStep={currentStep}
+        submitting={submitting}
+        checkingPayment={checkingPayment}
+        onBack={() => setStep((current) => Math.max(1, current - 1))}
+        onSave={saveDraft}
+        onNext={handlePrimaryAction}
+      />
+
+      {showInfoModal && (
+        <InfoModal service={service} feeAmount={feeAmount} docs={docs} onClose={() => setShowInfoModal(false)} />
+      )}
     </div>
   );
 }
 
 function PageState({ text }) {
-  return <div className="min-h-screen bg-[#f4f8fd] p-6"><div className="mx-auto max-w-3xl rounded-3xl border border-[#e5edf5] bg-white p-8 font-bold text-slate-700 shadow-lg">{text}</div></div>;
+  return <div className="flex min-h-[60vh] items-center justify-center bg-[#f4f8fd] px-6 text-center text-lg font-black text-slate-700">{text}</div>;
 }
 
-function Meta({ icon: Icon, label }) {
-  return <span className="inline-flex items-center gap-2 rounded-full bg-white/14 px-3 py-2 text-xs font-black ring-1 ring-white/18"><Icon className="h-4 w-4" /> {label}</span>;
+function MetaPill({ icon: Icon, text }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-white/14 px-3 py-1.5 ring-1 ring-white/20">
+      <Icon className="h-4 w-4" /> {text}
+    </span>
+  );
+}
+
+function ProgressSteps({ step }) {
+  return (
+    <div className="rounded-[20px] border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {wizardSteps.map((item) => {
+          const Icon = item.icon;
+          const active = item.id === step;
+          const done = item.id < step;
+          return (
+            <div
+              key={item.id}
+              className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition ${
+                active ? "bg-blue-700 text-white shadow-lg shadow-blue-700/20" : done ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-500"
+              }`}
+            >
+              <span className={`grid h-8 w-8 place-items-center rounded-xl ${active ? "bg-white/18" : done ? "bg-emerald-100" : "bg-white"}`}>
+                {done ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+              </span>
+              <span className="truncate">{item.title}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function Card({ children }) {
-  return <section className="rounded-[28px] border border-[#e5edf5] bg-white p-5 shadow-xl shadow-blue-950/5 sm:p-6">{children}</section>;
+  return <section className="rounded-[24px] border border-[#e5edf5] bg-white p-4 shadow-sm sm:p-5">{children}</section>;
 }
 
-function SectionHeader({ icon: Icon, title, subtitle, compact = false }) {
+function StepHeader({ step, currentStep }) {
+  const Icon = currentStep.icon;
   return (
-    <div className={compact ? "mb-3" : "mb-5"}>
-      <div className="flex items-center gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-50 text-blue-700"><Icon className="h-5 w-5" /></span>
-        <div>
-          <h2 className="text-lg font-black text-[#0f2f57]">{title}</h2>
-          {subtitle ? <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">{subtitle}</p> : null}
+    <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <p className="text-xs font-black uppercase tracking-wide text-blue-600">Bước {step}/4</p>
+        <h2 className="text-xl font-black text-[#0f2f57]">{currentStep.title}</h2>
+      </div>
+    </div>
+  );
+}
+
+function PersonalStep({ formData, formErrors, onChange }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="mb-3 text-base font-black text-[#0f2f57]">Thông tin cá nhân</h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Họ và tên" name="fullName" value={formData.fullName} onChange={onChange} error={formErrors.fullName} />
+          <Field label="CCCD/CMND" name="citizenId" value={formData.citizenId} onChange={onChange} error={formErrors.citizenId} />
+          <Field label="Số điện thoại" name="phone" value={formData.phone} onChange={onChange} error={formErrors.phone} />
+          <Field label="Email" name="email" value={formData.email} onChange={onChange} error={formErrors.email} />
         </div>
+      </div>
+      <div>
+        <h3 className="mb-3 text-base font-black text-[#0f2f57]">Thông tin cư trú</h3>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Field label="Tỉnh/Thành phố" name="province" value={formData.province} onChange={onChange} />
+          <Field label="Quận/Huyện" name="district" value={formData.district} onChange={onChange} />
+          <Field label="Phường/Xã" name="ward" value={formData.ward} onChange={onChange} />
+        </div>
+        <Field className="mt-3" label="Địa chỉ thường trú" name="address" value={formData.address} onChange={onChange} error={formErrors.address} />
+      </div>
+      <div>
+        <label className="mb-2 block text-sm font-black text-[#0f2f57]">Ghi chú bổ sung</label>
+        <textarea
+          name="note"
+          value={formData.note}
+          onChange={onChange}
+          rows={3}
+          placeholder="Nhập nội dung cần cán bộ lưu ý, nếu có"
+          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        />
+      </div>
+    </div>
+  );
+}
+
+function FilesStep({ docs, fileItems, formErrors, dragKey, onFile, onRemove, onDragState }) {
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-500">Tải giấy tờ bắt buộc cho hồ sơ. Mỗi file tối đa 10MB.</p>
+        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">{docs.length} giấy tờ</span>
+      </div>
+      {formErrors.files && <InlineAlert text={formErrors.files} />}
+      <div className="grid gap-3">
+        {docs.map((doc) => (
+          <UploadCard
+            key={doc.key}
+            doc={doc}
+            item={fileItems[doc.key]}
+            error={formErrors[doc.key]}
+            active={dragKey === doc.key}
+            onFile={(file) => onFile(doc.key, file)}
+            onRemove={() => onRemove(doc.key)}
+            onDragState={(active) => onDragState(active ? doc.key : "")}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReviewStep({ service, formData, docs, fileItems, feeAmount, isFree }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <ReviewBox title="Người nộp hồ sơ" rows={[
+        ["Họ và tên", formData.fullName],
+        ["CCCD/CMND", formData.citizenId],
+        ["Số điện thoại", formData.phone],
+        ["Email", formData.email || "Chưa nhập"],
+        ["Địa chỉ", [formData.address, formData.ward, formData.district, formData.province].filter(Boolean).join(", ")],
+      ]} />
+      <ReviewBox title="Hồ sơ dịch vụ" rows={[
+        ["Dịch vụ", service.name],
+        ["Danh mục", service.categoryName || service.category || "Dịch vụ công"],
+        ["Giấy tờ", `${Object.keys(fileItems).length}/${docs.length} file`],
+        ["Lệ phí", isFree ? "Miễn phí" : `${currency.format(feeAmount)}đ`],
+      ]} />
+      {formData.note && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+          <p className="text-xs font-black uppercase text-slate-500">Ghi chú</p>
+          <p className="mt-1 text-sm font-semibold text-slate-700">{formData.note}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpireAt, currentDossierId, feeAmount, checkingPayment, onCopy, onCheck, onDemoPaid }) {
+  if (!currentDossierId) {
+    return <InlineAlert text="Bạn cần xác nhận hồ sơ trước khi thanh toán." />;
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      <div className="rounded-[20px] border border-blue-100 bg-blue-50 p-4">
+        <p className="text-xs font-black uppercase text-blue-700">Mã hồ sơ</p>
+        <p className="mt-1 break-all text-xl font-black text-[#0f2f57]">{currentDossierId}</p>
+        <div className="mt-4 rounded-2xl bg-white p-3">
+          <InfoRow label="Số tiền" value={isFree ? "Miễn phí" : `${currency.format(feeAmount)}đ`} />
+          <InfoRow label="Trạng thái" value={isPaid ? "Đã thanh toán" : paymentStatus || "Đang chờ"} />
+          {paymentExpireAt && <InfoRow label="Hạn thanh toán" value={new Date(paymentExpireAt).toLocaleString("vi-VN")} />}
+        </div>
+      </div>
+
+      <div className="rounded-[20px] border border-slate-200 bg-white p-4">
+        {isFree || isPaid ? (
+          <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-emerald-800">
+            <CheckCircle2 className="mt-0.5 h-5 w-5" />
+            <div>
+              <p className="font-black">{isFree ? "Dịch vụ miễn phí" : "Thanh toán đã xác nhận"}</p>
+              <p className="text-sm font-semibold">Hồ sơ đã được ghi nhận trên hệ thống.</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="text-lg font-black text-[#0f2f57]">Thanh toán trực tuyến</p>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Quét mã VietQR hoặc chuyển khoản đúng nội dung để hệ thống tự đối soát.</p>
+            {paymentInfo?.qrImageUrl && (
+              <img src={paymentInfo.qrImageUrl} alt="Mã QR thanh toán" className="mt-4 h-56 w-56 rounded-2xl border border-slate-200 object-contain p-2" />
+            )}
+            <div className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-3 text-sm font-semibold">
+              <InfoRow label="Ngân hàng" value={paymentInfo?.bankCode || paymentInfo?.bankName || "Theo cấu hình hệ thống"} />
+              <InfoRow label="Số tài khoản" value={paymentInfo?.bankAccount || paymentInfo?.accountNo || "Đang cập nhật"} />
+              <InfoRow label="Nội dung" value={paymentInfo?.transferContent || currentDossierId} />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={onCopy} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-700 hover:bg-slate-50">
+                <Copy className="h-4 w-4" /> Sao chép nội dung
+              </button>
+              <button type="button" onClick={onCheck} disabled={checkingPayment} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-blue-700 px-4 text-sm font-black text-white hover:bg-blue-800 disabled:opacity-60">
+                {checkingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Kiểm tra
+              </button>
+              {import.meta.env.DEV && (
+                <button type="button" onClick={onDemoPaid} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-black text-white">Demo đã trả</button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -591,194 +676,226 @@ function SectionHeader({ icon: Icon, title, subtitle, compact = false }) {
 function Field({ label, name, value, onChange, error, className = "" }) {
   return (
     <label className={`block ${className}`}>
-      <span className="text-sm font-black text-[#0f2f57]">{label}</span>
+      <span className="mb-2 block text-sm font-black text-[#0f2f57]">{label}</span>
       <input
         name={name}
         value={value}
         onChange={onChange}
-        className={`mt-2 h-13 min-h-13 w-full rounded-2xl border bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 ${error ? "border-rose-300" : "border-[#dbe3ee]"}`}
+        className={`h-12 w-full rounded-2xl border bg-white px-4 text-sm font-semibold outline-none transition focus:ring-4 ${
+          error ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
+        }`}
       />
-      {error ? <span className="mt-1 block text-xs font-bold text-rose-600">{error}</span> : null}
+      {error && <span className="mt-1 flex items-center gap-1 text-xs font-bold text-rose-600"><AlertCircle className="h-3.5 w-3.5" /> {error}</span>}
     </label>
   );
 }
 
-function UploadZone({ doc, item, error, active, onFile, onRemove, onDragState }) {
+function UploadCard({ doc, item, error, active, onFile, onRemove, onDragState }) {
   return (
-    <div
-      onDragOver={(event) => { event.preventDefault(); onDragState(doc.key); }}
-      onDragLeave={() => onDragState("")}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDragState("");
-        onFile(event.dataTransfer.files?.[0]);
-      }}
-      className={`rounded-3xl border-2 border-dashed p-4 transition ${active ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/45"}`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-blue-700 shadow-sm"><UploadCloud className="h-5 w-5" /></div>
-          <div>
-            <div className="font-black text-[#0f2f57]">{doc.label}</div>
-            <div className="mt-1 text-sm font-semibold text-slate-500">{doc.required ? "Bắt buộc" : "Tùy chọn"} · Kéo thả hoặc chọn file</div>
-          </div>
-        </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-black ${doc.required ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"}`}>{doc.required ? "Bắt buộc" : "Tùy chọn"}</span>
-      </div>
-      <label className="mt-4 inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl bg-white px-4 text-sm font-black text-blue-700 shadow-sm ring-1 ring-blue-100 transition hover:-translate-y-0.5">
-        Chọn file
-        <input type="file" className="hidden" onChange={(event) => onFile(event.target.files?.[0])} />
-      </label>
-      {item ? (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-black text-slate-800">{item.name}</div>
-              <div className="mt-1 text-xs font-semibold text-slate-500">{formatSize(item.size)} · {item.uploadStatus === "error" ? "File lỗi" : item.uploadStatus === "uploading" ? "Đang tải lên" : item.uploadStatus === "done" ? "Đã tải lên" : "Sẵn sàng"}</div>
+    <div className={`rounded-2xl border p-3 transition ${active ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-200 hover:shadow-sm"}`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label
+          onDragOver={(event) => {
+            event.preventDefault();
+            onDragState(true);
+          }}
+          onDragLeave={() => onDragState(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            onDragState(false);
+            onFile(event.dataTransfer.files?.[0]);
+          }}
+          className="flex min-h-[76px] flex-1 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 transition hover:border-blue-400 hover:bg-blue-50"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-blue-700 shadow-sm">
+            <UploadCloud className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-black text-[#0f2f57]">
+              {doc.label} {doc.required && <b className="text-rose-500">*</b>}
+            </span>
+            <span className="block truncate text-xs font-semibold text-slate-500">{item ? item.name : "Kéo thả hoặc bấm để chọn file"}</span>
+          </span>
+          <input type="file" className="hidden" onChange={(event) => onFile(event.target.files?.[0])} />
+        </label>
+
+        {item && (
+          <div className="flex items-center gap-3 sm:w-[240px]">
+            {item.previewUrl ? (
+              <img src={item.previewUrl} alt={item.name} className="h-14 w-14 rounded-xl object-cover" />
+            ) : (
+              <div className="grid h-14 w-14 place-items-center rounded-xl bg-blue-50 text-blue-700">
+                <FileText className="h-5 w-5" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-black text-slate-700">{formatSize(item.size)}</p>
+              <div className="mt-2 h-1.5 rounded-full bg-slate-100">
+                <div className={`h-1.5 rounded-full ${item.uploadStatus === "error" ? "bg-rose-500" : "bg-blue-600"}`} style={{ width: `${item.progress || 0}%` }} />
+              </div>
             </div>
-            <button type="button" onClick={onRemove} className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-100">Xóa</button>
+            <button type="button" onClick={onRemove} className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 hover:bg-rose-50 hover:text-rose-600">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-            <div className={`h-full rounded-full ${item.uploadStatus === "error" ? "bg-rose-500" : "bg-blue-600"}`} style={{ width: `${item.progress || 0}%` }} />
-          </div>
-          {item.previewUrl ? <img src={item.previewUrl} alt="preview" className="mt-3 max-h-44 rounded-2xl border border-slate-200 object-cover" /> : null}
+        )}
+      </div>
+      {error && <p className="mt-2 text-xs font-bold text-rose-600">{error}</p>}
+    </div>
+  );
+}
+
+function ReviewBox({ title, rows }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <h3 className="mb-3 font-black text-[#0f2f57]">{title}</h3>
+      <div className="space-y-2">
+        {rows.map(([label, value]) => <InfoRow key={label} label={label} value={value || "Chưa nhập"} />)}
+      </div>
+    </div>
+  );
+}
+
+function ServiceInfoCard({ service, feeAmount }) {
+  return (
+    <div className="rounded-[24px] border border-[#e5edf5] bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-black text-[#0f2f57]">Thông tin dịch vụ</h3>
+      <div className="mt-4 space-y-3">
+        <InfoLine icon={Clock3} label="Thời gian xử lý" value={service.processingTime || "Theo quy định"} />
+        <InfoLine icon={Banknote} label="Lệ phí" value={feeAmount > 0 ? `${currency.format(feeAmount)}đ` : "Miễn phí"} />
+        <InfoLine icon={Building2} label="Cơ quan xử lý" value={service.agency || service.department || "Bộ phận một cửa"} />
+        <InfoLine icon={MapPin} label="Hotline hỗ trợ" value={service.hotline || "1900 0000"} />
+      </div>
+    </div>
+  );
+}
+
+function InfoLine({ icon: Icon, label, value }) {
+  return (
+    <div className="flex gap-3 rounded-2xl bg-slate-50 p-3">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs font-black uppercase text-slate-400">{label}</p>
+        <p className="break-words text-sm font-black text-slate-800">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-sm">
+      <span className="font-semibold text-slate-500">{label}</span>
+      <span className="text-right font-black text-slate-800">{value}</span>
+    </div>
+  );
+}
+
+function CompactFaq({ faq, openFaq, setOpenFaq }) {
+  return (
+    <div className="rounded-[20px] border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpenFaq(openFaq === "list" ? null : "list")}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-black text-[#0f2f57]"
+      >
+        Câu hỏi thường gặp
+        <ChevronDown className={`h-4 w-4 transition ${openFaq === "list" ? "rotate-180" : ""}`} />
+      </button>
+      {openFaq === "list" && (
+        <div className="border-t border-slate-100 p-3">
+          {faq.map((item, index) => (
+            <details key={item.q || index} className="group rounded-2xl px-3 py-2 open:bg-slate-50">
+              <summary className="cursor-pointer text-sm font-black text-slate-700">{item.q}</summary>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{item.a}</p>
+            </details>
+          ))}
         </div>
-      ) : null}
-      {error ? <div className="mt-2 text-xs font-bold text-rose-600">{error}</div> : null}
+      )}
+    </div>
+  );
+}
+
+function LoginGate({ navigate }) {
+  return (
+    <div className="mb-4 flex flex-col gap-3 rounded-[20px] border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex gap-3">
+        <LogIn className="mt-0.5 h-5 w-5 shrink-0" />
+        <div>
+          <p className="font-black">Bạn cần đăng nhập để nộp hồ sơ</p>
+          <p className="text-sm font-semibold">Bạn vẫn có thể xem thông tin dịch vụ, nhưng cần tài khoản để gửi hồ sơ.</p>
+        </div>
+      </div>
+      <button type="button" onClick={() => navigate("/auth")} className="h-11 rounded-2xl bg-amber-600 px-4 text-sm font-black text-white">
+        Đăng nhập
+      </button>
+    </div>
+  );
+}
+
+function ActionBar({ step, currentStep, submitting, checkingPayment, onBack, onSave, onNext }) {
+  return (
+    <div className="fixed bottom-3 left-1/2 z-50 w-[calc(100%-24px)] -translate-x-1/2 rounded-[22px] border border-slate-200 bg-white/95 p-2 shadow-2xl shadow-slate-900/15 backdrop-blur md:bottom-6 md:w-[calc(100%-64px)] md:max-w-[1200px]">
+      <div className="flex min-h-[56px] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="px-2">
+          <p className="text-xs font-black uppercase text-slate-400">Trạng thái</p>
+          <p className="text-sm font-black text-[#0f2f57]">Bước {step}/4 - {currentStep.title}</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+          <button type="button" onClick={onBack} disabled={step === 1 || submitting} className="h-11 rounded-2xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+            Quay lại
+          </button>
+          <button type="button" onClick={onSave} disabled={submitting} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:opacity-50">
+            <Save className="h-4 w-4" /> Lưu nháp
+          </button>
+          <button type="button" onClick={onNext} disabled={submitting || checkingPayment} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#073763] to-[#1167ad] px-4 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
+            {submitting || checkingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Tiếp tục
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoModal({ service, feeAmount, docs, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-[28px] bg-white p-5 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase text-blue-600">Thông tin dịch vụ</p>
+            <h2 className="text-2xl font-black text-[#0f2f57]">{service.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {service.description && <p className="mb-4 text-sm font-semibold leading-6 text-slate-600">{service.description}</p>}
+        <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+          <ServiceInfoCard service={service} feeAmount={feeAmount} />
+          <div className="rounded-[24px] border border-[#e5edf5] bg-slate-50 p-5">
+            <p className="text-sm font-black text-[#0f2f57]">Giấy tờ cần chuẩn bị</p>
+            <p className="mt-2 text-3xl font-black text-blue-700">{docs.length}</p>
+            <p className="text-sm font-semibold text-slate-500">tài liệu trong hồ sơ</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InlineAlert({ text }) {
+  return (
+    <div className="mb-3 flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+      <AlertCircle className="h-4 w-4" /> {text}
     </div>
   );
 }
 
 function formatSize(size = 0) {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function LoginGate({ navigate }) {
-  return (
-    <Card>
-      <SectionHeader icon={LogIn} title="Đăng nhập để nộp hồ sơ" subtitle="Bạn vẫn có thể xem thông tin dịch vụ. Đăng nhập để tải giấy tờ, nộp hồ sơ và thanh toán." />
-      <button type="button" onClick={() => navigate("/auth")} className="h-12 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-lg shadow-blue-900/15 transition hover:-translate-y-0.5 hover:bg-blue-800">Đăng nhập / Đăng ký</button>
-    </Card>
-  );
-}
-
-function ReviewBlock({ title, rows }) {
-  return (
-    <div className="mb-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-      <div className="mb-3 text-sm font-black uppercase tracking-wide text-slate-500">{title}</div>
-      <div className="grid gap-2">
-        {rows.map(([label, value]) => (
-          <div key={label} className="grid gap-1 rounded-2xl bg-white px-4 py-3 text-sm sm:grid-cols-[180px_1fr]">
-            <span className="font-bold text-slate-500">{label}</span>
-            <span className="font-black text-[#0f2f57]">{value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PaymentPanel({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpireAt, currentDossierId, feeAmount, checkingPayment, onCopy, onCheck, onDemoPaid }) {
-  return (
-    <Card>
-      <SectionHeader icon={CreditCard} title={isFree ? "Hồ sơ không phát sinh lệ phí" : "Thanh toán lệ phí"} subtitle="Thanh toán qua VietQR/SePay và kiểm tra trạng thái tự động." />
-      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-        <InfoRow label="Mã hồ sơ" value={currentDossierId || "Đang tạo"} />
-        <InfoRow label="Số tiền" value={`${currency.format(paymentInfo?.amount || feeAmount || 0)} VNĐ`} />
-        <InfoRow label="Trạng thái" value={isPaid ? "Thanh toán thành công" : paymentStatus || "PENDING"} />
-        {!isFree ? (
-          <>
-            <InfoRow label="Tài khoản" value={paymentInfo?.bankAccount || "Đang cập nhật"} />
-            <InfoRow label="Chủ tài khoản" value={paymentInfo?.bankAccountName || "Đang cập nhật"} />
-            <InfoRow label="Nội dung CK" value={paymentInfo?.transferContent || "Chưa có"} />
-          </>
-        ) : null}
-      </div>
-      {paymentInfo?.qrUrl ? <img src={paymentInfo.qrUrl} alt="payment qr" className="mx-auto mt-5 w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-2" /> : null}
-      {paymentExpireAt ? <div className="mt-3 text-center text-xs font-bold text-slate-500">Hết hạn: {new Date(paymentExpireAt).toLocaleString("vi-VN")}</div> : null}
-      <div className="mt-5 flex flex-wrap gap-3">
-        {!isFree ? <button type="button" onClick={onCopy} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-slate-100 px-4 text-sm font-black text-slate-700 hover:bg-slate-200"><Copy className="h-4 w-4" /> Sao chép nội dung</button> : null}
-        {!isFree ? <button type="button" onClick={onCheck} disabled={checkingPayment} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-700 px-4 text-sm font-black text-white hover:bg-blue-800 disabled:opacity-70"><RefreshCw className="h-4 w-4" /> {checkingPayment ? "Đang kiểm tra" : "Kiểm tra thanh toán"}</button> : null}
-        {!isFree ? <button type="button" onClick={onDemoPaid} disabled={isPaid} className="h-12 rounded-2xl bg-slate-900 px-4 text-sm font-black text-white disabled:opacity-60">Đánh dấu đã thanh toán demo</button> : null}
-        <Link to="/my-applications" className="inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-4 text-sm font-black text-white hover:bg-emerald-700">Xem hồ sơ đã nộp</Link>
-      </div>
-    </Card>
-  );
-}
-
-function InfoRow({ label, value }) {
-  return <div className="flex flex-wrap justify-between gap-3 border-b border-slate-200 py-3 last:border-b-0"><span className="text-sm font-bold text-slate-500">{label}</span><strong className="text-right text-sm text-[#0f2f57]">{value}</strong></div>;
-}
-
-function FAQ({ faq, openFaq, setOpenFaq }) {
-  return (
-    <Card>
-      <SectionHeader icon={Info} title="Câu hỏi thường gặp" subtitle="Các nội dung hay gặp khi chuẩn bị và nộp hồ sơ trực tuyến." />
-      <div className="space-y-3">
-        {faq.map((item, index) => {
-          const open = openFaq === index;
-          return (
-            <button key={item.q} type="button" onClick={() => setOpenFaq(open ? -1 : index)} className="w-full rounded-3xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-black text-[#0f2f57]">{item.q}</span>
-                <ChevronDown className={`h-5 w-5 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
-              </div>
-              <div className={`grid transition-all duration-300 ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                <div className="overflow-hidden">
-                  <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">{item.a}</p>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-function ServiceInfo({ service, feeAmount, docs }) {
-  return (
-    <div className="rounded-[28px] border border-[#e5edf5] bg-white p-5 shadow-xl shadow-blue-950/5">
-      <SectionHeader icon={FileText} title="Thông tin dịch vụ" compact />
-      <div className="space-y-3">
-        <InfoRow label="Thời gian xử lý" value={service.processingTime || "Đang cập nhật"} />
-        <InfoRow label="Lệ phí" value={`${currency.format(feeAmount)} VNĐ`} />
-        <InfoRow label="Cơ quan xử lý" value={service.agency || service.department || "Bộ phận một cửa"} />
-        <InfoRow label="Số giấy tờ" value={`${docs.length} mục`} />
-        <InfoRow label="Hotline" value="1900 1022" />
-      </div>
-    </div>
-  );
-}
-
-function AiHelper({ tips }) {
-  return (
-    <div className="rounded-[28px] border border-blue-100 bg-gradient-to-br from-blue-50 to-cyan-50 p-5 shadow-xl shadow-blue-950/5">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-700 text-white"><Bot className="h-5 w-5" /></div>
-        <div>
-          <div className="font-black text-[#0f2f57]">AI hỗ trợ hồ sơ</div>
-          <div className="text-sm font-semibold text-slate-500">Gợi ý theo dữ liệu đang nhập</div>
-        </div>
-      </div>
-      <div className="space-y-2">
-        {tips.map((tip) => (
-          <div key={tip} className="flex gap-2 rounded-2xl bg-white/75 p-3 text-sm font-bold leading-6 text-slate-700 ring-1 ring-blue-100">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
-            <span>{tip}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function InlineAlert({ text, tone = "warn" }) {
-  return (
-    <div className={`mb-4 flex gap-3 rounded-2xl px-4 py-3 text-sm font-bold ${tone === "info" ? "bg-blue-50 text-blue-800 ring-1 ring-blue-100" : "bg-amber-50 text-amber-800 ring-1 ring-amber-100"}`}>
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{text}</span>
-    </div>
-  );
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
