@@ -24,6 +24,81 @@ function gmailAuth() {
   return { user, pass };
 }
 
+function optionalEnv(name) {
+  loadEnv();
+  return String(process.env[name] || "").trim();
+}
+
+function mailFrom() {
+  return optionalEnv("EMAIL_FROM") || optionalEnv("EMAIL_USER");
+}
+
+async function postJson(url, { headers = {}, body }) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    const err = new Error(`HTTP mail provider failed: ${response.status} ${text}`);
+    err.code = "HTTP_MAIL_FAILED";
+    err.responseCode = response.status;
+    err.response = text;
+    throw err;
+  }
+}
+
+async function sendViaHttpProvider({ to, subject, html, text }) {
+  const from = mailFrom();
+  const toNorm = String(to).trim();
+  const resendKey = optionalEnv("RESEND_API_KEY");
+  if (resendKey) {
+    await postJson("https://api.resend.com/emails", {
+      headers: { Authorization: `Bearer ${resendKey}` },
+      body: { from, to: [toNorm], subject, html, text }
+    });
+    return "resend";
+  }
+
+  const brevoKey = optionalEnv("BREVO_API_KEY");
+  if (brevoKey) {
+    await postJson("https://api.brevo.com/v3/smtp/email", {
+      headers: { "api-key": brevoKey },
+      body: {
+        sender: { email: from },
+        to: [{ email: toNorm }],
+        subject,
+        htmlContent: html,
+        textContent: text
+      }
+    });
+    return "brevo";
+  }
+
+  const sendGridKey = optionalEnv("SENDGRID_API_KEY");
+  if (sendGridKey) {
+    await postJson("https://api.sendgrid.com/v3/mail/send", {
+      headers: { Authorization: `Bearer ${sendGridKey}` },
+      body: {
+        personalizations: [{ to: [{ email: toNorm }] }],
+        from: { email: from },
+        subject,
+        content: [
+          { type: "text/plain", value: text || "" },
+          { type: "text/html", value: html || "" }
+        ]
+      }
+    });
+    return "sendgrid";
+  }
+
+  return "";
+}
+
 async function resolveSmtpHost() {
   try {
     const addresses = await dnsPromises.resolve4("smtp.gmail.com");
@@ -106,6 +181,12 @@ function serializeSmtpError(err) {
 }
 
 async function sendMail({ to, subject, html, text }) {
+  const httpProvider = await sendViaHttpProvider({ to, subject, html, text });
+  if (httpProvider) {
+    console.log(`[mailer] Sent via ${httpProvider}`);
+    return;
+  }
+
   const { user } = gmailAuth();
   const from = user;
   const toNorm = String(to).trim();

@@ -1288,8 +1288,7 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-// Final production override: Railway may block outbound SMTP. Keep OTP flow usable by
-// returning a temporary OTP when email delivery times out.
+// Final production override: email must exist, then send OTP to that email.
 exports.forgotPassword = async (req, res) => {
   try {
     const emailNorm = String(req.body?.email || "").trim().toLowerCase();
@@ -1319,13 +1318,8 @@ exports.forgotPassword = async (req, res) => {
       });
     } catch (mailErr) {
       console.error("FORGOT PASSWORD OTP MAIL FAILED", mailErr?.message, mailErr);
-      setOtp(emailNorm, otp, 5 * 60_000);
-      return res.status(202).json({
-        message: "SMTP đang bị chặn trên server deploy. Hệ thống đã tạo OTP tạm thời để đặt lại mật khẩu.",
-        email: emailNorm,
-        otp,
-        mailSent: false,
-        expiresInMinutes: 5,
+      return res.status(500).json({
+        message: "Không gửi được OTP về email. Vui lòng kiểm tra cấu hình dịch vụ gửi mail.",
         smtp: serializeSmtpError(mailErr)
       });
     }

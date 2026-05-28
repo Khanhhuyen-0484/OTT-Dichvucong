@@ -227,9 +227,8 @@ export default function Auth() {
     setResetLink("");
     try {
       const emailNorm = email.trim().toLowerCase();
-      const res = await forgotPassword(emailNorm);
-      const otpQuery = res?.data?.otp ? `&otp=${encodeURIComponent(res.data.otp)}` : "";
-      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}${otpQuery}`, { replace: true });
+      await forgotPassword(emailNorm);
+      navigate(`/reset-password?email=${encodeURIComponent(emailNorm)}`, { replace: true });
     } catch (error) {
       showMessage(getApiErrorMessage(error));
     } finally {
