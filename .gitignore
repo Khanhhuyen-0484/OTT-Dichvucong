@@ -3,6 +3,7 @@ fontend/node_modules/
 backend/.env
 backend/src/config/ngrok.yml
 fontend/dist/
+fontend/.vercel/
 .vscode/
 npm-debug.log*
 yarn-debug.log*
