@@ -22,6 +22,7 @@ export async function login(payload) { return api.post("/auth/login", payload); 
 export async function register(payload) { return api.post("/auth/register", payload); }
 export async function sendOtp(email) { return api.post("/auth/send-otp", { email }); }
 export async function forgotPassword(email) { return api.post("/auth/forgot-password", { email }); }
+export async function resetPassword(payload) { return api.post("/auth/reset-password", payload); }
 export async function getServices(params = {}) { return api.get("/services", { params }); }
 export async function getServiceById(id) { return api.get(`/services/${id}`); }
 export async function submitServiceApplication(payload) { return api.post("/services/submit", payload); }

@@ -33,7 +33,7 @@ function countPasswordFactors(value) {
 function getPasswordStrength(value) {
   if (!value) return null;
 
-  if (value.length < 6 || isOnlyLowercaseAndNumbers(value)) {
+  if (value.length < 8 || isOnlyLowercaseAndNumbers(value)) {
     return "weak";
   }
 
@@ -47,7 +47,7 @@ function getPasswordStrength(value) {
     return "strong";
   }
 
-  if (value.length >= 6 && countPasswordFactors(value) >= 2) {
+  if (value.length >= 8 && countPasswordFactors(value) >= 2) {
     return "medium";
   }
 
@@ -56,16 +56,16 @@ function getPasswordStrength(value) {
 
 function validateRegisterPassword(value) {
   if (!value || typeof value !== "string") {
-    return { ok: false, message: "Mật khẩu phải có ít nhất 6 kí tự" };
+    return { ok: false, message: "Mật khẩu phải có ít nhất 8 ký tự" };
   }
-  if (value.length < 6) {
-    return { ok: false, message: "Mật khẩu phải có ít nhất 6 kí tự" };
+  if (value.length < 8) {
+    return { ok: false, message: "Mật khẩu phải có ít nhất 8 ký tự" };
   }
-  if (getPasswordStrength(value) === "weak") {
+  if (getPasswordStrength(value) !== "strong") {
     return {
       ok: false,
       message:
-        "Mật khẩu quá yếu. Cần kết hợp ít nhất 2 loại: chữ hoa, chữ thường, số, ký tự đặc biệt."
+        "Mật khẩu phải đủ các điều kiện: chữ hoa, chữ thường, chữ số và ký tự đặc biệt."
     };
   }
   return { ok: true };

@@ -448,6 +448,53 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
+exports.resetPassword = async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (!token) {
+      return res.status(400).json({ message: "Link đặt lại mật khẩu không hợp lệ" });
+    }
+
+    const passwordCheck = validateRegisterPassword(password);
+    if (!passwordCheck.ok) {
+      return res.status(400).json({ message: passwordCheck.message });
+    }
+
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({ message: "Server configuration error" });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(token, jwtSecret);
+    } catch {
+      return res.status(400).json({ message: "Link đặt lại mật khẩu đã hết hạn hoặc không hợp lệ" });
+    }
+
+    if (payload?.type !== "password_reset" || !payload?.sub) {
+      return res.status(400).json({ message: "Link đặt lại mật khẩu không hợp lệ" });
+    }
+
+    const user = await findById(String(payload.sub));
+    if (!user) {
+      return res.status(404).json({ message: "Tài khoản không tồn tại" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const updated = await updatePasswordHashById(user.id, passwordHash);
+    if (!updated) {
+      return res.status(500).json({ message: "Không thể cập nhật mật khẩu" });
+    }
+
+    return res.json({ message: "Đặt lại mật khẩu thành công" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi đặt lại mật khẩu" });
+  }
+};
+
 /** Upload avatar trực tiếp từ backend lên S3 (không có CORS issues). */
 exports.uploadAvatar = async (req, res) => {
   if (!isS3Configured()) {
@@ -526,14 +573,15 @@ exports.uploadAvatar = async (req, res) => {
 /** Xóa tài khoản */
 exports.deleteMe = async (req, res) => {
   try {
-    const success = await deleteUserById(req.user.id);
+    const { deleteUserById: removeUserById } = require("../store/userStore");
+    const success = await removeUserById(req.user.id);
     if (!success) {
       return res.status(404).json({ message: "Tài khoản không tìm thấy" });
     }
-    res.json({ message: "Tài khoản đã được xóa thành công" });
+    return res.json({ message: "Tài khoản đã được xóa thành công" });
   } catch (err) {
     console.error("deleteMe", err);
-    res.status(500).json({ message: err.message || "Không thể xóa tài khoản" });
+    return res.status(500).json({ message: err.message || "Không thể xóa tài khoản" });
   }
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -641,10 +689,9 @@ exports.register = async (req, res) => {
     if (!email || typeof email !== "string") {
       return res.status(400).json({ message: "Email không hợp lệ" });
     }
-    if (!password || typeof password !== "string" || password.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Mật khẩu phải có ít nhất 6 ký tự" });
+    const passwordCheck = validateRegisterPassword(password);
+    if (!passwordCheck.ok) {
+      return res.status(400).json({ message: passwordCheck.message });
     }
     if (!otp || typeof otp !== "string") {
       return res.status(400).json({ message: "OTP không hợp lệ" });
