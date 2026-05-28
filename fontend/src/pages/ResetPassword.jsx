@@ -13,8 +13,9 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import GovHeader from "../components/GovHeader.jsx";
+import RegisterPasswordField from "../components/RegisterPasswordField.jsx";
 import { getApiErrorMessage, resetPassword } from "../lib/api.js";
-import { getPasswordRequirementItems, getRegisterPasswordError } from "../lib/passwordStrength.js";
+import { getRegisterPasswordError } from "../lib/passwordStrength.js";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -22,7 +23,6 @@ export default function ResetPassword() {
   const token = useMemo(() => searchParams.get("token") || "", [searchParams]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
@@ -131,14 +131,13 @@ export default function ResetPassword() {
                 </button>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <PasswordField
+                  <RegisterPasswordField
                     label="Mật khẩu mới"
                     value={password}
-                    onChange={setPassword}
-                    visible={showPassword}
-                    setVisible={setShowPassword}
+                    onChange={(event) => setPassword(event.target.value)}
+                    error={getRegisterPasswordError(password)}
+                    required
                   />
-                  <PasswordChecklist value={password} />
                   <PasswordField
                     label="Nhập lại mật khẩu mới"
                     value={confirmPassword}
@@ -201,19 +200,3 @@ function PasswordField({ label, value, onChange, visible, setVisible }) {
   );
 }
 
-function PasswordChecklist({ value }) {
-  const items = getPasswordRequirementItems(value);
-  return (
-    <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-[#e5edf5]">
-      <div className="mb-2 text-xs font-black uppercase text-slate-500">Điều kiện mật khẩu</div>
-      <div className="grid gap-2">
-        {items.map((item) => (
-          <div key={item.id} className={`flex items-center gap-2 text-sm font-semibold ${item.met ? "text-emerald-700" : "text-slate-500"}`}>
-            <CheckCircle2 className={`h-4 w-4 ${item.met ? "text-emerald-600" : "text-slate-300"}`} />
-            {item.label}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

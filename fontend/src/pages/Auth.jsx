@@ -19,6 +19,7 @@ import {
   User,
 } from "lucide-react";
 import GovHeader from "../components/GovHeader.jsx";
+import RegisterPasswordField from "../components/RegisterPasswordField.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { forgotPassword, getApiErrorMessage, login, register, sendOtp } from "../lib/api.js";
 import { getRegisterPasswordError } from "../lib/passwordStrength.js";
@@ -243,7 +244,13 @@ export default function Auth() {
                       Gửi OTP
                     </button>
                   </div>
-                  <PasswordField icon={LockKeyhole} label="Mật khẩu" value={password} onChange={setPassword} visible={showPassword} setVisible={setShowPassword} autoComplete="new-password" />
+                  <RegisterPasswordField
+                    label="Mật khẩu"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    error={getRegisterPasswordError(password)}
+                    required
+                  />
                   <PasswordField icon={LockKeyhole} label="Nhập lại mật khẩu" value={confirmPassword} onChange={setConfirmPassword} visible={showConfirmPassword} setVisible={setShowConfirmPassword} autoComplete="new-password" />
                   <label className="flex items-start gap-3 rounded-2xl bg-slate-50 p-3 text-sm font-semibold leading-6 text-slate-600 ring-1 ring-[#e5edf5]">
                     <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-4 w-4 rounded border-slate-300 text-[#003366]" />

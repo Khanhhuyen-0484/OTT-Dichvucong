@@ -39,6 +39,23 @@ function normalizePublicUser(u) {
   };
 }
 
+function isDeleteBlockingApplication(application) {
+  const status = String(application?.status || "").trim().toUpperCase();
+  const finalStatuses = new Set([
+    "COMPLETED",
+    "REJECTED",
+    "APPROVED",
+    "CANCELLED",
+    "CANCELED",
+    "ĐÃ HOÀN THÀNH",
+    "ĐÃ PHÊ DUYỆT",
+    "ĐÃ TỪ CHỐI",
+    "ĐÃ HỦY"
+  ]);
+
+  return status ? !finalStatuses.has(status) : true;
+}
+
 // gửi OTP
 exports.sendOtp = async (req, res) => {
   const { email } = req.body;
@@ -573,7 +590,31 @@ exports.uploadAvatar = async (req, res) => {
 /** Xóa tài khoản */
 exports.deleteMe = async (req, res) => {
   try {
-    const { deleteUserById: removeUserById } = require("../store/userStore");
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Vui lòng đăng nhập lại để xóa tài khoản" });
+    }
+
+    const {
+      findById: getUserById,
+      deleteUserById: removeUserById
+    } = require("../store/userStore");
+    const { findByUserId: getApplicationsByUserId } = require("../store/serviceApplicationStore");
+
+    const user = await getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Tài khoản không tìm thấy" });
+    }
+
+    const applications = await getApplicationsByUserId(req.user.id);
+    const hasProcessingApplication = applications.some(isDeleteBlockingApplication);
+    if (hasProcessingApplication) {
+      return res.status(409).json({
+        blocked: true,
+        code: "ACCOUNT_HAS_PROCESSING_APPLICATION",
+        message: "Tài khoản còn hồ sơ đang xử lý"
+      });
+    }
+
     const success = await removeUserById(req.user.id);
     if (!success) {
       return res.status(404).json({ message: "Tài khoản không tìm thấy" });

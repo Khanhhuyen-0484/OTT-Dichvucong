@@ -7,6 +7,7 @@ import React, {
   useState
 } from "react";
 import {
+  deleteMe,
   getMe,
   patchProfile
 } from "../lib/api.js";
@@ -167,22 +168,11 @@ export function AuthProvider({ children }) {
   const deleteAccount = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      throw new Error("Kh�ng t?m th?y token");
+      throw new Error("Không tìm thấy token");
     }
-    const response = await fetch("/api/me", {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
-    if (!response.ok) {
-      const msg = await response.text();
-      throw new Error(msg || "Kh�ng th?f x?a t�i kho?n");
-    }
-    // Logout sau khi x?a th�nh c�ng
-    logout();
-  }, [logout]);
+    const { data } = await deleteMe();
+    return data;
+  }, []);
 
   const uploadAvatarFile = useCallback(
     async (file) => {
