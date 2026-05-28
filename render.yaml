@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: ott-dichvucong-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_BASE_URL
+        value: https://YOUR_FRONTEND_DOMAIN
+      - key: BACKEND_URL
+        value: https://ott-dichvucong-backend.onrender.com
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: BANK_CODE
+        sync: false
+      - key: BANK_ACCOUNT
+        sync: false
+      - key: BANK_ACCOUNT_NAME
+        sync: false
+      - key: SEPAY_WEBHOOK_SECRET
+        sync: false
