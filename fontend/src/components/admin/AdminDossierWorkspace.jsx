@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -6,6 +6,10 @@ import {
   CalendarClock,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   ClipboardCheck,
   ClipboardList,
   Clock3,
@@ -31,13 +35,22 @@ import {
 
 const STATUS_META = {
   PENDING: { label: "Chờ tiếp nhận", tone: "bg-slate-100 text-slate-700 ring-slate-200", dot: "bg-slate-400", icon: Clock3 },
-  PROCESSING: { label: "Đang xử lý", tone: "bg-blue-100 text-blue-700 ring-blue-200", dot: "bg-blue-500", icon: Play },
+  PROCESSING: { label: "Đang xử lý", tone: "bg-sky-100 text-sky-700 ring-sky-200", dot: "bg-sky-500", icon: Play },
   NEED_MORE: { label: "Cần bổ sung", tone: "bg-orange-100 text-orange-700 ring-orange-200", dot: "bg-orange-500", icon: AlertTriangle },
-  SUPPLEMENTED: { label: "Đã bổ sung", tone: "bg-indigo-100 text-indigo-700 ring-indigo-200", dot: "bg-indigo-500", icon: FileText },
+  SUPPLEMENTED: { label: "Đã bổ sung", tone: "bg-violet-100 text-violet-700 ring-violet-200", dot: "bg-violet-500", icon: FileText },
   APPROVED: { label: "Đã duyệt", tone: "bg-emerald-100 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500", icon: CheckCircle2 },
   COMPLETED: { label: "Đã hoàn thành", tone: "bg-emerald-100 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500", icon: FileCheck2 },
-  REJECTED: { label: "Từ chối", tone: "bg-red-100 text-red-700 ring-red-200", dot: "bg-red-500", icon: X },
-  OVERDUE: { label: "Quá hạn", tone: "animate-pulse bg-red-900 text-white ring-red-900", dot: "bg-red-900", icon: AlertTriangle },
+  REJECTED: { label: "Từ chối", tone: "bg-rose-100 text-rose-700 ring-rose-200", dot: "bg-rose-500", icon: X },
+  OVERDUE: { label: "Quá hạn", tone: "animate-pulse bg-rose-600 text-white ring-rose-600", dot: "bg-rose-600", icon: AlertTriangle },
+};
+
+const STAT_THEMES = {
+  total: "from-indigo-600 via-blue-600 to-cyan-500 text-white ring-blue-200",
+  pending: "from-slate-700 via-slate-600 to-slate-500 text-white ring-slate-200",
+  processing: "from-sky-500 via-blue-500 to-indigo-500 text-white ring-sky-200",
+  needMore: "from-orange-500 via-amber-500 to-yellow-400 text-white ring-orange-200",
+  completed: "from-emerald-500 via-teal-500 to-cyan-500 text-white ring-emerald-200",
+  overdue: "from-rose-600 via-red-500 to-orange-500 text-white ring-rose-200",
 };
 
 const WORKFLOW_STATUSES = ["PENDING", "PROCESSING", "NEED_MORE", "COMPLETED", "REJECTED"];
@@ -201,32 +214,40 @@ function isSupplementAttachment(file) {
   return group === "supplement" || group === "supplemented" || Boolean(file?.supplementedAt);
 }
 
-function StatTile({ label, value, icon: Icon, className, active, onClick }) {
+function StatTile({ label, value, icon: Icon, theme, active, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group rounded-2xl border bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-        active ? "border-[#003366] ring-2 ring-[#003366]/10" : "border-slate-200"
+      className={`group relative overflow-hidden rounded-3xl border bg-white/80 p-4 text-left shadow-lg shadow-blue-950/5 transition duration-300 hover:-translate-y-1 hover:shadow-xl ${
+        active ? "border-cyan-200 ring-4 ring-cyan-400/15 shadow-cyan-500/20" : "border-white/80 ring-1 ring-slate-200/70"
       }`}
     >
+      <div className={`absolute inset-0 bg-linear-to-br ${theme} opacity-[0.08]`} />
+      <div className={`absolute inset-x-0 bottom-0 h-1.5 bg-linear-to-r ${theme}`} />
+      <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-cyan-300/25 blur-2xl transition group-hover:scale-125" />
       <div className="flex items-center justify-between gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${className}`}>
+        <div className={`relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/70 text-blue-700 shadow-inner ring-1 ring-white/80`}>
           <Icon className="h-5 w-5" />
         </div>
-        <ChevronDown className="h-4 w-4 text-slate-300 transition group-hover:translate-y-0.5" />
+        <ChevronDown className="relative h-4 w-4 text-slate-300 transition group-hover:translate-y-0.5 group-hover:text-slate-500" />
       </div>
-      <div className="mt-4 text-2xl font-black text-slate-900">{value}</div>
-      <div className="mt-1 text-xs font-bold uppercase text-slate-500">{label}</div>
+      <div className="relative mt-5 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-3xl font-black tracking-tight text-slate-950">{value}</div>
+          <div className="mt-1 text-[11px] font-black uppercase tracking-wide text-slate-500">{label}</div>
+        </div>
+        {active ? <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black uppercase text-blue-700">Đang lọc</span> : null}
+      </div>
     </button>
   );
 }
 
-function StatusBadge({ item, status }) {
+function StatusBadge({ item, status, showDot = true, compact = false }) {
   const meta = item ? displayStatusMeta(item) : statusMeta(status);
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${meta.tone}`}>
-      <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+    <span className={`inline-flex items-center gap-1.5 rounded-full font-bold ring-1 ${compact ? "px-2 py-1 text-[11px]" : "px-2.5 py-1 text-xs"} ${meta.tone}`}>
+      {showDot ? <span className={`h-2 w-2 rounded-full ${meta.dot}`} /> : null}
       {meta.label}
     </span>
   );
@@ -234,9 +255,9 @@ function StatusBadge({ item, status }) {
 
 function MiniField({ label, value }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm ring-1 ring-slate-200/70">
       <div className="text-[10px] font-black uppercase text-slate-400">{label}</div>
-      <div className="mt-1 break-words text-sm font-semibold text-slate-800">{value || "-"}</div>
+      <div className="mt-1 wrap-break-word text-sm font-semibold text-slate-800">{value || "-"}</div>
     </div>
   );
 }
@@ -255,6 +276,8 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
   const [activeDossier, setActiveDossier] = useState(null);
   const [drawerTab, setDrawerTab] = useState("info");
   const [viewMode, setViewMode] = useState("table");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [busy, setBusy] = useState(false);
   const [chatDetail, setChatDetail] = useState(null);
   const [chatText, setChatText] = useState("");
@@ -305,6 +328,11 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
   }, [enriched, filters, query]);
 
   const selectedDossiers = useMemo(() => enriched.filter((item) => selectedIds.includes(item._code)), [enriched, selectedIds]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [currentPage, filtered, pageSize]);
 
   const activeConversation = useMemo(() => {
     if (!activeDossier) return null;
@@ -423,60 +451,90 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
     setSelectedIds((prev) => (prev.includes(code) ? prev.filter((id) => id !== code) : [...prev, code]));
   }
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item._code));
+  function openDatePicker(event) {
+    try {
+      event.currentTarget.showPicker?.();
+    } catch {
+      // Some browsers only allow showPicker from direct user gestures.
+    }
+  }
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.date, filters.overdue, filters.status, pageSize, query]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
+  const allVisibleSelected = paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.includes(item._code));
 
   return (
-    <div className="space-y-5">
-      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="Tổng hồ sơ" value={stats.total} icon={ClipboardList} className="bg-slate-100 text-slate-700" active={filters.status === "ALL"} onClick={() => setFilter("status", "ALL")} />
-        <StatTile label="Chờ tiếp nhận" value={stats.pending} icon={Clock3} className="bg-slate-100 text-slate-700" active={filters.status === "PENDING"} onClick={() => setFilter("status", "PENDING")} />
-        <StatTile label="Đang xử lý" value={stats.processing} icon={Play} className="bg-blue-100 text-blue-700" active={filters.status === "PROCESSING"} onClick={() => setFilter("status", "PROCESSING")} />
-        <StatTile label="Cần bổ sung" value={stats.needMore} icon={AlertTriangle} className="bg-orange-100 text-orange-700" active={filters.status === "NEED_MORE"} onClick={() => setFilter("status", "NEED_MORE")} />
-        <StatTile label="Đã hoàn thành" value={stats.completed} icon={FileCheck2} className="bg-emerald-100 text-emerald-700" active={filters.status === "COMPLETED"} onClick={() => setFilter("status", "COMPLETED")} />
-        <StatTile label="Quá hạn" value={stats.overdue} icon={CalendarClock} className="bg-red-100 text-red-700" active={filters.status === "OVERDUE"} onClick={() => setFilter("status", "OVERDUE")} />
+    <div className="relative space-y-5">
+      <div className="pointer-events-none absolute -left-10 -top-8 h-52 w-52 rounded-full bg-cyan-300/25 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-20 h-64 w-64 rounded-full bg-fuchsia-300/20 blur-3xl" />
+
+      <section className="relative grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <StatTile label="Tổng hồ sơ" value={stats.total} icon={ClipboardList} theme={STAT_THEMES.total} active={filters.status === "ALL"} onClick={() => setFilter("status", "ALL")} />
+        <StatTile label="Chờ tiếp nhận" value={stats.pending} icon={Clock3} theme={STAT_THEMES.pending} active={filters.status === "PENDING"} onClick={() => setFilter("status", "PENDING")} />
+        <StatTile label="Đang xử lý" value={stats.processing} icon={Play} theme={STAT_THEMES.processing} active={filters.status === "PROCESSING"} onClick={() => setFilter("status", "PROCESSING")} />
+        <StatTile label="Cần bổ sung" value={stats.needMore} icon={AlertTriangle} theme={STAT_THEMES.needMore} active={filters.status === "NEED_MORE"} onClick={() => setFilter("status", "NEED_MORE")} />
+        <StatTile label="Đã hoàn thành" value={stats.completed} icon={FileCheck2} theme={STAT_THEMES.completed} active={filters.status === "COMPLETED"} onClick={() => setFilter("status", "COMPLETED")} />
+        <StatTile label="Quá hạn" value={stats.overdue} icon={CalendarClock} theme={STAT_THEMES.overdue} active={filters.status === "OVERDUE"} onClick={() => setFilter("status", "OVERDUE")} />
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+      <section className="relative overflow-hidden rounded-4xl border border-white/70 bg-white/90 shadow-xl shadow-blue-950/5 ring-1 ring-slate-200/70 backdrop-blur">
+        <div className="relative overflow-hidden bg-linear-to-r from-[#003366] via-blue-600 to-teal-400 px-5 py-6 text-white">
+          <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-white/20 blur-3xl" />
+          <div className="absolute right-20 top-6 h-24 w-24 rounded-full bg-cyan-200/20 blur-2xl" />
+          <div className="relative flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-black uppercase tracking-wide text-white ring-1 ring-white/20">
               <ClipboardCheck className="h-4 w-4" />
               Quản lý hồ sơ
+              </div>
+              <h1 className="mt-3 text-3xl font-black tracking-tight">Bàn làm việc xử lý hồ sơ</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-white/85">Lọc, chọn nhiều hồ sơ, cập nhật trạng thái và xem chi tiết ngay trong panel.</p>
             </div>
-            <h1 className="mt-2 text-2xl font-black text-slate-900">Bàn làm việc xử lý hồ sơ</h1>
-            <p className="mt-1 text-sm text-slate-600">Lọc, chọn nhiều hồ sơ, cập nhật trạng thái và xem chi tiết ngay trong panel.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={onReload} className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={onReload} className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-black text-blue-700 shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50 hover:shadow-xl">
               <RefreshCw className="h-4 w-4" />
               Làm mới
-            </button>
-            <div className="rounded-xl bg-slate-100 p-1">
-              <button type="button" onClick={() => setViewMode("table")} className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold ${viewMode === "table" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500"}`}>
+              </button>
+              <div className="rounded-2xl bg-white/15 p-1 shadow-inner ring-1 ring-white/20 backdrop-blur">
+                <button type="button" onClick={() => setViewMode("table")} className={`inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-black transition ${viewMode === "table" ? "bg-white text-blue-700 shadow-sm" : "text-white/75 hover:text-white"}`}>
                 <ListChecks className="h-4 w-4" />
                 Table
-              </button>
-              <button type="button" onClick={() => setViewMode("kanban")} className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold ${viewMode === "kanban" ? "bg-white text-[#003366] shadow-sm" : "text-slate-500"}`}>
+                </button>
+                <button type="button" onClick={() => setViewMode("kanban")} className={`inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-black transition ${viewMode === "kanban" ? "bg-white text-blue-700 shadow-sm" : "text-white/75 hover:text-white"}`}>
                 <LayoutGrid className="h-4 w-4" />
                 Kanban
-              </button>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(260px,1fr)_220px]">
+        <div className="grid gap-3 p-5 md:grid-cols-[minmax(260px,1fr)_220px]">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã hồ sơ, tên, SĐT, CCCD, dịch vụ..." className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none focus:border-[#003366]" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-500" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã hồ sơ, tên, SĐT, CCCD, dịch vụ..." className="w-full rounded-2xl border border-slate-200 bg-white/95 py-3.5 pl-12 pr-4 text-sm font-semibold shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
           </div>
-          <div className="flex rounded-xl border border-slate-200 bg-white px-3">
-            <input type="date" value={filters.date} onChange={(event) => setFilter("date", event.target.value)} className="w-full bg-transparent py-2.5 text-sm font-semibold text-slate-700 outline-none" />
+          <div className="flex rounded-2xl border border-slate-200 bg-white/95 px-4 shadow-sm transition">
+            <input
+              type="date"
+              value={filters.date}
+              onClick={openDatePicker}
+              onFocus={openDatePicker}
+              onChange={(event) => setFilter("date", event.target.value)}
+              className="admin-date-filter w-full cursor-pointer bg-transparent py-3.5 text-sm font-bold text-slate-700 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+            />
           </div>
         </div>
 
         {selectedIds.length ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-            <div className="text-sm font-bold text-blue-900">Đã chọn {selectedIds.length} hồ sơ</div>
+          <div className="relative mx-5 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-linear-to-r from-blue-50 via-cyan-50 to-indigo-50 px-4 py-3 shadow-sm">
+            <div className="text-sm font-black text-blue-950">Đã chọn {selectedIds.length} hồ sơ</div>
             <div className="flex flex-wrap gap-2">
               <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "COMPLETED", "Duyệt hàng loạt")} label="Duyệt" />
               <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "PROCESSING", "Chuyển xử lý hàng loạt")} label="Chuyển xử lý" />
@@ -489,14 +547,23 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
 
       {viewMode === "table" ? (
         <DossierTable
-          items={filtered}
+          items={paginatedItems}
           selectedIds={selectedIds}
           allVisibleSelected={allVisibleSelected}
-          onToggleAll={() => setSelectedIds(allVisibleSelected ? [] : filtered.map((item) => item._code))}
+          onToggleAll={() => {
+            const pageCodes = paginatedItems.map((item) => item._code);
+            setSelectedIds((prev) => allVisibleSelected ? prev.filter((id) => !pageCodes.includes(id)) : Array.from(new Set([...prev, ...pageCodes])));
+          }}
           onToggleSelect={toggleSelect}
           onOpen={openDrawer}
           onUpdate={(item, status) => requestStatusUpdate([item], status)}
           busy={busy}
+          page={currentPage}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
         />
       ) : (
         <KanbanBoard items={filtered} onOpen={openDrawer} onDropStatus={(item, status) => requestStatusUpdate([item], status, "Cập nhật từ Kanban")} />
@@ -570,60 +637,151 @@ function NoteModal({ status, count, note, setNote, onClose, onSubmit, busy }) {
 
 function BatchButton({ label, icon: Icon = CheckCircle2, ...props }) {
   return (
-    <button type="button" {...props} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-[#003366] ring-1 ring-blue-200 hover:bg-blue-50 disabled:opacity-50">
+    <button type="button" {...props} className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2 text-xs font-black text-blue-700 shadow-sm ring-1 ring-blue-200 transition hover:-translate-y-0.5 hover:bg-blue-600 hover:text-white hover:shadow-md disabled:opacity-50">
       <Icon className="h-4 w-4" />
       {label}
     </button>
   );
 }
 
-function DossierTable({ items, selectedIds, allVisibleSelected, onToggleAll, onToggleSelect, onOpen, onUpdate, busy }) {
+function paginationPages(page, totalPages) {
+  const pages = new Set([1, totalPages, page - 1, page, page + 1].filter((value) => value >= 1 && value <= totalPages));
+  return Array.from(pages).sort((a, b) => a - b);
+}
+
+function PaginationButton({ children, active, disabled, onClick, title }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`grid h-9 min-w-9 place-items-center rounded-xl px-3 text-xs font-black transition ${
+        active
+          ? "bg-linear-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/20"
+          : "bg-white text-slate-600 ring-1 ring-slate-200 hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
+      } disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-white disabled:hover:text-slate-600`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DossierPagination({ page, pageSize, totalItems, totalPages, onPageChange, onPageSizeChange }) {
+  const firstItem = totalItems ? (page - 1) * pageSize + 1 : 0;
+  const lastItem = Math.min(totalItems, page * pageSize);
+  const pages = paginationPages(page, totalPages);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-100 bg-linear-to-r from-slate-50/90 via-white to-blue-50/70 px-4 py-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
+        <span>Hiển thị</span>
+        <select
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        >
+          {[10, 20, 50].map((size) => (
+            <option key={size} value={size}>{size}</option>
+          ))}
+        </select>
+        <span>
+          {firstItem}-{lastItem} trong tổng {totalItems} hồ sơ
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <PaginationButton title="Trang đầu" disabled={page <= 1} onClick={() => onPageChange(1)}>
+          <ChevronsLeft className="h-4 w-4" />
+        </PaginationButton>
+        <PaginationButton title="Trang trước" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          <ChevronLeft className="h-4 w-4" />
+        </PaginationButton>
+
+        {pages.map((pageNumber, index) => {
+          const previous = pages[index - 1];
+          return (
+            <React.Fragment key={pageNumber}>
+              {previous && pageNumber - previous > 1 ? <span className="px-1 text-xs font-black text-slate-300">...</span> : null}
+              <PaginationButton active={pageNumber === page} onClick={() => onPageChange(pageNumber)}>
+                {pageNumber}
+              </PaginationButton>
+            </React.Fragment>
+          );
+        })}
+
+        <PaginationButton title="Trang sau" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          <ChevronRight className="h-4 w-4" />
+        </PaginationButton>
+        <PaginationButton title="Trang cuối" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)}>
+          <ChevronsRight className="h-4 w-4" />
+        </PaginationButton>
+      </div>
+    </div>
+  );
+}
+
+function DossierTable({ items, selectedIds, allVisibleSelected, onToggleAll, onToggleSelect, onOpen, onUpdate, busy, page, pageSize, totalItems, totalPages, onPageChange, onPageSizeChange }) {
+  return (
+    <section className="overflow-hidden rounded-4xl border border-white/70 bg-white/90 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur">
       <div className="overflow-x-auto">
-        <table className="min-w-[1180px] w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs font-black uppercase text-slate-500">
+        <table className="w-full min-w-[1060px] table-fixed text-left text-[13px]">
+          <colgroup>
+            <col className="w-[38px]" />
+            <col className="w-[130px]" />
+            <col className="w-[130px]" />
+            <col className="w-[150px]" />
+            <col className="w-[105px]" />
+            <col className="w-[112px]" />
+            <col className="w-[90px]" />
+            <col className="w-[105px]" />
+            <col className="w-[115px]" />
+            <col className="w-[85px]" />
+          </colgroup>
+          <thead className="bg-linear-to-r from-slate-50 via-blue-50 to-cyan-50 text-[10px] font-black uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="w-10 px-4 py-3"><input type="checkbox" checked={allVisibleSelected} onChange={onToggleAll} /></th>
-              <th className="px-4 py-3">Mã hồ sơ</th>
-              <th className="px-4 py-3">Người nộp</th>
-              <th className="px-4 py-3">Dịch vụ</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3">Thanh toán</th>
-              <th className="px-4 py-3">Ngày tạo</th>
-              <th className="px-4 py-3">Hạn xử lý</th>
-              <th className="px-4 py-3">Cán bộ phụ trách</th>
-              <th className="px-4 py-3">Thao tác</th>
+              <th className="px-2 py-4 text-center"><input type="checkbox" checked={allVisibleSelected} onChange={onToggleAll} className="h-4 w-4 rounded border-slate-300 text-blue-600" /></th>
+              <th className="px-2 py-4">Mã hồ sơ</th>
+              <th className="px-2 py-4">Người nộp</th>
+              <th className="px-2 py-4">Dịch vụ</th>
+              <th className="px-2 py-4 text-center">Trạng thái</th>
+              <th className="px-2 py-4 text-center">Thanh toán</th>
+              <th className="px-2 py-4 text-center">Ngày tạo</th>
+              <th className="px-2 py-4 text-center">Hạn xử lý</th>
+              <th className="px-2 py-4">Cán bộ</th>
+              <th className="px-2 py-4 text-center">Thao tác</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100/80">
             {items.map((item) => {
               const sla = slaText(item);
               return (
-                <tr key={item._code} className="group hover:bg-slate-50">
-                  <td className="px-4 py-3"><input type="checkbox" checked={selectedIds.includes(item._code)} onChange={() => onToggleSelect(item._code)} /></td>
-                  <td className="px-4 py-3">
-                    <button type="button" onClick={() => onOpen(item)} className="font-black text-[#003366] hover:underline">{item._code}</button>
+                <tr key={item._code} className="group transition hover:bg-blue-50/55">
+                  <td className="px-2 py-4 text-center"><input type="checkbox" checked={selectedIds.includes(item._code)} onChange={() => onToggleSelect(item._code)} className="h-4 w-4 rounded border-slate-300 text-blue-600" /></td>
+                  <td className="px-2 py-4">
+                    <button type="button" onClick={() => onOpen(item)} title={item._code} className="max-w-full truncate rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700 ring-1 ring-blue-100 transition group-hover:bg-blue-600 group-hover:text-white">{item._code}</button>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="font-bold text-slate-900">{citizenName(item)}</div>
-                    <div className="text-xs text-slate-500">{citizenPhone(item)}</div>
+                  <td className="px-2 py-4">
+                    <div className="truncate font-bold text-slate-900" title={citizenName(item)}>{citizenName(item)}</div>
+                    <div className="truncate text-xs text-slate-500">{citizenPhone(item)}</div>
                   </td>
-                  <td className="max-w-[240px] px-4 py-3">
-                    <div className="truncate font-semibold text-slate-800">{item.serviceName || item.serviceId || "-"}</div>
+                  <td className="px-2 py-4">
+                    <div className="truncate font-bold text-slate-800" title={item.serviceName || item.serviceId || "-"}>{item.serviceName || item.serviceId || "-"}</div>
                   </td>
-                  <td className="px-4 py-3"><StatusBadge item={item} /></td>
-                  <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${paymentTone(item)}`}>{paymentLabel(item)}</span></td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(item.createdAt)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-4 text-center"><StatusBadge item={item} showDot={false} compact /></td>
+                  <td className="px-2 py-4 text-center"><span className={`inline-flex max-w-full rounded-full px-2 py-1 text-[11px] font-bold leading-tight ring-1 ${paymentTone(item)}`}>{paymentLabel(item)}</span></td>
+                  <td className="px-2 py-4 text-center text-slate-600">{formatDate(item.createdAt)}</td>
+                  <td className="px-2 py-4 text-center">
                     <div className="font-semibold text-slate-800">{formatDate(item._due)}</div>
-                    <div className={`text-xs ${sla.tone}`}>{sla.label}</div>
+                    <div className={`text-[11px] ${sla.tone}`}>{sla.label}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-700">{assignedOfficer(item)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => onOpen(item)} className="rounded-lg bg-[#003366] px-3 py-1.5 text-xs font-bold text-white">Mở</button>
-                      <button type="button" disabled={busy} onClick={() => onUpdate(item, "PROCESSING")} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 disabled:opacity-50">Xử lý</button>
+                  <td className="px-2 py-4 text-slate-700">
+                    <div className="truncate" title={assignedOfficer(item)}>{assignedOfficer(item)}</div>
+                  </td>
+                  <td className="px-2 py-4">
+                    <div className="flex flex-col items-center gap-1">
+                      <button type="button" onClick={() => onOpen(item)} className="w-full rounded-lg bg-linear-to-r from-blue-600 to-cyan-500 px-2 py-1.5 text-[11px] font-black text-white shadow-sm shadow-blue-500/20 transition hover:-translate-y-0.5 hover:shadow-md">Mở</button>
+                      <button type="button" disabled={busy} onClick={() => onUpdate(item, "PROCESSING")} className="w-full rounded-lg bg-slate-100 px-2 py-1.5 text-[11px] font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-white disabled:opacity-50">Xử lý</button>
                     </div>
                   </td>
                 </tr>
@@ -631,12 +789,20 @@ function DossierTable({ items, selectedIds, allVisibleSelected, onToggleAll, onT
             })}
             {!items.length ? (
               <tr>
-                <td colSpan={10} className="px-4 py-12 text-center text-sm font-semibold text-slate-500">Không có hồ sơ phù hợp bộ lọc.</td>
+                <td colSpan={10} className="px-4 py-16 text-center text-sm font-semibold text-slate-500">Không có hồ sơ phù hợp bộ lọc.</td>
               </tr>
             ) : null}
           </tbody>
         </table>
       </div>
+      <DossierPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />
     </section>
   );
 }
@@ -662,11 +828,11 @@ function KanbanBoard({ items, onOpen, onDropStatus }) {
               if (item) onDropStatus(item, status);
               setDragCode("");
             }}
-            className="min-h-[460px] min-w-[260px] rounded-2xl border border-slate-200 bg-slate-50 p-3"
+            className="min-h-[460px] min-w-[260px] rounded-[1.75rem] border border-white/70 bg-white/75 p-3 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur"
           >
             <div className="mb-3 flex items-center justify-between">
               <StatusBadge status={status} />
-              <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-slate-500 ring-1 ring-slate-200">{columnItems.length}</span>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-500 shadow-sm ring-1 ring-slate-200">{columnItems.length}</span>
             </div>
             <div className="space-y-3">
               {columnItems.map((item) => {
@@ -678,15 +844,15 @@ function KanbanBoard({ items, onOpen, onDropStatus }) {
                     draggable
                     onDragStart={() => setDragCode(item._code)}
                     onClick={() => onOpen(item)}
-                    className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    className="group w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50/50 hover:shadow-lg"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-black text-[#003366]">{item._code}</span>
-                      <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700 ring-1 ring-blue-100">{item._code}</span>
+                      <span className={`h-2.5 w-2.5 rounded-full ${meta.dot} shadow-sm`} />
                     </div>
-                    <div className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">{item.serviceName || item.serviceId || "Hồ sơ dịch vụ công"}</div>
-                    <div className="mt-2 text-xs text-slate-500">{citizenName(item)}</div>
-                    <div className={`mt-3 text-xs ${sla.tone}`}>{sla.label}</div>
+                    <div className="mt-3 line-clamp-2 text-sm font-black text-slate-900">{item.serviceName || item.serviceId || "Hồ sơ dịch vụ công"}</div>
+                    <div className="mt-2 text-xs font-semibold text-slate-500">{citizenName(item)}</div>
+                    <div className={`mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs ring-1 ring-slate-100 ${sla.tone}`}>{sla.label}</div>
                   </button>
                 );
               })}
@@ -862,11 +1028,11 @@ function AttachmentCard({ file, index }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {image && url ? (
-        <a href={url} target="_blank" rel="noreferrer" className="block aspect-[16/10] bg-slate-100">
+        <a href={url} target="_blank" rel="noreferrer" className="block aspect-16/10 bg-slate-100">
           <img src={url} alt={docName} className="h-full w-full object-cover transition duration-200 hover:scale-[1.02]" loading="lazy" />
         </a>
       ) : (
-        <div className="flex aspect-[16/10] items-center justify-center bg-slate-50">
+        <div className="flex aspect-16/10 items-center justify-center bg-slate-50">
           <div className="rounded-2xl bg-blue-50 p-4 text-blue-700"><FileText className="h-8 w-8" /></div>
         </div>
       )}

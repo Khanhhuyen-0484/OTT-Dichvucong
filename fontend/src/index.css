@@ -26,6 +26,19 @@ body {
   outline-offset: 2px;
 }
 
+.admin-date-filter,
+.admin-date-filter:focus,
+.admin-date-filter:focus-visible,
+.admin-date-filter::-webkit-datetime-edit,
+.admin-date-filter::-webkit-datetime-edit-fields-wrapper,
+.admin-date-filter::-webkit-datetime-edit-text,
+.admin-date-filter::-webkit-datetime-edit-day-field,
+.admin-date-filter::-webkit-datetime-edit-month-field,
+.admin-date-filter::-webkit-datetime-edit-year-field {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }

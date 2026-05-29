@@ -186,7 +186,7 @@ function StatusDonut({ byStatus = {}, total = 0 }) {
     <div className="grid gap-5 md:grid-cols-[220px_1fr] md:items-center">
       <div className="relative mx-auto h-52 w-52">
         <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-          <circle cx="60" cy="60" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="14" />
+          <circle cx="60" cy="60" r={radius} fill="none" stroke="#e0f2fe" strokeWidth="14" />
           {segments.map((item) => (
             <circle
               key={item.key}
@@ -204,7 +204,7 @@ function StatusDonut({ byStatus = {}, total = 0 }) {
         </svg>
         <div className="absolute inset-0 grid place-items-center text-center">
           <div>
-            <div className="text-3xl font-black text-[#003366]">{total}</div>
+            <div className="text-3xl font-black text-blue-700">{total}</div>
             <div className="text-xs font-bold uppercase text-slate-500">Hồ sơ</div>
           </div>
         </div>
@@ -214,7 +214,7 @@ function StatusDonut({ byStatus = {}, total = 0 }) {
           const value = Number(byStatus[key] || 0);
           const percent = total ? Math.round((value / total) * 100) : 0;
           return (
-            <div key={key} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2">
+            <div key={key} className="flex items-center justify-between gap-3 rounded-2xl border border-white/70 bg-white/75 px-3 py-2 shadow-sm ring-1 ring-slate-200/70">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLORS[key] }} />
                 <span className="truncate text-sm font-bold text-slate-700">{STATUS_LABELS[key]}</span>
@@ -245,10 +245,10 @@ function RevenueLineChart({ items = [] }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-64 w-full rounded-2xl bg-slate-50">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-64 w-full rounded-3xl bg-linear-to-br from-slate-50 via-blue-50/70 to-cyan-50/60 ring-1 ring-slate-200/70">
         <defs>
           <linearGradient id="revenueArea" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.28" />
+            <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.32" />
             <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.02" />
           </linearGradient>
         </defs>
@@ -257,10 +257,10 @@ function RevenueLineChart({ items = [] }) {
           return <line key={ratio} x1={padding} x2={width - padding} y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" />;
         })}
         <polygon points={area} fill="url(#revenueArea)" />
-        <polyline points={line} fill="none" stroke="#0369a1" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={line} fill="none" stroke="#2563eb" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
         {points.map((point) => (
           <g key={point.date}>
-            <circle cx={point.x} cy={point.y} r="5" fill="#ffffff" stroke="#0369a1" strokeWidth="3" />
+            <circle cx={point.x} cy={point.y} r="5" fill="#ffffff" stroke="#2563eb" strokeWidth="3" />
             <title>{`${point.date}: ${formatCurrency(point.revenue)} (${point.paidCount || 0} giao dịch)`}</title>
           </g>
         ))}
@@ -283,7 +283,7 @@ function ServiceBarChart({ items = [], mode = "applications" }) {
         const value = Number(mode === "revenue" ? item.revenue : item.total) || 0;
         const percent = Math.max(4, Math.round((value / max) * 100));
         return (
-          <div key={`${mode}-${item.serviceId || item.serviceName}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+          <div key={`${mode}-${item.serviceId || item.serviceName}`} className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm ring-1 ring-slate-200/70">
             <div className="mb-2 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-black text-slate-800">{item.serviceName || "Không rõ dịch vụ"}</div>
@@ -293,8 +293,8 @@ function ServiceBarChart({ items = [], mode = "applications" }) {
               </div>
               <div className="shrink-0 text-sm font-black text-[#003366]">{mode === "revenue" ? formatCurrency(value) : value}</div>
             </div>
-            <div className="h-4 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
-              <div className={`h-full rounded-full ${mode === "revenue" ? "bg-emerald-500" : "bg-[#0b5c9a]"}`} style={{ width: `${percent}%` }} />
+            <div className="h-4 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+              <div className={`h-full rounded-full bg-linear-to-r ${mode === "revenue" ? "from-emerald-500 to-teal-400" : "from-blue-600 to-cyan-400"}`} style={{ width: `${percent}%` }} />
             </div>
           </div>
         );
@@ -378,19 +378,22 @@ export default function AdminStatistics() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <main className="mx-auto max-w-7xl px-4 py-8">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_34%),radial-gradient(circle_at_top_right,rgba(20,184,166,0.16),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#effcff_48%,#f8fafc_100%)] text-slate-900">
+      <main className="mx-auto max-w-[1600px] px-4 py-8 md:px-6 xl:px-8">
         <BackToDashboardButton label="Quay lại" variant="soft" className="mb-5" />
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <section className="relative overflow-hidden rounded-4xl border border-white/70 bg-white/85 p-6 shadow-xl shadow-blue-950/5 ring-1 ring-slate-200/70 backdrop-blur">
+          <div className="absolute inset-0 bg-linear-to-br from-blue-100/70 via-cyan-50/80 to-emerald-100/60" />
+          <div className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-cyan-300/25 blur-3xl" />
+          <div className="absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-blue-300/20 blur-3xl" />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+              <div className="inline-flex items-center gap-2 rounded-full bg-linear-to-r from-blue-700 to-cyan-500 px-3 py-1 text-xs font-black uppercase tracking-wide text-white shadow-lg shadow-blue-600/20">
                 <TrendingUp className="h-4 w-4" />
                 Thống kê
               </div>
-              <h1 className="mt-3 text-3xl font-black text-slate-900">Thống kê hồ sơ</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-600">
+              <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">Thống kê hồ sơ</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                 Theo dõi số lượng hồ sơ, trạng thái xử lý và doanh thu thanh toán theo khoảng thời gian.
               </p>
             </div>
@@ -401,10 +404,10 @@ export default function AdminStatistics() {
                     key={item.key}
                     type="button"
                     onClick={() => applyQuickRange(item.key)}
-                    className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                    className={`rounded-2xl px-4 py-2 text-sm font-black transition ${
                       quickRange === item.key
-                        ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                        : "bg-white/85 text-slate-700 ring-1 ring-slate-200 hover:bg-blue-50 hover:text-blue-700"
                     }`}
                   >
                     {item.label}
@@ -419,7 +422,7 @@ export default function AdminStatistics() {
                     setFromDate(event.target.value);
                     setQuickRange("custom");
                   }}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-sm font-semibold shadow-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                 />
                 <input
                   type="date"
@@ -428,12 +431,12 @@ export default function AdminStatistics() {
                     setToDate(event.target.value);
                     setQuickRange("custom");
                   }}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-sm font-semibold shadow-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                 />
                 <button
                   type="button"
                   onClick={() => load()}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-white/90 px-4 py-2 text-sm font-black text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-700"
                 >
                   <RefreshCw className="h-4 w-4" />
                   Lọc
@@ -442,7 +445,7 @@ export default function AdminStatistics() {
                   type="button"
                   disabled={!data}
                   onClick={() => exportCsv(data)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#003366] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-linear-to-r from-blue-700 to-cyan-500 px-4 py-2 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 disabled:opacity-50"
                 >
                   <Download className="h-4 w-4" />
                   Xuất CSV
@@ -452,16 +455,16 @@ export default function AdminStatistics() {
           </div>
         </section>
 
-        <div className="sticky top-0 z-20 mt-6 flex flex-wrap gap-2 rounded-2xl bg-white/95 p-2 shadow-sm ring-1 ring-slate-200 backdrop-blur">
+        <div className="sticky top-0 z-20 mt-6 flex flex-wrap gap-2 rounded-3xl border border-white/80 bg-white/90 p-2 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+              className={`rounded-2xl px-4 py-2 text-sm font-black transition ${
                 activeTab === tab.key
-                  ? "bg-[#003366] text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-100"
+                  ? "bg-linear-to-r from-blue-700 to-cyan-500 text-white shadow-lg shadow-blue-600/20"
+                  : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"
               }`}
             >
               {tab.label}
@@ -469,8 +472,8 @@ export default function AdminStatistics() {
           ))}
         </div>
 
-        {loading ? <div className="mt-6 rounded-2xl bg-white p-6 ring-1 ring-slate-200">Đang tải thống kê...</div> : null}
-        {err ? <div className="mt-6 rounded-2xl bg-red-50 p-6 text-red-700 ring-1 ring-red-200">{err}</div> : null}
+        {loading ? <div className="mt-6 rounded-3xl bg-white/90 p-6 font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">Đang tải thống kê...</div> : null}
+        {err ? <div className="mt-6 rounded-3xl bg-red-50/90 p-6 font-bold text-red-700 shadow-sm ring-1 ring-red-200">{err}</div> : null}
 
         {!loading && data ? (
           <div className="mt-6">
@@ -587,9 +590,10 @@ export default function AdminStatistics() {
 
 function StatCard({ label, value, subValue }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-sm font-semibold text-slate-600">{label}</div>
-      <div className="mt-2 text-3xl font-black text-[#003366]">{value}</div>
+    <div className="group relative overflow-hidden rounded-3xl border border-white/80 bg-white/90 p-5 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/70 transition hover:-translate-y-1 hover:shadow-xl">
+      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-cyan-200/55 blur-2xl transition group-hover:scale-125" />
+      <div className="relative text-sm font-black text-slate-600">{label}</div>
+      <div className="relative mt-2 text-3xl font-black tracking-tight text-blue-700">{value}</div>
       {subValue ? <div className="mt-2 text-xs font-medium text-slate-500">{subValue}</div> : null}
     </div>
   );
@@ -597,9 +601,9 @@ function StatCard({ label, value, subValue }) {
 
 function Panel({ title, icon, children }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-4xl border border-white/80 bg-white/90 p-5 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur">
       <div className="mb-4 flex items-center gap-2 text-base font-black text-slate-900">
-        {icon}
+        {icon ? <span className="grid h-9 w-9 place-items-center rounded-2xl bg-blue-50 text-blue-700">{icon}</span> : null}
         {title}
       </div>
       {children}
@@ -608,7 +612,7 @@ function Panel({ title, icon, children }) {
 }
 
 function EmptyText({ children }) {
-  return <div className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">{children}</div>;
+  return <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-5 text-sm font-semibold text-slate-500">{children}</div>;
 }
 
 function MiniBar({ label, value, total }) {
@@ -620,7 +624,7 @@ function MiniBar({ label, value, total }) {
         <span className="text-slate-500">{value} hồ sơ</span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-        <div className="h-full rounded-full bg-[#003366]" style={{ width: `${percent}%` }} />
+        <div className="h-full rounded-full bg-linear-to-r from-blue-600 to-cyan-400" style={{ width: `${percent}%` }} />
       </div>
     </div>
   );
@@ -635,10 +639,10 @@ function RevenueBar({ label, value, total, meta }) {
           <div className="truncate font-bold text-slate-700">{label}</div>
           {meta ? <div className="text-xs text-slate-500">{meta}</div> : null}
         </div>
-        <span className="shrink-0 font-bold text-[#003366]">{formatCurrency(value)}</span>
+        <span className="shrink-0 font-bold text-blue-700">{formatCurrency(value)}</span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${percent}%` }} />
+        <div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-teal-400" style={{ width: `${percent}%` }} />
       </div>
     </div>
   );
@@ -652,7 +656,7 @@ function ApplicationsByService({ items }) {
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <div key={item.serviceId} className="rounded-2xl border border-slate-200 p-4">
+        <div key={item.serviceId} className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="truncate font-bold text-slate-900">{item.serviceName || "Không rõ dịch vụ"}</div>
@@ -660,7 +664,7 @@ function ApplicationsByService({ items }) {
                 Hoàn thành {item.completed || 0}, từ chối {item.rejected || 0}
               </div>
             </div>
-            <div className="text-2xl font-black text-[#003366]">{item.total || 0}</div>
+            <div className="text-2xl font-black text-blue-700">{item.total || 0}</div>
           </div>
         </div>
       ))}
@@ -676,13 +680,13 @@ function LatestApplications({ items }) {
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <div key={item.dossierId} className="rounded-2xl border border-slate-200 p-4">
+        <div key={item.dossierId} className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="truncate font-bold text-slate-900">{item.serviceName || "Không rõ dịch vụ"}</div>
               <div className="mt-1 text-xs text-slate-500">{item.dossierCode || item.dossierId}</div>
             </div>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">
               {item.statusLabel || applicationStatusLabel(item.status)}
             </span>
           </div>
@@ -701,7 +705,7 @@ function LatestPayments({ items }) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
-        <thead className="text-xs uppercase text-slate-500">
+        <thead className="bg-linear-to-r from-slate-50 via-blue-50 to-cyan-50 text-xs uppercase text-slate-500">
           <tr className="border-b border-slate-200">
             <th className="py-3 pr-4">Mã thanh toán</th>
             <th className="py-3 pr-4">Hồ sơ</th>
@@ -712,11 +716,11 @@ function LatestPayments({ items }) {
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.paymentId || `${item.dossierId}-${item.paidAt}`} className="border-b border-slate-100">
+            <tr key={item.paymentId || `${item.dossierId}-${item.paidAt}`} className="border-b border-slate-100 hover:bg-blue-50/50">
               <td className="py-3 pr-4 font-semibold text-slate-800">{item.paymentId || "-"}</td>
               <td className="py-3 pr-4 text-slate-600">{item.dossierId || "-"}</td>
               <td className="py-3 pr-4 text-slate-600">{item.serviceName || "Không rõ dịch vụ"}</td>
-              <td className="py-3 pr-4 font-bold text-[#003366]">{formatCurrency(item.amount)}</td>
+              <td className="py-3 pr-4 font-bold text-blue-700">{formatCurrency(item.amount)}</td>
               <td className="py-3 pr-4 text-slate-500">{formatDate(item.paidAt || item.createdAt)}</td>
             </tr>
           ))}
