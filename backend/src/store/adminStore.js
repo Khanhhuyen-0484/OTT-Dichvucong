@@ -55,7 +55,9 @@ async function getDashboardStats() {
 async function listDossiers(query = "") {
   try {
     const dossiers = await readApplications();
-    const visibleDossiers = dossiers.filter(isPaidApplication);
+    const visibleDossiers = dossiers
+      .filter(isPaidApplication)
+      .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
     const q = String(query || "").trim().toLowerCase();
     if (!q) return visibleDossiers;
     return visibleDossiers.filter((d) => String(d.dossierId || d.dossierCode || d.id || "").toLowerCase().includes(q) || String(d.phone || d.formData?.phone || "").toLowerCase().includes(q) || String(d.citizenName || d.formData?.fullName || "").toLowerCase().includes(q));
