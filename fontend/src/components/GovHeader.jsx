@@ -73,7 +73,7 @@ export default function GovHeader({ sticky = true, minimal = false }) {
         </div>
 
         {!minimal ? (
-        <nav className="flex gap-2 overflow-x-auto pb-3 lg:hidden" aria-label="Chính trên di động">
+        <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-3 lg:hidden" aria-label="Chính trên di động">
           <NavLink className={navItem} to="/">Trang chủ</NavLink>
           <NavLink className={navItem} to="/services">
             <FileSearch className="h-4 w-4" />

@@ -25,11 +25,14 @@ import {
 } from "lucide-react";
 import {
   createBankTransferPayment,
+  deleteServiceDraft,
   getApiErrorMessage,
   getBankTransferPaymentStatus,
+  getServiceDraft,
   getServiceById,
   mockPaymentComplete,
   presignAttachmentUpload,
+  saveServiceDraft,
   submitServiceApplication,
 } from "../lib/api";
 import { uploadToS3 } from "../lib/uploadToS3.js";
@@ -174,25 +177,25 @@ export default function ServiceWizard() {
   }, [serviceId]);
 
   useEffect(() => {
-    const rawDraft = localStorage.getItem(draftStorageKey) || localStorage.getItem(legacyDraftStorageKey);
-    if (!rawDraft) return;
-    try {
-      const draft = JSON.parse(rawDraft);
-      if (!draft || String(draft.serviceId) !== String(serviceId)) return;
+    let ignore = false;
+
+    function restoreDraft(draft) {
+      if (ignore || !draft || String(draft.serviceId) !== String(serviceId)) return;
       setFormData((prev) => ({ ...prev, ...(draft.formData || {}) }));
       setStep(clampStep(draft.step));
       if (draft.submitResult) setSubmitResult(draft.submitResult);
       if (draft.paymentInfo) setPaymentInfo(draft.paymentInfo);
       if (draft.paymentExpireAt) setPaymentExpireAt(draft.paymentExpireAt);
       if (draft.savedPaymentStatus) setPaymentStatus(draft.savedPaymentStatus);
-      if (draft.files && typeof draft.files === "object") {
+      const files = draft.files || Object.fromEntries((draft.attachments || []).map((item) => [item.key, item]));
+      if (files && typeof files === "object") {
         setFileItems(
           Object.fromEntries(
-            Object.entries(draft.files).map(([key, item]) => [
+            Object.entries(files).map(([key, item]) => [
               key,
               {
-                name: item?.name || "File đã lưu nháp",
-                type: item?.type || "",
+                name: item?.name || item?.fileName || "File đã lưu nháp",
+                type: item?.type || item?.fileType || item?.mimeType || "",
                 size: item?.size || 0,
                 uploadStatus: "saved",
                 progress: 100,
@@ -201,8 +204,31 @@ export default function ServiceWizard() {
           )
         );
       }
-    } catch {}
-  }, [draftStorageKey, legacyDraftStorageKey, serviceId]);
+    }
+
+    async function loadDraft() {
+      if (user) {
+        try {
+          const { data } = await getServiceDraft(serviceId);
+          if (data?.draft) {
+            restoreDraft(data.draft);
+            return;
+          }
+        } catch {}
+      }
+
+      const rawDraft = localStorage.getItem(draftStorageKey) || localStorage.getItem(legacyDraftStorageKey);
+      if (!rawDraft) return;
+      try {
+        restoreDraft(JSON.parse(rawDraft));
+      } catch {}
+    }
+
+    loadDraft();
+    return () => {
+      ignore = true;
+    };
+  }, [draftStorageKey, legacyDraftStorageKey, serviceId, user]);
 
   const docs = useMemo(() => service?.documents || [], [service]);
   const requiredDocs = useMemo(() => docs.filter((doc) => doc.required), [docs]);
@@ -328,9 +354,22 @@ export default function ServiceWizard() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    localStorage.setItem(draftStorageKey, JSON.stringify(draft));
-    localStorage.removeItem(legacyDraftStorageKey);
-    alert(`Đã lưu nháp tại bước ${step}/4 - ${currentStep.title}.`);
+    const finishDraftSave = () => {
+      alert(`Lưu nháp thành công tại bước ${step}/4 - ${currentStep.title}.`);
+      navigate("/my-applications?view=draft", { replace: true });
+    };
+
+    try {
+      if (!user) throw new Error("AUTH_REQUIRED");
+      await saveServiceDraft(serviceId, draft);
+      localStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(legacyDraftStorageKey);
+      return finishDraftSave();
+    } catch {
+      localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      localStorage.removeItem(legacyDraftStorageKey);
+      return finishDraftSave();
+    }
   }
 
   async function submitApplication() {
@@ -373,6 +412,7 @@ export default function ServiceWizard() {
       if (!dossierId) throw new Error("Thiếu mã hồ sơ từ phản hồi nộp hồ sơ");
 
       setSubmitResult(data);
+      await deleteServiceDraft(serviceId).catch(() => {});
       localStorage.removeItem(draftStorageKey);
       localStorage.removeItem(legacyDraftStorageKey);
       setPaymentExpireAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());

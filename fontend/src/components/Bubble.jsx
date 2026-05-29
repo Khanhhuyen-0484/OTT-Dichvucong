@@ -22,6 +22,7 @@ function resolveImageFromText(text) {
 function normalizeMediaUrl(input) {
   const raw = String(input || "").trim();
   if (!raw) return "";
+  if (/^https?:\/\/mock-s3\.local(?:\/|$)/i.test(raw)) return "";
   if (raw.startsWith("blob:") || raw.startsWith("data:")) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
   if (raw.startsWith("/")) return raw;
@@ -160,21 +161,23 @@ function Bubble({
   const isCallLog = messageType === "call_log";
 
   if (isCallLog) {
+    const isMissedCall = callLog?.status === "missed";
+    const callLabel = isMissedCall ? "Cuộc gọi nhỡ" : "Cuộc gọi";
     return (
       <div className="inline-flex py-1">
-        <div className="rounded-[15px] border bg-white px-3 py-2 text-gray-600 shadow-sm">
+        <div className={`rounded-[15px] border bg-white px-3 py-2 shadow-sm ${isMissedCall ? "text-red-600" : "text-gray-600"}`}>
           {showSenderName && senderName ? (
             <div className="mb-1 text-[11px] font-semibold leading-none text-slate-500">
               {senderName}
             </div>
           ) : null}
           <div className="inline-flex items-center gap-2 text-xs">
-            {callLog?.status === "missed" ? (
+            {isMissedCall ? (
               <PhoneMissed size={14} className="text-red-500" />
             ) : (
               <Phone size={14} />
             )}
-            <span>Cuộc gọi</span>
+            <span>{callLabel}</span>
           </div>
         </div>
       </div>
@@ -224,9 +227,9 @@ function Bubble({
         )}
 
         {/* VIDEO */}
-        {media?.type === "video" && media?.url && (
+        {media?.type === "video" && mediaUrl && (
           <video
-            src={media.url}
+            src={mediaUrl}
             controls
             className="mb-2 rounded-[12px]"
             style={{ maxWidth: "280px" }}

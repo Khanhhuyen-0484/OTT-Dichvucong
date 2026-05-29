@@ -77,7 +77,9 @@ const DOCUMENT_NAME_MAP = {
 };
 
 function normalizeStatus(status) {
-  return String(status || "PENDING").toUpperCase();
+  const value = String(status || "PENDING").trim().toUpperCase();
+  if (value === "SUBMITTED" || value === "RECEIVED" || value === "WAITING" || value === "WAITING_RECEIVE") return "PENDING";
+  return value;
 }
 
 function dossierCode(item) {
@@ -159,9 +161,13 @@ function slaText(item) {
 
 function statusMeta(itemOrStatus) {
   if (typeof itemOrStatus === "object") {
-    return isOverdue(itemOrStatus) ? STATUS_META.OVERDUE : STATUS_META[normalizeStatus(itemOrStatus?.status)] || STATUS_META.PENDING;
+    return STATUS_META[normalizeStatus(itemOrStatus?.status)] || STATUS_META.PENDING;
   }
   return STATUS_META[normalizeStatus(itemOrStatus)] || STATUS_META.PENDING;
+}
+
+function displayStatusMeta(item) {
+  return isOverdue(item) ? STATUS_META.OVERDUE : statusMeta(item);
 }
 
 function attachmentUrl(fileUrl) {
@@ -217,7 +223,7 @@ function StatTile({ label, value, icon: Icon, className, active, onClick }) {
 }
 
 function StatusBadge({ item, status }) {
-  const meta = item ? statusMeta(item) : statusMeta(status);
+  const meta = item ? displayStatusMeta(item) : statusMeta(status);
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${meta.tone}`}>
       <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
@@ -252,9 +258,13 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
   const [busy, setBusy] = useState(false);
   const [chatDetail, setChatDetail] = useState(null);
   const [chatText, setChatText] = useState("");
+  const [noteModal, setNoteModal] = useState(null);
 
   const enriched = useMemo(
-    () => dossiers.map((item) => ({ ...item, _code: dossierCode(item), _overdue: isOverdue(item), _due: getDueDate(item) })),
+    () =>
+      dossiers
+        .map((item) => ({ ...item, _code: dossierCode(item), _overdue: isOverdue(item), _due: getDueDate(item) }))
+        .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0)),
     [dossiers]
   );
 
@@ -272,24 +282,26 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return enriched.filter((item) => {
-      const searchable = [
-        item._code,
-        citizenName(item),
-        citizenPhone(item),
-        citizenId(item),
-        item.serviceName,
-        item.serviceId,
-      ].join(" ").toLowerCase();
-      const status = normalizeStatus(item.status);
-      const created = item.createdAt ? new Date(item.createdAt).toISOString().slice(0, 10) : "";
-      return (
-        (!needle || searchable.includes(needle)) &&
-        (filters.status === "ALL" || status === filters.status || (filters.status === "OVERDUE" && item._overdue)) &&
-        (!filters.date || created === filters.date) &&
-        (filters.overdue === "ALL" || (filters.overdue === "YES" ? item._overdue : !item._overdue))
-      );
-    });
+    return enriched
+      .filter((item) => {
+        const searchable = [
+          item._code,
+          citizenName(item),
+          citizenPhone(item),
+          citizenId(item),
+          item.serviceName,
+          item.serviceId,
+        ].join(" ").toLowerCase();
+        const status = normalizeStatus(item.status);
+        const created = item.createdAt ? new Date(item.createdAt).toISOString().slice(0, 10) : "";
+        return (
+          (!needle || searchable.includes(needle)) &&
+          (filters.status === "ALL" || (filters.status === "OVERDUE" ? item._overdue : status === filters.status)) &&
+          (!filters.date || created === filters.date) &&
+          (filters.overdue === "ALL" || (filters.overdue === "YES" ? item._overdue : !item._overdue))
+        );
+      })
+      .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
   }, [enriched, filters, query]);
 
   const selectedDossiers = useMemo(() => enriched.filter((item) => selectedIds.includes(item._code)), [enriched, selectedIds]);
@@ -315,6 +327,15 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
     setChatDetail(null);
   }
 
+  function requestStatusUpdate(items, nextStatus, fallbackNote = "") {
+    const targets = Array.isArray(items) ? items : [items];
+    if (["NEED_MORE", "REJECTED"].includes(nextStatus)) {
+      setNoteModal({ items: targets, status: nextStatus, note: fallbackNote });
+      return;
+    }
+    updateStatus(targets, nextStatus, fallbackNote);
+  }
+
   async function updateStatus(items, nextStatus, note = "") {
     if (!items.length) return;
     setBusy(true);
@@ -330,6 +351,15 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
       );
       setSelectedIds([]);
       setMessage?.(`Đã cập nhật ${items.length} hồ sơ`);
+      setActiveDossier((current) => {
+        if (!current || !items.some((item) => item._code === current._code)) return current;
+        const timeline = current.timeline || current.history || [];
+        return {
+          ...current,
+          status: nextStatus,
+          timeline: [...timeline, { status: nextStatus, action: String(nextStatus).toLowerCase(), note: note || statusMeta(nextStatus).label, actor: "admin", createdAt: new Date().toISOString() }],
+        };
+      });
       await onReload?.();
     } catch (error) {
       setMessage?.("Không cập nhật được trạng thái hồ sơ");
@@ -448,9 +478,9 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
             <div className="text-sm font-bold text-blue-900">Đã chọn {selectedIds.length} hồ sơ</div>
             <div className="flex flex-wrap gap-2">
-              <BatchButton disabled={busy} onClick={() => updateStatus(selectedDossiers, "COMPLETED", "Duyệt hàng loạt")} label="Duyệt" />
-              <BatchButton disabled={busy} onClick={() => updateStatus(selectedDossiers, "PROCESSING", "Chuyển xử lý hàng loạt")} label="Chuyển xử lý" />
-              <BatchButton disabled={busy} onClick={() => updateStatus(selectedDossiers, "NEED_MORE", "Yêu cầu bổ sung hồ sơ")} label="Yêu cầu bổ sung" />
+              <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "COMPLETED", "Duyệt hàng loạt")} label="Duyệt" />
+              <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "PROCESSING", "Chuyển xử lý hàng loạt")} label="Chuyển xử lý" />
+              <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "NEED_MORE", "Yêu cầu bổ sung hồ sơ")} label="Yêu cầu bổ sung" />
               <BatchButton disabled={busy} onClick={() => exportCsv(selectedDossiers)} label="Xuất Excel" icon={Download} />
             </div>
           </div>
@@ -465,11 +495,11 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
           onToggleAll={() => setSelectedIds(allVisibleSelected ? [] : filtered.map((item) => item._code))}
           onToggleSelect={toggleSelect}
           onOpen={openDrawer}
-          onUpdate={(item, status) => updateStatus([item], status)}
+          onUpdate={(item, status) => requestStatusUpdate([item], status)}
           busy={busy}
         />
       ) : (
-        <KanbanBoard items={filtered} onOpen={openDrawer} onDropStatus={(item, status) => updateStatus([item], status, "Cập nhật từ Kanban")} />
+        <KanbanBoard items={filtered} onOpen={openDrawer} onDropStatus={(item, status) => requestStatusUpdate([item], status, "Cập nhật từ Kanban")} />
       )}
 
       {activeDossier ? (
@@ -478,7 +508,7 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
           tab={drawerTab}
           setTab={setDrawerTab}
           onClose={() => setActiveDossier(null)}
-          onUpdate={(status) => updateStatus([activeDossier], status)}
+          onUpdate={(status) => requestStatusUpdate([activeDossier], status)}
           activeConversation={activeConversation}
           chatDetail={chatDetail}
           chatText={chatText}
@@ -488,6 +518,52 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
           busy={busy}
         />
       ) : null}
+
+      {noteModal ? (
+        <NoteModal
+          status={noteModal.status}
+          count={noteModal.items.length}
+          note={noteModal.note}
+          setNote={(note) => setNoteModal((prev) => ({ ...prev, note }))}
+          onClose={() => setNoteModal(null)}
+          onSubmit={() => {
+            const next = noteModal;
+            setNoteModal(null);
+            updateStatus(next.items, next.status, next.note);
+          }}
+          busy={busy}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function NoteModal({ status, count, note, setNote, onClose, onSubmit, busy }) {
+  const isNeedMore = status === "NEED_MORE";
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-black text-slate-950">{isNeedMore ? "Ghi chú bổ sung hồ sơ" : "Lý do từ chối hồ sơ"}</h3>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Áp dụng cho {count} hồ sơ. Nội dung này sẽ hiển thị cho người dân.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+        </div>
+        <textarea
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          rows={5}
+          placeholder={isNeedMore ? "Nhập rõ giấy tờ/thông tin cần người dân bổ sung..." : "Nhập lý do từ chối hồ sơ..."}
+          className="mt-4 w-full rounded-2xl border border-slate-200 p-4 text-sm font-semibold outline-none focus:border-[#003366] focus:ring-4 focus:ring-blue-100"
+        />
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={onClose} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-200">Huỷ</button>
+          <button type="button" onClick={onSubmit} disabled={busy || String(note || "").trim().length < 5} className="flex-1 rounded-2xl bg-[#003366] px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50">
+            Xác nhận
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

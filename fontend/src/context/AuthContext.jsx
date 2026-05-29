@@ -11,6 +11,7 @@ import {
   getMe,
   patchProfile
 } from "../lib/api.js";
+import { disconnectSocket } from "../lib/socket.js";
 
 const AuthContext = createContext(null);
 
@@ -92,6 +93,7 @@ export function AuthProvider({ children }) {
   const refreshProfile = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
+      disconnectSocket();
       setUser(null);
       setAvatarUrl(null);
       setReady(true);
@@ -106,6 +108,7 @@ export function AuthProvider({ children }) {
     } catch (err) {
       const status = err?.response?.status;
       if (status === 401 || status === 403) {
+        disconnectSocket();
         setUser(null);
         setAvatarUrl(null);
         localStorage.removeItem("token");
@@ -153,6 +156,7 @@ export function AuthProvider({ children }) {
 
   const loginWithToken = useCallback(
     async (token) => {
+      disconnectSocket();
       localStorage.setItem("token", token);
       await refreshProfile();
     },
@@ -161,6 +165,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem("token");
+    disconnectSocket();
     setUser(null);
     setAvatarUrl(null);
   }, []);

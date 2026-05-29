@@ -122,13 +122,15 @@ export default function AdminPanel() {
 
   const filteredDossiers = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return dossiers.filter((item) => {
-      const code = String(item.applicationCode || item.dossierCode || item.dossierId || item.id || "").toLowerCase();
-      const name = String(item.citizenName || item.formData?.fullName || "").toLowerCase();
-      const phone = String(item.phone || item.formData?.phone || "").toLowerCase();
-      const status = String(item.status || "PENDING").toUpperCase();
-      return (!q || code.includes(q) || name.includes(q) || phone.includes(q)) && (statusFilter === "ALL" || status === statusFilter);
-    });
+    return [...dossiers]
+      .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0))
+      .filter((item) => {
+        const code = String(item.applicationCode || item.dossierCode || item.dossierId || item.id || "").toLowerCase();
+        const name = String(item.citizenName || item.formData?.fullName || "").toLowerCase();
+        const phone = String(item.phone || item.formData?.phone || "").toLowerCase();
+        const status = String(item.status || "PENDING").toUpperCase();
+        return (!q || code.includes(q) || name.includes(q) || phone.includes(q)) && (statusFilter === "ALL" || status === statusFilter);
+      });
   }, [dossiers, query, statusFilter]);
 
   const sortedConversations = useMemo(
@@ -159,7 +161,7 @@ export default function AdminPanel() {
       rejected: stats.rejected ?? stats.totalRejected ?? 0,
       waitingMessages: stats.waitingMessages ?? 0,
     });
-    setDossiers(dossierRes.data.dossiers || []);
+    setDossiers([...(dossierRes.data.dossiers || [])].sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0)));
     setConversations(convRes.data.conversations || []);
   }
 

@@ -84,7 +84,8 @@ function initSocket(server) {
  
     const userRoom = `user_${user.id}`;
     socket.join(userRoom);
-    console.log(`[SOCKET] ✅ Online: ${user.fullName} | room=${userRoom} | socketId=${socket.id}`);
+    socket.emit("socket-ready", { userId: user.id, room: userRoom, socketId: socket.id });
+    console.log(`[SOCKET] ✅ Online: ${user.fullName || user.id} | room=${userRoom} | socketId=${socket.id}`);
 
     socket.on("send-message", async (data = {}) => {
       const isAiChat =
@@ -144,7 +145,7 @@ function initSocket(server) {
         return;
       }
  
-      socket.to(targetRoom).emit("incoming-call", {
+      io.to(targetRoom).emit("incoming-call", {
         fromUserId:  user.id,
         callerName:  callerName || user.fullName,
         offer: resolvedOffer,
@@ -163,7 +164,7 @@ function initSocket(server) {
       const { toUserId, answer, roomId } = data;
       console.log(`[CALL] ✔️  ${user.fullName} chấp nhận → gửi answer tới user_${toUserId}`);
  
-      socket.to(`user_${toUserId}`).emit("call-accepted", {
+      io.to(`user_${toUserId}`).emit("call-accepted", {
         fromUserId: user.id,
         answer,
         roomId,
@@ -180,7 +181,7 @@ function initSocket(server) {
         return;
       }
       console.log(`[ICE] 🧊 ${user.fullName} (${user.id}) → user_${toUserId}`);
-      socket.to(`user_${toUserId}`).emit("ice-candidate", {
+      io.to(`user_${toUserId}`).emit("ice-candidate", {
         fromUserId: user.id,
         candidate,
       });
@@ -193,7 +194,7 @@ function initSocket(server) {
       const { toUserId, roomId, durationSec = 0, callerId = "", callerName = "" } = data || {};
       console.log(`[CALL] 📵 ${user.fullName} kết thúc → user_${toUserId}`);
       // FIX: truyền fromUserId để client nhóm chỉ xóa peer này
-      socket.to(`user_${toUserId}`).emit("call-ended", { fromUserId: user.id });
+      io.to(`user_${toUserId}`).emit("call-ended", { fromUserId: user.id });
       await createCallLogMessage({
         callRoomId: roomId,
         actorUserId: user.id,
@@ -209,13 +210,31 @@ function initSocket(server) {
       const { toUserId, roomId, callerId = "", callerName = "" } = data || {};
       console.log(`[CALL] 🚫 ${user.fullName} từ chối → user_${toUserId}`);
       // FIX: truyền fromUserId để client nhóm chỉ xóa peer này, không đóng hết
-      socket.to(`user_${toUserId}`).emit("call-rejected", { fromUserId: user.id });
+      io.to(`user_${toUserId}`).emit("call-rejected", { fromUserId: user.id });
       await createCallLogMessage({
         callRoomId: roomId,
         actorUserId: user.id,
         status: "missed",
         durationSec: 0,
         callerId: callerId || toUserId,
+        callerName: callerName || user.fullName,
+        endedBy: user.id
+      });
+    });
+
+    socket.on("call-missed", async (data) => {
+      const { toUserIds = [], toUserId, roomId, callerName = "" } = data || {};
+      const targetIds = Array.from(new Set([...(Array.isArray(toUserIds) ? toUserIds : []), toUserId].filter(Boolean)));
+      console.log(`[CALL] ⏱️ ${user.fullName || user.id} gọi nhỡ | targets=${targetIds.join(",")}`);
+      targetIds.forEach((targetId) => {
+        io.to(`user_${targetId}`).emit("call-ended", { fromUserId: user.id });
+      });
+      await createCallLogMessage({
+        callRoomId: roomId,
+        actorUserId: user.id,
+        status: "missed",
+        durationSec: 0,
+        callerId: user.id,
         callerName: callerName || user.fullName,
         endedBy: user.id
       });
@@ -232,7 +251,7 @@ function initSocket(server) {
       const targetSockets = await io.in(targetRoom).fetchSockets();
       if (targetSockets.length === 0) return;
  
-      socket.to(targetRoom).emit("group-call-offer", {
+      io.to(targetRoom).emit("group-call-offer", {
         fromUserId: user.id,
         callerName: user.fullName,
         offer,

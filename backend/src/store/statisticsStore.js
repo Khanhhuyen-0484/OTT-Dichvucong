@@ -98,6 +98,14 @@ function getApplicationPaymentStatus(application) {
   return String(application?.paymentStatus || "UNPAID").trim().toUpperCase();
 }
 
+function normalizeApplicationStatus(application) {
+  const status = String(application?.status || "PENDING").trim().toUpperCase();
+  const paymentStatus = getApplicationPaymentStatus(application);
+  if (status === "DRAFT" && isPaidStatus(paymentStatus)) return "PENDING";
+  if (status === "SUBMITTED" || status === "RECEIVED" || status === "WAITING" || status === "WAITING_RECEIVE") return "PENDING";
+  return status;
+}
+
 function getDossierKey(item) {
   return String(
     item?.dossierId ||
@@ -133,7 +141,8 @@ function dedupeApplications(items = []) {
 }
 
 function isSubmittedApplication(application) {
-  return String(application?.status || "").trim().toUpperCase() !== "DRAFT";
+  const status = String(application?.status || "").trim().toUpperCase();
+  return status !== "DRAFT" || isPaidStatus(getApplicationPaymentStatus(application));
 }
 
 function isPaidStatus(status) {
@@ -242,7 +251,7 @@ async function getAdminStatistics(query = {}) {
       .filter(isSubmittedApplication)
       .map((application) => ({
         ...application,
-        status: String(application.status || "PENDING").trim().toUpperCase(),
+        status: normalizeApplicationStatus(application),
         createdAtDate: getApplicationDate(application),
       }));
 
@@ -256,10 +265,10 @@ async function getAdminStatistics(query = {}) {
       inRange(application.createdAtDate, fromDate, toDate)
     );
 
-    const todayApplications = filteredApplications.filter((application) =>
+    const todayApplications = applications.filter((application) =>
       inRange(application.createdAtDate, todayStart, todayEnd)
     );
-    const monthApplications = filteredApplications.filter((application) =>
+    const monthApplications = applications.filter((application) =>
       inRange(application.createdAtDate, monthStart, null)
     );
 
@@ -303,43 +312,34 @@ async function getAdminStatistics(query = {}) {
     const normalizedPayments = (Array.isArray(paymentsRaw) ? paymentsRaw : []).map((payment) =>
       normalizePayment(payment, applicationsByCode, serviceMap)
     );
-    const filteredPayments = normalizedPayments.filter((payment) =>
-      inRange(payment.paidDate, fromDate, toDate)
-    );
+    const paidPayments = normalizedPayments.filter((payment) => isPaidStatus(payment.status));
 
     const revenueByServiceMap = new Map();
     const revenueByDateMap = new Map();
-    const countedPaidDossiers = new Set();
-    let totalRevenue = 0;
-    let todayRevenue = 0;
-    let monthRevenue = 0;
-    let paidCount = 0;
+    const dossiersWithAnyPayment = new Set();
     let pendingPaymentCount = 0;
     let unpaidCount = 0;
 
-    filteredPayments.forEach((payment) => {
-      if (isPaidStatus(payment.status)) {
-        totalRevenue += payment.amount;
-        paidCount += 1;
-        if (inRange(payment.paidDate, todayStart, todayEnd)) todayRevenue += payment.amount;
-        if (inRange(payment.paidDate, monthStart, null)) monthRevenue += payment.amount;
+    const revenueRecords = paidPayments.map((payment) => {
+      if (payment.dossierId) dossiersWithAnyPayment.add(payment.dossierId);
+      return {
+        paymentId: payment.paymentId,
+        dossierId: payment.dossierId,
+        serviceId: payment.serviceId,
+        serviceName: payment.serviceName,
+        serviceGroupKey: payment.serviceGroupKey,
+        amount: payment.amount,
+        paidDate: payment.paidDate,
+        paidDateKey: payment.paidDateKey,
+        createdAt: payment.createdAt,
+        paidAt: payment.paidAt || payment.paymentCompletedAt || payment.completedAt || payment.updatedAt || payment.createdAt,
+        status: payment.status,
+      };
+    });
 
-        addRevenue(
-          revenueByServiceMap,
-          payment.serviceGroupKey || payment.serviceId,
-          { serviceId: payment.serviceId, serviceName: payment.serviceName },
-          payment.amount
-        );
-        addRevenue(
-          revenueByDateMap,
-          payment.paidDateKey,
-          { date: payment.paidDateKey },
-          payment.amount
-        );
-        if (payment.dossierId) countedPaidDossiers.add(payment.dossierId);
-        return;
-      }
-
+    normalizedPayments.forEach((payment) => {
+      if (payment.dossierId) dossiersWithAnyPayment.add(payment.dossierId);
+      if (isPaidStatus(payment.status)) return;
       if (PENDING_PAYMENT_STATUSES.has(payment.status)) {
         pendingPaymentCount += 1;
       } else if (UNPAID_PAYMENT_STATUSES.has(payment.status) || payment.status) {
@@ -347,10 +347,10 @@ async function getAdminStatistics(query = {}) {
       }
     });
 
-    filteredApplications.forEach((application) => {
+    applications.forEach((application) => {
       const code = getDossierKey(application);
       const paymentStatus = getApplicationPaymentStatus(application);
-      if (!isPaidStatus(paymentStatus) || countedPaidDossiers.has(code)) return;
+      if (!isPaidStatus(paymentStatus) || dossiersWithAnyPayment.has(code)) return;
 
       const amount = safeNumber(application.fee || application.paymentAmount);
       if (amount <= 0) return;
@@ -362,21 +362,40 @@ async function getAdminStatistics(query = {}) {
           application.updatedAt ||
           application.createdAt
       );
-      if (!inRange(paidDate, fromDate, toDate)) return;
-
       const serviceGroup = getServiceGroup(application, serviceMap);
-      totalRevenue += amount;
-      paidCount += 1;
-      if (inRange(paidDate, todayStart, todayEnd)) todayRevenue += amount;
-      if (inRange(paidDate, monthStart, null)) monthRevenue += amount;
+      revenueRecords.push({
+        paymentId: application.paymentId || "",
+        dossierId: code,
+        serviceId: serviceGroup.serviceId,
+        serviceName: serviceGroup.serviceName,
+        serviceGroupKey: serviceGroup.serviceGroupKey,
+        amount,
+        paidDate,
+        paidDateKey: formatDateKey(paidDate),
+        createdAt: application.createdAt,
+        paidAt: paidDate?.toISOString?.() || application.updatedAt || application.createdAt,
+        status: paymentStatus,
+      });
+    });
 
+    const filteredRevenueRecords = revenueRecords.filter((record) => inRange(record.paidDate, fromDate, toDate));
+    const totalRevenue = revenueRecords.reduce((sum, record) => sum + record.amount, 0);
+    const todayRevenue = revenueRecords
+      .filter((record) => inRange(record.paidDate, todayStart, todayEnd))
+      .reduce((sum, record) => sum + record.amount, 0);
+    const monthRevenue = revenueRecords
+      .filter((record) => inRange(record.paidDate, monthStart, null))
+      .reduce((sum, record) => sum + record.amount, 0);
+    const paidCount = revenueRecords.length;
+
+    filteredRevenueRecords.forEach((record) => {
       addRevenue(
         revenueByServiceMap,
-        serviceGroup.serviceGroupKey,
-        { serviceId: serviceGroup.serviceId, serviceName: serviceGroup.serviceName },
-        amount
+        record.serviceGroupKey || record.serviceId,
+        { serviceId: record.serviceId, serviceName: record.serviceName },
+        record.amount
       );
-      addRevenue(revenueByDateMap, formatDateKey(paidDate), { date: formatDateKey(paidDate) }, amount);
+      addRevenue(revenueByDateMap, record.paidDateKey, { date: record.paidDateKey }, record.amount);
     });
 
     const byService = Array.from(byServiceMap.values())
@@ -406,8 +425,7 @@ async function getAdminStatistics(query = {}) {
         };
       });
 
-    const latestPayments = filteredPayments
-      .filter((payment) => isPaidStatus(payment.status))
+    const latestPayments = filteredRevenueRecords
       .sort((a, b) => (b.paidDate?.getTime() || 0) - (a.paidDate?.getTime() || 0))
       .slice(0, 8)
       .map((payment) => ({

@@ -7,6 +7,9 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
     {
       urls: "turn:openrelay.metered.ca:80",
       username: "openrelayproject",
@@ -26,15 +29,54 @@ const ICE_SERVERS = {
   iceCandidatePoolSize: 10,
 };
 
-async function getMediaStream() {
+const MISSED_CALL_TIMEOUT_SECONDS = 30;
+
+function isVideoCallDebugEnabled() {
   try {
-    return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    return localStorage.getItem("videoCallDebug") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function debugVideoCall(...args) {
+  if (isVideoCallDebugEnabled()) console.log(...args);
+}
+
+async function getMediaStream() {
+  const preferredConstraints = {
+    audio: true,
+    video: {
+      width: { ideal: 640 },
+      height: { ideal: 480 },
+      frameRate: { ideal: 15 },
+      facingMode: "user",
+    },
+  };
+  const basicVideoConstraints = { audio: true, video: true };
+  const audioOnlyConstraints = { audio: true, video: false };
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(preferredConstraints);
   } catch (err) {
-    if (["NotReadableError", "NotFoundError", "OverconstrainedError"].includes(err.name)) {
-      console.warn("[VideoCall] Camera không khả dụng, thử audio-only:", err.name);
-      return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+    debugVideoCall("[VideoCall] Không lấy được camera với constraints ưu tiên:", err.name);
+  }
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(basicVideoConstraints);
+  } catch (err) {
+    debugVideoCall("[VideoCall] Camera vẫn không khả dụng với video:true, chuyển audio-only:", err.name);
+  }
+
+  try {
+    const audioOnlyStream = await navigator.mediaDevices.getUserMedia(audioOnlyConstraints);
+    debugVideoCall("[VideoCall] Đang dùng audio-only vì không tìm thấy camera.");
+    return audioOnlyStream;
+  } catch (err) {
+    if (err.name === "NotAllowedError") {
+      throw err;
     }
-    throw err;
+    throw new Error(`Không thể truy cập thiết bị âm thanh/video: ${err.name || err.message}`);
   }
 }
 
@@ -53,14 +95,140 @@ async function checkMediaPermissions() {
 
 // RemoteVideo: 1 khung hình cho 1 peer.
 function RemoteVideo({ stream, label }) {
+  const videoRef = useRef(null);
+  const audioRef = useRef(null);
+  const [trackState, setTrackState] = useState({
+    hasAudioTrack: false,
+    hasVideoTrack: false,
+    hasLiveVideo: false,
+  });
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return undefined;
+    const audioEl = audioRef.current;
+
+    const attachedTracks = new Set();
+    let playTimer = null;
+    let videoTrackKey = "";
+    let audioTrackKey = "";
+    const videoTracks = () => stream?.getVideoTracks?.() || [];
+    const audioTracks = () => stream?.getAudioTracks?.() || [];
+    const attachMediaElements = () => {
+      const videos = videoTracks();
+      const audios = audioTracks();
+      const nextVideoKey = videos.map((track) => track.id).join("|");
+      const nextAudioKey = audios.map((track) => track.id).join("|");
+      if (nextVideoKey !== videoTrackKey) {
+        videoTrackKey = nextVideoKey;
+        el.srcObject = videos.length ? new MediaStream(videos) : null;
+      }
+      if (audioEl && nextAudioKey !== audioTrackKey) {
+        audioTrackKey = nextAudioKey;
+        audioEl.srcObject = audios.length ? new MediaStream(audios) : null;
+      }
+    };
+    const syncTrackState = () => {
+      const videos = videoTracks();
+      const audios = audioTracks();
+      attachMediaElements();
+      setTrackState({
+        hasAudioTrack: audios.some((track) => track.readyState === "live"),
+        hasVideoTrack: videos.some((track) => track.readyState === "live"),
+        hasLiveVideo: videos.some((track) => track.readyState === "live" && !track.muted),
+      });
+    };
+    const playRemote = () => {
+      if (!stream) return;
+      if (playTimer) window.clearTimeout(playTimer);
+      playTimer = window.setTimeout(() => {
+        el.play().catch((err) => {
+          if (err?.name !== "AbortError") {
+            console.warn("[VideoCall] Không autoplay được remote video:", err?.message || err);
+          }
+        });
+        audioEl?.play?.().catch((err) => {
+          if (err?.name !== "AbortError") {
+            console.warn("[VideoCall] Không autoplay được remote audio:", err?.message || err);
+          }
+        });
+      }, 50);
+    };
+    const attachTrackHandlers = (track) => {
+      if (!track || attachedTracks.has(track)) return;
+      attachedTracks.add(track);
+      const handleUnmute = () => {
+        syncTrackState();
+        playRemote();
+      };
+      track.addEventListener?.("unmute", handleUnmute);
+      track.addEventListener?.("mute", syncTrackState);
+      track.addEventListener?.("ended", syncTrackState);
+      track.__videoCallHandlers = { handleUnmute, syncTrackState };
+    };
+    const handleTrackChange = () => {
+      stream?.getTracks?.().forEach(attachTrackHandlers);
+      syncTrackState();
+      playRemote();
+    };
+
+    syncTrackState();
+    if (stream) {
+      if (el.readyState >= 2) playRemote();
+      el.onloadedmetadata = playRemote;
+      stream.getTracks?.().forEach(attachTrackHandlers);
+      stream.addEventListener?.("addtrack", handleTrackChange);
+      stream.addEventListener?.("removetrack", handleTrackChange);
+    }
+
+    return () => {
+      if (playTimer) window.clearTimeout(playTimer);
+      el.onloadedmetadata = null;
+      if (audioEl) audioEl.onloadedmetadata = null;
+      attachedTracks.forEach((track) => {
+        const handlers = track.__videoCallHandlers;
+        if (handlers) {
+          track.removeEventListener?.("unmute", handlers.handleUnmute);
+          track.removeEventListener?.("mute", handlers.syncTrackState);
+          track.removeEventListener?.("ended", handlers.syncTrackState);
+        }
+      });
+      stream?.removeEventListener?.("addtrack", handleTrackChange);
+      stream?.removeEventListener?.("removetrack", handleTrackChange);
+    };
+  }, [stream]);
+
+  const waitingText = trackState.hasVideoTrack
+    ? "Đã nhận video, đang mở khung hình..."
+    : trackState.hasAudioTrack
+      ? "Đã nhận âm thanh, chưa nhận video..."
+      : "Đang chờ hình ảnh...";
+
   return (
     <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
       {stream ? (
-        <video
-          autoPlay playsInline
-          className="w-full h-full object-cover"
-          ref={(el) => { if (el) el.srcObject = stream; }}
-        />
+        <>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
+          <audio ref={audioRef} autoPlay playsInline />
+          {!trackState.hasVideoTrack ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 text-slate-500">
+              <div className="w-16 h-16 rounded-full bg-linear-to-br from-slate-700 to-slate-800 flex items-center justify-center text-2xl font-bold text-slate-400">
+                {label?.[0]?.toUpperCase() || "?"}
+              </div>
+              <p className="px-4 text-center text-sm italic text-slate-500">{waitingText}</p>
+            </div>
+          ) : !trackState.hasLiveVideo ? (
+            <div className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white">
+              Đang mở hình ảnh...
+            </div>
+          ) : null}
+        </>
       ) : (
         <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-3">
           <div className="w-16 h-16 rounded-full bg-linear-to-br from-slate-700 to-slate-800 flex items-center justify-center text-2xl font-bold text-slate-400">
@@ -72,6 +240,86 @@ function RemoteVideo({ stream, label }) {
       <div className="absolute bottom-3 left-3 bg-black/60 px-2.5 py-1 rounded-lg text-xs text-white font-medium">
         {label || "Thành viên"}
       </div>
+    </div>
+  );
+}
+
+const LocalVideo = React.memo(function LocalVideo({ stream, hidden = false }) {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return undefined;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream || null;
+    }
+    return () => {
+      if (el.srcObject === stream) el.srcObject = null;
+    };
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      muted
+      playsInline
+      className={`w-full h-full object-cover scale-x-[-1] transform-gpu ${hidden ? "opacity-0" : "opacity-100"}`}
+    />
+  );
+});
+
+function CallerWaitingAvatar({ active, initial }) {
+  const [remaining, setRemaining] = useState(MISSED_CALL_TIMEOUT_SECONDS);
+
+  useEffect(() => {
+    if (!active) {
+      setRemaining(MISSED_CALL_TIMEOUT_SECONDS);
+      return undefined;
+    }
+
+    const startedAt = Date.now();
+    setRemaining(MISSED_CALL_TIMEOUT_SECONDS);
+    const timer = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      setRemaining(Math.max(0, MISSED_CALL_TIMEOUT_SECONDS - elapsed));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  const progress = remaining / MISSED_CALL_TIMEOUT_SECONDS;
+  const radius = 46;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - progress);
+
+  return (
+    <div className="relative h-28 w-28">
+      {active && (
+        <svg className="absolute inset-0 h-28 w-28 -rotate-90" viewBox="0 0 112 112" aria-hidden="true">
+          <circle cx="56" cy="56" r={radius} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="6" />
+          <circle
+            cx="56"
+            cy="56"
+            r={radius}
+            fill="none"
+            stroke={remaining <= 8 ? "#ef4444" : "#22c55e"}
+            strokeLinecap="round"
+            strokeWidth="6"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            className="transition-all duration-300 ease-linear"
+          />
+        </svg>
+      )}
+      <div className="absolute inset-4 rounded-full bg-linear-to-br from-blue-600 to-blue-800 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+        {initial || "B"}
+      </div>
+      {active && (
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-slate-950 px-2 py-0.5 text-[11px] font-black text-white ring-1 ring-white/10">
+          {remaining}s
+        </div>
+      )}
     </div>
   );
 }
@@ -98,13 +346,19 @@ export default function VideoCall({
   const [isVideoOff,    setIsVideoOff]    = useState(false);
   const [errorMsg,      setErrorMsg]      = useState(null);
   const [remoteStreams, setRemoteStreams]  = useState({});
+  const [joinedPeerIds, setJoinedPeerIds] = useState([]);
 
   const socketRef       = useRef(connectSocket());
   const localStreamRef  = useRef(null);
   const pcsRef          = useRef({});
   const queuesRef       = useRef({});
+  const remoteStreamsRef = useRef({});
+  const statsTimersRef  = useRef({});
+  const renegotiatedVideoRef = useRef({});
   const activeRef       = useRef(true);
   const callStartedAtRef = useRef(0);
+  const joinedPeerIdsRef = useRef([]);
+  const missedCallTimerRef = useRef(null);
 
   const onCloseRef      = useRef(onClose);
   const targetsRef      = useRef(targets);
@@ -119,6 +373,7 @@ export default function VideoCall({
   useEffect(() => { callerOfferRef.current  = callerOffer;  }, [callerOffer]);
   useEffect(() => { isGroupRef.current      = isGroup;      }, [isGroup]);
   useEffect(() => { activeRoomRef.current   = activeRoom;   }, [activeRoom]);
+  useEffect(() => { joinedPeerIdsRef.current = joinedPeerIds; }, [joinedPeerIds]);
 
   // Helpers.
   const destroyPeer = useCallback((userId) => {
@@ -128,13 +383,33 @@ export default function VideoCall({
     pc.onicecandidate = null;
     pc.onconnectionstatechange = null;
     pc.close();
+    if (statsTimersRef.current[userId]) {
+      window.clearInterval(statsTimersRef.current[userId]);
+      delete statsTimersRef.current[userId];
+    }
     delete pcsRef.current[userId];
     delete queuesRef.current[userId];
+    delete remoteStreamsRef.current[userId];
+    delete renegotiatedVideoRef.current[userId];
     setRemoteStreams((prev) => { const n = { ...prev }; delete n[userId]; return n; });
-    console.log("[VideoCall] destroyPeer:", userId);
+    setJoinedPeerIds((prev) => prev.filter((id) => id !== userId));
+    debugVideoCall("[VideoCall] destroyPeer:", userId);
+  }, []);
+
+  const markPeerJoined = useCallback((userId) => {
+    if (!userId) return;
+    if (missedCallTimerRef.current) {
+      window.clearTimeout(missedCallTimerRef.current);
+      missedCallTimerRef.current = null;
+    }
+    setJoinedPeerIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
   }, []);
 
   const destroyAll = useCallback(() => {
+    if (missedCallTimerRef.current) {
+      window.clearTimeout(missedCallTimerRef.current);
+      missedCallTimerRef.current = null;
+    }
     Object.keys(pcsRef.current).forEach(destroyPeer);
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -148,6 +423,21 @@ export default function VideoCall({
     onCloseRef.current();
   }, [destroyAll]);
 
+  const clearMissedCallTimer = useCallback(() => {
+    if (!missedCallTimerRef.current) return;
+    window.clearTimeout(missedCallTimerRef.current);
+    missedCallTimerRef.current = null;
+  }, []);
+
+  const emitMissedCall = useCallback(() => {
+    const targetIds = targetsRef.current.filter(Boolean);
+    socketRef.current.emit("call-missed", {
+      toUserIds: targetIds,
+      roomId,
+      callerName: currentUserName,
+    });
+  }, [currentUserName, roomId]);
+
   const processQueue = useCallback(async (userId) => {
     const pc = pcsRef.current[userId];
     if (!pc?.remoteDescription) return;
@@ -159,7 +449,129 @@ export default function VideoCall({
     }
   }, []);
 
-  const createPeer = useCallback((userId, stream) => {
+  const renegotiateVideoReceive = useCallback(async (userId, pc) => {
+    if (!activeRef.current || !pc || renegotiatedVideoRef.current[userId]) return;
+    if (pc.signalingState !== "stable") return;
+
+    const hasVideoReceiver = pc.getReceivers?.().some((receiver) => receiver.track?.kind === "video");
+    if (!hasVideoReceiver) return;
+
+    renegotiatedVideoRef.current[userId] = true;
+    try {
+      debugVideoCall("[VideoCall] remote video chưa có frame, renegotiate video receive:", userId);
+      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      await pc.setLocalDescription(offer);
+      socketRef.current.emit("group-call-offer", {
+        toUserId: userId,
+        offer,
+        roomId,
+        callerName: currentUserName,
+      });
+    } catch (err) {
+      renegotiatedVideoRef.current[userId] = false;
+      console.error("[VideoCall] renegotiate video lỗi:", err);
+    }
+  }, [currentUserName, roomId]);
+
+  const startStatsMonitor = useCallback((userId, pc) => {
+    if (statsTimersRef.current[userId]) return;
+    statsTimersRef.current[userId] = window.setInterval(async () => {
+      if (!activeRef.current || !pc || !["connecting", "connected"].includes(pc.connectionState)) return;
+      try {
+        const stats = await pc.getStats();
+        const inboundVideo = [];
+        const outboundVideo = [];
+        stats.forEach((report) => {
+          if (report.type === "inbound-rtp" && report.kind === "video") {
+            inboundVideo.push({
+              packetsReceived: report.packetsReceived || 0,
+              bytesReceived: report.bytesReceived || 0,
+              framesDecoded: report.framesDecoded || 0,
+            });
+          }
+          if (report.type === "outbound-rtp" && report.kind === "video") {
+            outboundVideo.push({
+              packetsSent: report.packetsSent || 0,
+              bytesSent: report.bytesSent || 0,
+              framesEncoded: report.framesEncoded || 0,
+            });
+          }
+        });
+        if (inboundVideo.length || outboundVideo.length) {
+          const videoReceivers = pc.getReceivers?.()
+            .filter((receiver) => receiver.track?.kind === "video")
+            .map((receiver) => ({
+              muted: receiver.track.muted,
+              readyState: receiver.track.readyState,
+            })) || [];
+
+          const hasDecodedFrame = inboundVideo.some((item) => item.framesDecoded > 0);
+          const hasMutedVideoReceiver = videoReceivers.some((item) => item.readyState === "live" && item.muted);
+          if (hasDecodedFrame) {
+            debugVideoCall("[VideoCall] video-stats", userId, JSON.stringify({ inboundVideo, outboundVideo, videoReceivers }));
+            window.clearInterval(statsTimersRef.current[userId]);
+            delete statsTimersRef.current[userId];
+            return;
+          }
+          debugVideoCall("[VideoCall] video-stats", userId, JSON.stringify({ inboundVideo, outboundVideo, videoReceivers }));
+          if (!hasDecodedFrame && hasMutedVideoReceiver) {
+            await renegotiateVideoReceive(userId, pc);
+          }
+        }
+      } catch (err) {
+        console.warn("[VideoCall] getStats lỗi:", err?.message || err);
+      }
+    }, 3000);
+  }, [renegotiateVideoReceive]);
+
+  const attachLocalTracks = useCallback(async (pc, userId, stream, { ensureVideoReceiver = false } = {}) => {
+    if (!pc || !stream) return;
+    for (const track of stream.getTracks()) {
+      const senders = pc.getSenders();
+      const alreadyAdded = senders.some((sender) => sender.track?.id === track.id);
+      if (alreadyAdded) continue;
+
+      const transceiver = pc.getTransceivers?.()
+        ?.find((item) => {
+          const kind = item.receiver?.track?.kind || item.sender?.track?.kind;
+          return kind === track.kind && !item.sender?.track && item.mid !== null;
+        });
+
+      if (transceiver) {
+        await transceiver.sender.replaceTrack(track);
+        transceiver.direction = "sendrecv";
+      } else {
+        pc.addTrack(track, stream);
+      }
+    }
+
+    if (ensureVideoReceiver && !stream.getVideoTracks().length) {
+      const videoTransceiver = pc.getTransceivers?.()
+        ?.find((transceiver) => transceiver.receiver?.track?.kind === "video" || transceiver.sender?.track?.kind === "video");
+      if (videoTransceiver) {
+        try {
+          if (!videoTransceiver.sender?.track && videoTransceiver.direction !== "recvonly") {
+            videoTransceiver.direction = "recvonly";
+          }
+        } catch (err) {
+          console.warn("[VideoCall] Không set được video transceiver recvonly:", err?.message || err);
+        }
+      } else {
+        pc.addTransceiver("video", { direction: "recvonly" });
+      }
+    }
+
+    debugVideoCall("[VideoCall] local-tracks", userId, stream.getTracks().map((track) => `${track.kind}:${track.readyState}`));
+    debugVideoCall("[VideoCall] transceivers", userId, pc.getTransceivers?.().map((item) => ({
+      mid: item.mid,
+      direction: item.direction,
+      currentDirection: item.currentDirection,
+      sender: item.sender?.track?.kind || null,
+      receiver: item.receiver?.track?.kind || null,
+    })));
+  }, []);
+
+  const createPeer = useCallback((userId) => {
     if (pcsRef.current[userId]) return pcsRef.current[userId];
     const pc = new RTCPeerConnection(ICE_SERVERS);
     pcsRef.current[userId] = pc;
@@ -167,14 +579,39 @@ export default function VideoCall({
 
     pc.ontrack = (e) => {
       if (!activeRef.current) return;
-      const s = e.streams?.[0] || new MediaStream([e.track]);
-      setRemoteStreams((prev) => ({ ...prev, [userId]: s }));
+      markPeerJoined(userId);
+      const remoteStream = remoteStreamsRef.current[userId] || new MediaStream();
+      remoteStreamsRef.current[userId] = remoteStream;
+      if (!remoteStream.getTracks().some((track) => track.id === e.track.id)) {
+        remoteStream.addTrack(e.track);
+      }
+      const publishRemoteStream = () => {
+        setRemoteStreams((prev) => ({
+          ...prev,
+          [userId]: new MediaStream(remoteStream.getTracks()),
+        }));
+      };
+      debugVideoCall("[VideoCall] remote-track", userId, e.track.kind, {
+        muted: e.track.muted,
+        readyState: e.track.readyState,
+        tracks: remoteStream.getTracks().map((track) => `${track.kind}:${track.readyState}`),
+      });
+      e.track.addEventListener?.("unmute", () => {
+        debugVideoCall("[VideoCall] remote-track-unmute", userId, e.track.kind);
+        publishRemoteStream();
+      });
+      e.track.addEventListener?.("ended", publishRemoteStream);
+      publishRemoteStream();
+      if (e.track.kind === "video") {
+        startStatsMonitor(userId, pc);
+        window.setTimeout(() => {
+          if (!activeRef.current || !pcsRef.current[userId]) return;
+          if (e.track.readyState === "live" && e.track.muted) {
+            renegotiateVideoReceive(userId, pc);
+          }
+        }, 2500);
+      }
     };
-
-    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-    if (!stream.getVideoTracks().length) {
-      pc.addTransceiver("video", { direction: "recvonly" });
-    }
 
     pc.onicecandidate = (e) => {
       if (!e.candidate || !activeRef.current) return;
@@ -184,8 +621,12 @@ export default function VideoCall({
     pc.onconnectionstatechange = () => {
       if (!activeRef.current) return;
       const state = pc.connectionState;
-      console.log("[VideoCall] peer-state", userId, state);
-      if (state === "connected") { setStatus("connected"); setErrorMsg(null); }
+      debugVideoCall("[VideoCall] peer-state", userId, state);
+      if (state === "connected") {
+        setStatus("connected");
+        setErrorMsg(null);
+        startStatsMonitor(userId, pc);
+      }
       if (state === "connected" && !callStartedAtRef.current) {
         callStartedAtRef.current = Date.now();
       }
@@ -201,8 +642,16 @@ export default function VideoCall({
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      if (!activeRef.current) return;
+      debugVideoCall("[VideoCall] ice-state", userId, pc.iceConnectionState);
+      if (["connected", "completed"].includes(pc.iceConnectionState)) {
+        startStatsMonitor(userId, pc);
+      }
+    };
+
     return pc;
-  }, [roomId, destroyPeer]);
+  }, [roomId, destroyPeer, markPeerJoined, renegotiateVideoReceive, startStatsMonitor]);
 
   // Main effect.
   useEffect(() => {
@@ -213,6 +662,13 @@ export default function VideoCall({
       if (!activeRef.current) return;
       const pc = pcsRef.current[fromUserId];
       if (!pc) return;
+      if (pc.signalingState !== "have-local-offer") {
+        debugVideoCall("[VideoCall] Bỏ qua answer trễ/trùng", {
+          fromUserId,
+          signalingState: pc.signalingState,
+        });
+        return;
+      }
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
         await processQueue(fromUserId);
@@ -233,10 +689,11 @@ export default function VideoCall({
 
     const handleGroupOffer = async ({ fromUserId, offer }) => {
       if (!activeRef.current || !localStreamRef.current) return;
-      console.log("[VideoCall] group-call-offer", fromUserId);
-      const pc = createPeer(fromUserId, localStreamRef.current);
+      debugVideoCall("[VideoCall] group-call-offer", fromUserId);
+      const pc = createPeer(fromUserId);
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await attachLocalTracks(pc, fromUserId, localStreamRef.current, { ensureVideoReceiver: true });
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit("call-accepted", { toUserId: fromUserId, answer, roomId });
@@ -247,7 +704,7 @@ export default function VideoCall({
     // call-ended nhận fromUserId để chỉ xóa peer đó trong nhóm.
     const handleCallEnded = ({ fromUserId } = {}) => {
       if (!activeRef.current) return;
-      console.log("[VideoCall] call-ended", fromUserId);
+      debugVideoCall("[VideoCall] call-ended", fromUserId);
       if (fromUserId && isGroupRef.current) {
         destroyPeer(fromUserId);
         // Đóng hẳn nếu không còn ai.
@@ -260,7 +717,7 @@ export default function VideoCall({
     // call-rejected trong nhóm chỉ hiện toast 3s, xóa peer, không đóng cuộc gọi.
     const handleCallRejected = ({ fromUserId } = {}) => {
       if (!activeRef.current) return;
-      console.log("[VideoCall] call-rejected from", fromUserId);
+      debugVideoCall("[VideoCall] call-rejected from", fromUserId);
       if (fromUserId && isGroupRef.current) {
         const name = activeRoomRef.current?.members?.find((m) => m.id === fromUserId)?.fullName || "Thành viên";
         setErrorMsg(`${name} từ chối cuộc gọi`);
@@ -274,11 +731,9 @@ export default function VideoCall({
 
     const handleCallUnavailable = ({ reason, targetUserId, isGroupCall } = {}) => {
       if (!activeRef.current) return;
+      debugVideoCall("[VideoCall] call-unavailable", { reason, targetUserId, isGroupCall });
       if ((isGroupCall || isGroupRef.current) && targetUserId) {
-        const name = activeRoomRef.current?.members?.find((m) => m.id === targetUserId)?.fullName || "Thành viên";
-        setErrorMsg(reason === "offline" ? `${name} hiện không trực tuyến.` : `Không thể gọi ${name}.`);
         destroyPeer(targetUserId);
-        setTimeout(() => setErrorMsg(null), 3000);
         return;
       }
       if (reason === "offline") {
@@ -295,6 +750,17 @@ export default function VideoCall({
     socket.on("call-rejected",    handleCallRejected);
     socket.on("call-unavailable", handleCallUnavailable);
     socket.on("group-call-offer", handleGroupOffer);
+
+    if (!isCallee) {
+      missedCallTimerRef.current = window.setTimeout(() => {
+        if (!activeRef.current || joinedPeerIdsRef.current.length > 0) return;
+        emitMissedCall();
+        setErrorMsg("Cuộc gọi nhỡ");
+        activeRef.current = false;
+        destroyAll();
+        window.setTimeout(() => onCloseRef.current(), 1800);
+      }, MISSED_CALL_TIMEOUT_SECONDS * 1000);
+    }
 
     const init = async () => {
       try {
@@ -324,8 +790,9 @@ export default function VideoCall({
           if (!currentIsGroup && singleOffer && currentTargets.length === 1) {
             // Gọi đơn callee.
             const uid = currentTargets[0];
-            const pc  = createPeer(uid, stream);
+            const pc  = createPeer(uid);
             await pc.setRemoteDescription(new RTCSessionDescription(singleOffer));
+            await attachLocalTracks(pc, uid, stream, { ensureVideoReceiver: true });
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             socket.emit("call-accepted", { toUserId: uid, answer, roomId });
@@ -338,8 +805,9 @@ export default function VideoCall({
 
             for (const [uid, offer] of Object.entries(offersMap)) {
               if (!activeRef.current) break;
-              const pc = createPeer(uid, stream);
+              const pc = createPeer(uid);
               await pc.setRemoteDescription(new RTCSessionDescription(offer));
+              await attachLocalTracks(pc, uid, stream, { ensureVideoReceiver: true });
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
               socket.emit("call-accepted", { toUserId: uid, answer, roomId });
@@ -349,7 +817,8 @@ export default function VideoCall({
             for (const uid of currentTargets) {
               if (!activeRef.current) break;
               if (offeredSet.has(uid)) continue;
-              const pc    = createPeer(uid, stream);
+              const pc    = createPeer(uid);
+              await attachLocalTracks(pc, uid, stream, { ensureVideoReceiver: true });
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
               socket.emit("group-call-offer", {
@@ -361,7 +830,8 @@ export default function VideoCall({
           // Caller: gửi offer đến từng target.
           for (const uid of currentTargets) {
             if (!activeRef.current) break;
-            const pc    = createPeer(uid, stream);
+            const pc    = createPeer(uid);
+            await attachLocalTracks(pc, uid, stream, { ensureVideoReceiver: true });
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             socket.emit("call-user", {
@@ -373,7 +843,7 @@ export default function VideoCall({
               isGroupCall: currentTargets.length > 1,
               groupName:   activeRoomRef.current?.name,
             });
-            console.log("[VideoCall] offer", uid);
+            debugVideoCall("[VideoCall] offer", uid);
           }
         }
       } catch (err) {
@@ -387,16 +857,18 @@ export default function VideoCall({
       }
     };
 
-    init();
+    const initTimer = window.setTimeout(init, 0);
 
     return () => {
       activeRef.current = false;
+      window.clearTimeout(initTimer);
       socket.off("call-accepted",    handleAccepted);
       socket.off("ice-candidate",    handleIceCandidate);
       socket.off("call-ended",       handleCallEnded);
       socket.off("call-rejected",    handleCallRejected);
       socket.off("call-unavailable", handleCallUnavailable);
       socket.off("group-call-offer", handleGroupOffer);
+      clearMissedCallTimer();
       destroyAll();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -415,6 +887,15 @@ export default function VideoCall({
   };
 
   const handleEndCall = () => {
+    if (!isCallee && joinedPeerIdsRef.current.length === 0) {
+      emitMissedCall();
+      setErrorMsg("Cuộc gọi nhỡ");
+      activeRef.current = false;
+      destroyAll();
+      window.setTimeout(() => onCloseRef.current(), 1200);
+      return;
+    }
+
     const durationSec = callStartedAtRef.current
       ? Math.max(0, Math.round((Date.now() - callStartedAtRef.current) / 1000))
       : 0;
@@ -430,9 +911,15 @@ export default function VideoCall({
     cleanup();
   };
 
-  const total    = 1 + targets.length;
+  const visibleRemoteIds = isGroup
+    ? targets.filter((uid) => joinedPeerIds.includes(uid) && remoteStreams[uid])
+    : targets;
+  const total    = 1 + visibleRemoteIds.length;
   const gridCols = total <= 2 ? "md:grid-cols-2" : total <= 4 ? "md:grid-cols-2" : "md:grid-cols-3";
   const getMemberName = (uid) => activeRoom?.members?.find((m) => m.id === uid)?.fullName || "Thành viên";
+  const showCallerCountdown = !isCallee && joinedPeerIds.length === 0;
+  const shouldShowLocalPlaceholder = !localStream || audioOnly || isVideoOff;
+  const localInitial = currentUserName?.[0]?.toUpperCase() || "B";
 
   return (
     <div className="fixed inset-0 z-9999 bg-slate-950 flex flex-col items-center justify-center p-4 md:p-6">
@@ -442,7 +929,7 @@ export default function VideoCall({
         {isGroup ? <Users size={15} /> : <Video size={15} />}
         <span>
           {isGroup
-            ? `Cuộc gọi nhóm • ${activeRoom?.name || "Nhóm"} • ${targets.length + 1} người`
+            ? `Cuộc gọi nhóm • ${activeRoom?.name || "Nhóm"} • ${visibleRemoteIds.length + 1} người đang tham gia`
             : `Cuộc gọi với ${getMemberName(targets[0])}`}
         </span>
         <span className={`ml-1 h-2 w-2 rounded-full ${status === "connected" ? "bg-emerald-400 animate-pulse" : "bg-yellow-400 animate-bounce"}`} />
@@ -466,15 +953,22 @@ export default function VideoCall({
 
         {/* Local */}
         <div className="relative bg-slate-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-          {localStream && !audioOnly ? (
-            <video autoPlay muted playsInline className="w-full h-full object-cover scale-x-[-1]"
-              ref={(el) => { if (el) el.srcObject = localStream; }} />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
-              <div className="w-20 h-20 rounded-full bg-linear-to-br from-blue-600 to-blue-800 flex items-center justify-center text-3xl font-bold text-white">
-                {currentUserName?.[0]?.toUpperCase() || "B"}
-              </div>
-              <p className="text-sm">{localStream ? "Có âm thanh" : "Đang khởi tạo..."}</p>
+          {localStream && !audioOnly && (
+            <LocalVideo stream={localStream} hidden={shouldShowLocalPlaceholder} />
+          )}
+
+          {shouldShowLocalPlaceholder && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center h-full text-slate-400 gap-3 bg-slate-900">
+              <CallerWaitingAvatar active={showCallerCountdown} initial={localInitial} />
+              <p className="text-sm">
+                {showCallerCountdown
+                  ? "Đang chờ người tham gia..."
+                  : isVideoOff
+                    ? "Camera đang tắt"
+                    : localStream
+                      ? "Có âm thanh"
+                      : "Đang khởi tạo..."}
+              </p>
             </div>
           )}
           <div className="absolute bottom-3 left-3 bg-black/60 px-2.5 py-1 rounded-lg text-xs text-white font-medium">
@@ -482,8 +976,8 @@ export default function VideoCall({
           </div>
         </div>
 
-        {/* Remote slots: luôn render tất cả targets */}
-        {targets.map((uid) => (
+        {/* Chỉ render remote khi người đó thực sự tham gia cuộc gọi. */}
+        {visibleRemoteIds.map((uid) => (
           <RemoteVideo key={uid} stream={remoteStreams[uid] || null} label={getMemberName(uid)} />
         ))}
       </div>

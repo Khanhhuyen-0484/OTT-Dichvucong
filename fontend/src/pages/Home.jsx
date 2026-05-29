@@ -318,7 +318,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f8fc] text-slate-900">
+    <div className="min-h-screen overflow-x-hidden bg-[#f5f8fc] text-slate-900">
       <GovHeader />
       <style>{`
         @keyframes smart-float {
@@ -331,7 +331,7 @@ export default function Home() {
         }
       `}</style>
       <main>
-        <section className="relative overflow-visible bg-gradient-to-br from-[#001f45] via-[#06477f] to-[#1280bd] pb-16 text-white lg:pb-20">
+        <section className="relative overflow-hidden bg-gradient-to-br from-[#001f45] via-[#06477f] to-[#1280bd] pb-16 text-white lg:pb-20">
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl" />
             <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
@@ -391,9 +391,9 @@ export default function Home() {
                 </form>
               </div>
 
-              <div className="lg:col-span-5">
-                <div className="group relative mx-auto max-w-[430px] transition duration-500 hover:-translate-y-1">
-                  <div className="absolute -inset-4 rounded-[38px] bg-cyan-300/20 blur-2xl transition duration-500 group-hover:bg-cyan-300/30" />
+              <div className="min-w-0 lg:col-span-5">
+                <div className="group relative mx-auto w-full max-w-[430px] transition duration-500 hover:-translate-y-1">
+                  <div className="absolute -inset-2 rounded-[38px] bg-cyan-300/20 blur-2xl transition duration-500 group-hover:bg-cyan-300/30 sm:-inset-4" />
                   <div className="relative rounded-[32px] border border-white/25 bg-white/12 p-4 shadow-2xl shadow-blue-950/25 backdrop-blur-xl [animation:smart-float_6s_ease-in-out_infinite]">
                   <div className="rounded-[26px] border border-white/45 bg-white/88 p-5 text-slate-900 shadow-xl backdrop-blur [animation:smart-fade_.55s_ease-out_both]">
                     <div className="flex items-center justify-between gap-4">
