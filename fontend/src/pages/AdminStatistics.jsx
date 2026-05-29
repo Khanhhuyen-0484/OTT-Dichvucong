@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { BarChart3, CreditCard, Download, PieChart, ReceiptText, RefreshCw, TrendingUp } from "lucide-react";
 import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import { getAdminStatistics, getApiErrorMessage } from "../lib/api";
+import { applicationStatusLabel } from "../lib/statusLabels.js";
 
 const STATUS_LABELS = {
   pending: "Chờ tiếp nhận",
@@ -533,7 +534,7 @@ function LatestApplications({ items }) {
               <div className="mt-1 text-xs text-slate-500">{item.dossierCode || item.dossierId}</div>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
-              {item.statusLabel || item.status}
+              {item.statusLabel || applicationStatusLabel(item.status)}
             </span>
           </div>
           <div className="mt-2 text-xs text-slate-500">{formatDate(item.createdAt)}</div>

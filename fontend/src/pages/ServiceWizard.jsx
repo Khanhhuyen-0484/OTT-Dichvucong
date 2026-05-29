@@ -34,6 +34,7 @@ import {
 } from "../lib/api";
 import { uploadToS3 } from "../lib/uploadToS3.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { isPaidStatus, paymentStatusLabel } from "../lib/statusLabels.js";
 
 const defaultFaq = [
   {
@@ -170,7 +171,7 @@ export default function ServiceWizard() {
   const feeAmount = Number(service?.fee || submitResult?.application?.fee || submitResult?.fee || 0);
   const isFree = feeAmount <= 0;
   const currentDossierId = getSubmitDossierId(submitResult) || paymentInfo?.dossierId;
-  const isPaid = ["PAID", "COMPLETED", "SUCCESS", "SUCCEEDED"].includes(String(paymentStatus).toUpperCase());
+  const isPaid = isPaidStatus(paymentStatus);
   const faq = service?.faq?.length ? service.faq : defaultFaq;
   const currentStep = wizardSteps.find((item) => item.id === step) || wizardSteps[0];
 
@@ -633,7 +634,7 @@ function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpire
         <p className="mt-1 break-all text-xl font-black text-[#0f2f57]">{currentDossierId}</p>
         <div className="mt-4 rounded-2xl bg-white p-3">
           <InfoRow label="Số tiền" value={isFree ? "Miễn phí" : `${currency.format(feeAmount)}đ`} />
-          <InfoRow label="Trạng thái" value={isPaid ? "Đã thanh toán" : paymentStatus || "Đang chờ"} />
+          <InfoRow label="Trạng thái" value={isPaid ? "Đã thanh toán" : paymentStatusLabel(paymentStatus, "Đang chờ")} />
           {paymentExpireAt && <InfoRow label="Hạn thanh toán" value={new Date(paymentExpireAt).toLocaleString("vi-VN")} />}
         </div>
       </div>

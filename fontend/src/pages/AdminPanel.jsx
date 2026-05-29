@@ -290,11 +290,11 @@ export default function AdminPanel() {
               <h1 className="text-2xl font-black text-slate-900">Dashboard điều hành</h1>
               <p className="mt-1 text-sm text-slate-600">Tổng quan số liệu hồ sơ theo workflow mới.</p>
               <div className="mt-4 grid gap-4 md:grid-cols-5">
-                <Widget title="PENDING" value={String(dashboard.pending || 0)} colorClass="text-slate-700" />
-                <Widget title="PROCESSING" value={String(dashboard.processing || 0)} colorClass="text-sky-700" />
-                <Widget title="NEED_MORE" value={String(dashboard.needMore || 0)} colorClass="text-amber-700" />
-                <Widget title="COMPLETED" value={String(dashboard.completed || 0)} colorClass="text-emerald-700" />
-                <Widget title="REJECTED" value={String(dashboard.rejected || 0)} colorClass="text-red-700" />
+                <Widget title="Chờ tiếp nhận" value={String(dashboard.pending || 0)} colorClass="text-slate-700" />
+                <Widget title="Đang xử lý" value={String(dashboard.processing || 0)} colorClass="text-sky-700" />
+                <Widget title="Cần bổ sung" value={String(dashboard.needMore || 0)} colorClass="text-amber-700" />
+                <Widget title="Hoàn thành" value={String(dashboard.completed || 0)} colorClass="text-emerald-700" />
+                <Widget title="Từ chối" value={String(dashboard.rejected || 0)} colorClass="text-red-700" />
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <Widget title="Tin nhắn chờ xử lý" value={String(dashboard.waitingMessages || 0)} colorClass="text-[#003366]" />

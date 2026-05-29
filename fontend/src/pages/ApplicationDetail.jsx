@@ -23,6 +23,7 @@ import {
   supplementApplication,
   verifyPaymentStatus,
 } from "../lib/api";
+import { applicationStatusLabel, isPaidStatus, paymentStatusLabel } from "../lib/statusLabels.js";
 
 // Placeholder QR images (use data URLs) — replace with real assets if available
 const PLACEHOLDER_QR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Crect width='100%25' height='100%25' fill='%23f8fafc'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23666' font-size='20'%3EQR%3C/text%3E%3C/svg%3E";
@@ -141,7 +142,7 @@ export default function ApplicationDetail() {
         const statusRes = await verifyPaymentStatus(applicationCode);
         const { paymentStatus: status } = statusRes.data;
         setPaymentStatus(status);
-        if (status === "completed" || status === "PAID") {
+        if (isPaidStatus(status)) {
           stopPaymentPolling();
           await loadDetail();
           setShowPaymentModal(false);
@@ -204,7 +205,7 @@ export default function ApplicationDetail() {
   }
 
   const statusKey = String(item?.status || "").toUpperCase();
-  const statusLabel = STATUS_LABELS[statusKey] || item?.status || "-";
+  const statusLabel = STATUS_LABELS[statusKey] || applicationStatusLabel(item?.status, "-");
   const paymentMethodKey = String(item?.paymentMethod || "").toUpperCase();
   const paymentStatusKey = String(item?.paymentStatus || "").toUpperCase();
   const feeText = `${currency.format(item?.fee || 0)} VNĐ`;
@@ -276,7 +277,7 @@ export default function ApplicationDetail() {
                 <Info icon={<ShieldCheck />} label="Trạng thái" value={statusLabel} accent="blue" />
                 <Info icon={<CalendarDays />} label="Ngày nộp" value={formatDate(item.createdAt)} accent="slate" />
                 <Info icon={<ReceiptText />} label="Lệ phí" value={feeText} accent="emerald" />
-                <Info icon={<CreditCard />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatusKey] || PAYMENT_LABELS[paymentMethodKey] || item.paymentMethod || "-"} accent="amber" />
+                <Info icon={<CreditCard />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatusKey] || PAYMENT_LABELS[paymentMethodKey] || paymentStatusLabel(paymentStatusKey || paymentMethodKey, "-")} accent="amber" />
               </div>
 
               {item.status === "PENDING" && (
@@ -374,7 +375,7 @@ export default function ApplicationDetail() {
                   <img src={qrCode} alt="Payment QR Code" className="w-full" />
                   {paymentExpireAt && <p className="mt-3 text-center text-xs text-red-600">Hết hạn: {new Date(paymentExpireAt).toLocaleString("vi-VN")}</p>}
                 </div>
-                <div className="mb-4 text-center text-sm text-slate-600">{paymentStatus === "pending" ? "Đang chờ thanh toán..." : "Thanh toán thành công!"}</div>
+                <div className="mb-4 text-center text-sm text-slate-600">{isPaidStatus(paymentStatus) ? "Thanh toán thành công!" : paymentStatusLabel(paymentStatus, "Đang chờ thanh toán...")}</div>
                 <div className="flex gap-2">
                   <button onClick={() => setShowPaymentModal(false)} className="flex-1 rounded-lg bg-slate-200 px-4 py-2 font-semibold">Đóng</button>
                   <button onClick={handleMockPaymentComplete} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Thanh toán</button>
@@ -449,7 +450,7 @@ function Info({ label, value, icon, accent = "slate", wide = false }) {
 
 function TimelineItem({ item, isLast }) {
   const status = String(item.status || "").toUpperCase();
-  const label = STATUS_LABELS[status] || item.status || "Cập nhật";
+  const label = STATUS_LABELS[status] || applicationStatusLabel(item.status, "Cập nhật");
   const className = STATUS_STYLES[status] || "border-slate-200 bg-slate-50 text-slate-700";
 
   return (

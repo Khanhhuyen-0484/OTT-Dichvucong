@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import { getApiErrorMessage, trackApplication } from "../lib/api";
+import { applicationStatusLabel, paymentStatusLabel } from "../lib/statusLabels.js";
 
 const STATUS_LABELS = {
   DRAFT: "Lưu nháp",
@@ -71,9 +72,9 @@ export default function TrackApplication() {
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Info label="Mã hồ sơ" value={application.applicationCode || application.dossierCode || application.dossierId || application.id} />
                 <Info label="Dịch vụ" value={application.serviceName} />
-                <Info label="Trạng thái" value={STATUS_LABELS[application.status] || application.status} />
+                <Info label="Trạng thái" value={STATUS_LABELS[String(application.status || "").toUpperCase()] || applicationStatusLabel(application.status)} />
                 <Info label="Ngày nộp" value={formatDate(application.createdAt)} />
-                <Info label="Thanh toán" value={application.paymentStatus || "-"} />
+                <Info label="Thanh toán" value={paymentStatusLabel(application.paymentStatus, "-")} />
                 <Info label="Lệ phí" value={`${new Intl.NumberFormat("vi-VN").format(application.fee || 0)} VNĐ`} />
               </div>
             </section>
@@ -98,7 +99,7 @@ export default function TrackApplication() {
                 {timeline.length ? timeline.map((item, idx) => (
                   <div key={`${item.createdAt || idx}`} className="rounded-xl border border-slate-200 p-4">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="rounded-full bg-slate-100 px-2 py-1 font-bold">{STATUS_LABELS[item.status] || item.status}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 font-bold">{STATUS_LABELS[String(item.status || "").toUpperCase()] || applicationStatusLabel(item.status)}</span>
                       <span className="font-semibold">{item.action || "Cập nhật"}</span>
                       <span className="text-slate-500">{formatDate(item.createdAt)}</span>
                     </div>

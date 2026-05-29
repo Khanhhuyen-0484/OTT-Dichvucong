@@ -17,6 +17,7 @@ import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import { getAllMyApplications, getApiErrorMessage, getServiceNotifications } from "../lib/api";
 import { connectSocket } from "../lib/socket.js";
+import { applicationStatusLabel, paymentStatusLabel } from "../lib/statusLabels.js";
 
 const STATUS_LABELS = {
   DRAFT: "Lưu nháp",
@@ -327,13 +328,13 @@ function ApplicationCard({ item }) {
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <InfoChip icon={<CalendarDays />} label="Ngày nộp" value={formatDate(item.createdAt) || "-"} />
             <InfoChip icon={<ReceiptText />} label="Lệ phí" value={`${currency.format(item.fee || 0)} VNĐ`} />
-            <InfoChip icon={<WalletCards />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatus] || PAYMENT_LABELS[paymentMethod] || item.paymentMethod || "-"} />
+            <InfoChip icon={<WalletCards />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatus] || PAYMENT_LABELS[paymentMethod] || paymentStatusLabel(paymentStatus || paymentMethod, "-")} />
           </div>
         </div>
 
         <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
           <span className={`inline-flex rounded-full px-3 py-1 text-sm font-black ring-1 ${statusClass(status)}`}>
-            {STATUS_LABELS[status] || item.status || "Chưa rõ"}
+            {STATUS_LABELS[status] || applicationStatusLabel(status || item.status)}
           </span>
           <Link
             to={`/my-applications/${code}`}
