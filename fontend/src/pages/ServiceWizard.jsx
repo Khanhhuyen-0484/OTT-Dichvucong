@@ -170,7 +170,7 @@ export default function ServiceWizard() {
   const feeAmount = Number(service?.fee || submitResult?.application?.fee || submitResult?.fee || 0);
   const isFree = feeAmount <= 0;
   const currentDossierId = getSubmitDossierId(submitResult) || paymentInfo?.dossierId;
-  const isPaid = String(paymentStatus).toUpperCase() === "PAID";
+  const isPaid = ["PAID", "COMPLETED", "SUCCESS", "SUCCEEDED"].includes(String(paymentStatus).toUpperCase());
   const faq = service?.faq?.length ? service.faq : defaultFaq;
   const currentStep = wizardSteps.find((item) => item.id === step) || wizardSteps[0];
 
@@ -442,6 +442,7 @@ export default function ServiceWizard() {
                   onCopy={copyTransferContent}
                   onCheck={checkPaymentStatus}
                   onDemoPaid={markDemoPaid}
+                  onFinish={() => navigate("/services", { replace: true })}
                 />
               )}
             </Card>
@@ -454,15 +455,17 @@ export default function ServiceWizard() {
         </div>
       </main>
 
-      <ActionBar
-        step={step}
-        currentStep={currentStep}
-        submitting={submitting}
-        checkingPayment={checkingPayment}
-        onBack={() => setStep((current) => Math.max(1, current - 1))}
-        onSave={saveDraft}
-        onNext={handlePrimaryAction}
-      />
+      {!(step === 4 && isPaid) && (
+        <ActionBar
+          step={step}
+          currentStep={currentStep}
+          submitting={submitting}
+          checkingPayment={checkingPayment}
+          onBack={() => setStep((current) => Math.max(1, current - 1))}
+          onSave={saveDraft}
+          onNext={handlePrimaryAction}
+        />
+      )}
 
       {showInfoModal && (
         <InfoModal service={service} feeAmount={feeAmount} docs={docs} onClose={() => setShowInfoModal(false)} />
@@ -617,7 +620,7 @@ function ReviewStep({ service, formData, docs, fileItems, feeAmount, isFree }) {
   );
 }
 
-function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpireAt, currentDossierId, feeAmount, checkingPayment, onCopy, onCheck, onDemoPaid }) {
+function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpireAt, currentDossierId, feeAmount, checkingPayment, onCopy, onCheck, onDemoPaid, onFinish }) {
   const qrImage = paymentInfo?.qrImageUrl || paymentInfo?.qrUrl || paymentInfo?.qrCode || paymentInfo?.payment?.qrUrl || "";
   if (!currentDossierId) {
     return <InlineAlert text="Bạn cần xác nhận hồ sơ trước khi thanh toán." />;
@@ -637,12 +640,22 @@ function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpire
 
       <div className="rounded-[20px] border border-slate-200 bg-white p-4">
         {isFree || isPaid ? (
-          <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-emerald-800">
+          <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-800">
+            <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 h-5 w-5" />
             <div>
               <p className="font-black">{isFree ? "Dịch vụ miễn phí" : "Thanh toán đã xác nhận"}</p>
               <p className="text-sm font-semibold">Hồ sơ đã được ghi nhận trên hệ thống.</p>
             </div>
+            </div>
+            <p className="mt-3 text-sm font-semibold">Nộp hồ sơ thành công. Bạn có thể kết thúc để quay về danh sách dịch vụ.</p>
+            <button
+              type="button"
+              onClick={onFinish}
+              className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-700 px-5 text-sm font-black text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-800"
+            >
+              Kết thúc
+            </button>
           </div>
         ) : (
           <>
