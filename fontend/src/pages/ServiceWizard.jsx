@@ -354,16 +354,21 @@ export default function ServiceWizard() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    const finishDraftSave = () => {
+      alert(`Lưu nháp thành công tại bước ${step}/4 - ${currentStep.title}.`);
+      navigate("/my-applications?view=draft", { replace: true });
+    };
+
     try {
       if (!user) throw new Error("AUTH_REQUIRED");
       await saveServiceDraft(serviceId, draft);
       localStorage.removeItem(draftStorageKey);
       localStorage.removeItem(legacyDraftStorageKey);
-      alert(`Đã lưu nháp tại bước ${step}/4 - ${currentStep.title}.`);
+      return finishDraftSave();
     } catch {
       localStorage.setItem(draftStorageKey, JSON.stringify(draft));
       localStorage.removeItem(legacyDraftStorageKey);
-      alert(`Đã lưu nháp tạm trên trình duyệt tại bước ${step}/4 - ${currentStep.title}.`);
+      return finishDraftSave();
     }
   }
 

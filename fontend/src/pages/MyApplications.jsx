@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
@@ -104,13 +104,15 @@ function readLocalDrafts(user) {
 
 export default function MyApplications() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialView = ["submitted", "draft", "all"].includes(searchParams.get("view")) ? searchParams.get("view") : "submitted";
   const [items, setItems] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [submitted, setSubmitted] = useState([]);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [view, setView] = useState("submitted");
+  const [view, setView] = useState(initialView);
   const [notifications, setNotifications] = useState([]);
 
   async function loadData() {
