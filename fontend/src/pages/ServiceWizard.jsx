@@ -618,6 +618,7 @@ function ReviewStep({ service, formData, docs, fileItems, feeAmount, isFree }) {
 }
 
 function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpireAt, currentDossierId, feeAmount, checkingPayment, onCopy, onCheck, onDemoPaid }) {
+  const qrImage = paymentInfo?.qrImageUrl || paymentInfo?.qrUrl || paymentInfo?.qrCode || paymentInfo?.payment?.qrUrl || "";
   if (!currentDossierId) {
     return <InlineAlert text="Bạn cần xác nhận hồ sơ trước khi thanh toán." />;
   }
@@ -647,8 +648,8 @@ function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpire
           <>
             <p className="text-lg font-black text-[#0f2f57]">Thanh toán trực tuyến</p>
             <p className="mt-1 text-sm font-semibold text-slate-500">Quét mã VietQR hoặc chuyển khoản đúng nội dung để hệ thống tự đối soát.</p>
-            {paymentInfo?.qrImageUrl && (
-              <img src={paymentInfo.qrImageUrl} alt="Mã QR thanh toán" className="mt-4 h-56 w-56 rounded-2xl border border-slate-200 object-contain p-2" />
+            {qrImage && (
+              <img src={qrImage} alt="Mã QR thanh toán" className="mt-4 h-56 w-56 rounded-2xl border border-slate-200 object-contain p-2" />
             )}
             <div className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-3 text-sm font-semibold">
               <InfoRow label="Ngân hàng" value={paymentInfo?.bankCode || paymentInfo?.bankName || "Theo cấu hình hệ thống"} />
