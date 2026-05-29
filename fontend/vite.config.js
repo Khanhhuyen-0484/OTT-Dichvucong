@@ -7,6 +7,22 @@ export default defineConfig(() => {
 
   return {
     plugins: [react(), tailwindcss()],
+    esbuild: {
+      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return undefined;
+            if (id.includes("react") || id.includes("react-router-dom")) return "react-vendor";
+            if (id.includes("socket.io-client")) return "socket-vendor";
+            if (id.includes("lucide-react")) return "icons-vendor";
+            return "vendor";
+          },
+        },
+      },
+    },
     server: {
       host: true,
       port: 5173,
