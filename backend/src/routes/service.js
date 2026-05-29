@@ -12,6 +12,9 @@ const {
   trackApplication,
   getMyServiceNotifications,
   getApplicationPayments,
+  getServiceDraft,
+  saveServiceDraft,
+  deleteServiceDraft,
   payForApplication,
   adminCreateService,
   adminUpdateService,
@@ -24,6 +27,9 @@ router.get("/", getServices);
 router.get("/my-applications", authMiddleware, getMyApplications);
 router.get("/notifications", authMiddleware, getMyServiceNotifications);
 router.get("/payments/:applicationId", authMiddleware, getApplicationPayments);
+router.get("/drafts/:serviceId", authMiddleware, getServiceDraft);
+router.post("/drafts/:serviceId", authMiddleware, saveServiceDraft);
+router.delete("/drafts/:serviceId", authMiddleware, deleteServiceDraft);
 router.get("/application/code/:applicationCode", getApplicationByCode);
 router.get("/track/:applicationCode", trackApplication);
 router.get("/application/:applicationCode/result", authMiddleware, downloadApplicationResult);

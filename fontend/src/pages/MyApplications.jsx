@@ -72,7 +72,7 @@ function applicationCodeOf(item) {
 }
 
 function applicationUrlOf(item) {
-  if (item?.localDraft && item?.serviceId) return `/services/${item.serviceId}`;
+  if ((item?.localDraft || String(item?.draftType || "").toUpperCase() === "WIZARD") && item?.serviceId) return `/services/${item.serviceId}`;
   return `/my-applications/${item?.dossierId || item?.applicationId || item?.applicationCode || item?.dossierCode || item?.id || ""}`;
 }
 
@@ -120,7 +120,8 @@ export default function MyApplications() {
         getServiceNotifications().catch(() => ({ data: { notifications: [] } })),
       ]);
       setItems(data.applications || []);
-      const localDrafts = readLocalDrafts(user);
+      const serverDraftServiceIds = new Set((data.drafts || []).map((item) => String(item.serviceId || "")));
+      const localDrafts = readLocalDrafts(user).filter((item) => !serverDraftServiceIds.has(String(item.serviceId || "")));
       setDrafts([...(data.drafts || []), ...localDrafts]);
       setSubmitted(data.submitted || []);
       setNote(data.note || "");
@@ -352,7 +353,7 @@ function ApplicationCard({ item }) {
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-lg font-black text-slate-950">{item.serviceName || "Dịch vụ công"}</h2>
-              <p className="mt-1 wrap-break-word text-xs font-bold text-slate-500">{item.localDraft ? `Đang dừng ở bước ${item.step || 1}/4${item.stepTitle ? ` - ${item.stepTitle}` : ""}` : `Mã hồ sơ: ${code || "-"}`}</p>
+              <p className="mt-1 wrap-break-word text-xs font-bold text-slate-500">{item.localDraft || String(item.draftType || "").toUpperCase() === "WIZARD" ? `Đang dừng ở bước ${item.step || 1}/4${item.stepTitle ? ` - ${item.stepTitle}` : ""}` : `Mã hồ sơ: ${code || "-"}`}</p>
             </div>
           </div>
 

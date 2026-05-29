@@ -2,7 +2,7 @@ const { listServices, getService, upsertService, seedServicesToDynamo } = requir
 const { listCategories, seedDefaultCategories } = require("../store/serviceCategoryStore");
 const { createNotification, getNotificationsByUser } = require("../store/notificationStore");
 const { savePayment, getPaymentsByDossierId } = require("../store/paymentStore");
-const { create, findByCode, readAll, updateByCode } = require("../store/serviceApplicationStore");
+const { create, findByCode, readAll, updateByCode, deleteByCode } = require("../store/serviceApplicationStore");
 const { getIo } = require("../socket");
 
 const ALLOWED_STATUSES = new Set([
@@ -384,6 +384,95 @@ exports.getMyApplications = async (req, res) => {
     drafts: drafts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     submitted: submitted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
   });
+};
+
+function findWizardDraft(items, uid, serviceId) {
+  return items
+    .filter(
+      (item) =>
+        item.userId === uid &&
+        String(item.serviceId || "") === String(serviceId || "") &&
+        String(item.status || "").toUpperCase() === "DRAFT" &&
+        String(item.draftType || "").toUpperCase() === "WIZARD"
+    )
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))[0] || null;
+}
+
+exports.getServiceDraft = async (req, res) => {
+  const uid = userId(req);
+  const serviceId = String(req.params.serviceId || "").trim();
+  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
+  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+  const items = await readAll();
+  const draft = findWizardDraft(items, uid, serviceId);
+  return res.json({ draft });
+};
+
+exports.saveServiceDraft = async (req, res) => {
+  const uid = userId(req);
+  const serviceId = String(req.params.serviceId || req.body?.serviceId || "").trim();
+  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
+  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+  const service = await resolveService(serviceId);
+  if (!service) return res.status(404).json({ message: "Dịch vụ không tồn tại" });
+
+  const items = await readAll();
+  const existing = findWizardDraft(items, uid, serviceId);
+  const now = nowIso();
+  const step = Math.min(4, Math.max(1, Number(req.body?.step || existing?.step || 1)));
+  const dossierId = existing?.dossierId || generateDossierCode();
+  const files = req.body?.files && typeof req.body.files === "object" ? req.body.files : {};
+  const attachments = Object.entries(files).map(([key, item]) => ({
+    key,
+    name: item?.name || "",
+    fileName: item?.name || "",
+    mimeType: item?.type || "",
+    fileType: item?.type || "",
+    size: Number(item?.size || 0),
+  }));
+
+  const draft = {
+    ...(existing || {}),
+    dossierCode: dossierId,
+    dossierId,
+    id: dossierId,
+    userId: uid,
+    serviceId,
+    serviceName: service.name,
+    formData: req.body?.formData || {},
+    citizenName: req.body?.formData?.fullName || "",
+    phone: req.body?.formData?.phone || "",
+    email: req.body?.formData?.email || "",
+    attachments,
+    draftType: "WIZARD",
+    step,
+    stepTitle: String(req.body?.stepTitle || "").trim(),
+    status: "DRAFT",
+    paymentStatus: "UNPAID",
+    progress: 0,
+    fee: Number(service.fee || req.body?.fee || 0),
+    timeline: [],
+    history: [],
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+
+  const saved = existing ? await updateByCode(existing.dossierId, draft) : await create(draft);
+  return res.json({ message: "Đã lưu nháp hồ sơ", draft: saved });
+};
+
+exports.deleteServiceDraft = async (req, res) => {
+  const uid = userId(req);
+  const serviceId = String(req.params.serviceId || "").trim();
+  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
+  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+  const items = await readAll();
+  const draft = findWizardDraft(items, uid, serviceId);
+  if (draft?.dossierId) await deleteByCode(draft.dossierId);
+  return res.json({ message: "Đã xoá bản nháp" });
 };
 
 exports.trackApplication = async (req, res) => {

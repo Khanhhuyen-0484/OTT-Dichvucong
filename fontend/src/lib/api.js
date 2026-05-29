@@ -27,6 +27,9 @@ export async function resetPassword(payload) { return api.post("/auth/reset-pass
 export async function getServices(params = {}) { return api.get("/services", { params }); }
 export async function getServiceById(id) { return api.get(`/services/${id}`); }
 export async function submitServiceApplication(payload) { return api.post("/services/submit", payload); }
+export async function getServiceDraft(serviceId) { return api.get(`/services/drafts/${serviceId}`); }
+export async function saveServiceDraft(serviceId, payload) { return api.post(`/services/drafts/${serviceId}`, payload); }
+export async function deleteServiceDraft(serviceId) { return api.delete(`/services/drafts/${serviceId}`); }
 export async function trackApplication(code) { return api.get(`/services/track/${code}`); }
 export async function getApplicationByCode(code) { return api.get(`/services/application/code/${code}`); }
 export async function getApplicationDetail(code) { return getApplicationByCode(code); }
