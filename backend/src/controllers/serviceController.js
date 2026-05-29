@@ -355,7 +355,7 @@ exports.getApplicationByCode = async (req, res) => {
   const visibleApplication =
     Number(application.fee || 0) <= 0 || paymentStatus === "COMPLETED" || paymentStatus === "PAID"
       ? application
-      : { ...application, status: "PENDING", timeline: [], history: [] };
+      : { ...application, status: "DRAFT", timeline: [], history: [] };
 
   res.json({
     application: visibleApplication,
@@ -397,7 +397,7 @@ exports.trackApplication = async (req, res) => {
   const visibleApplication =
     Number(application.fee || 0) <= 0 || paymentStatus === "COMPLETED" || paymentStatus === "PAID"
       ? application
-      : { ...application, status: "PENDING", timeline: [], history: [] };
+      : { ...application, status: "DRAFT", timeline: [], history: [] };
 
   res.json({
     application: visibleApplication,

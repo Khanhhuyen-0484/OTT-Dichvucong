@@ -17,11 +17,11 @@ import {
 import GovHeader from "../components/GovHeader.jsx";
 import {
   downloadApplicationResult,
+  createBankTransferPayment,
   getApiErrorMessage,
   getApplicationDetail,
-  mockPaymentComplete,
+  getBankTransferPaymentStatus,
   supplementApplication,
-  verifyPaymentStatus,
 } from "../lib/api";
 import { applicationStatusLabel, isPaidStatus, paymentStatusLabel } from "../lib/statusLabels.js";
 
@@ -35,6 +35,7 @@ const zalopay2 = PLACEHOLDER_QR;
 const zalopay3 = PLACEHOLDER_QR;
 
 const STATUS_LABELS = {
+  DRAFT: "Bản nháp",
   PENDING: "Chờ tiếp nhận",
   PROCESSING: "Đang xử lý",
   NEED_MORE: "Yêu cầu bổ sung",
@@ -44,6 +45,7 @@ const STATUS_LABELS = {
 };
 
 const STATUS_STYLES = {
+  DRAFT: "border-slate-200 bg-slate-50 text-slate-700",
   PENDING: "border-amber-200 bg-amber-50 text-amber-700",
   PROCESSING: "border-blue-200 bg-blue-50 text-blue-700",
   NEED_MORE: "border-orange-200 bg-orange-50 text-orange-700",
@@ -85,6 +87,7 @@ export default function ApplicationDetail() {
   const [notifications, setNotifications] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [qrCode, setQrCode] = useState(null);
+  const [paymentInfo, setPaymentInfo] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("pending");
   const [paymentExpireAt, setPaymentExpireAt] = useState(null);
   const [generatingQr, setGeneratingQr] = useState(false);
@@ -137,10 +140,12 @@ export default function ApplicationDetail() {
   const adminNote = item?.decisionNote || item?.timeline?.slice(-1)?.[0]?.note || adminNeedMoreNotifications[0]?.message || "";
 
   function startPaymentPolling() {
+    stopPaymentPolling();
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const statusRes = await verifyPaymentStatus(applicationCode);
+        const statusRes = await getBankTransferPaymentStatus(applicationCode);
         const { paymentStatus: status } = statusRes.data;
+        setPaymentInfo(statusRes.data?.payment || null);
         setPaymentStatus(status);
         if (isPaidStatus(status)) {
           stopPaymentPolling();
@@ -160,20 +165,37 @@ export default function ApplicationDetail() {
     setShowPaymentModal(true);
     setGeneratingQr(true);
     try {
-      setQrCode(getQRImage());
+      const { data } = await createBankTransferPayment({
+        dossierId: applicationCodeOf(item) || applicationCode,
+        amount: item?.fee || 0,
+      });
+      setPaymentInfo(data || null);
+      setQrCode(data?.qrUrl || data?.qrImageUrl || data?.qrCode || getQRImage());
       setPaymentStatus("pending");
       setPaymentExpireAt(item?.paymentExpireAt || new Date(Date.now() + 60 * 60 * 1000).toISOString());
       startPaymentPolling();
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+      setShowPaymentModal(false);
     } finally {
       setGeneratingQr(false);
     }
   }
 
-  async function handleMockPaymentComplete() {
-    await mockPaymentComplete(applicationCode);
-    stopPaymentPolling();
-    await loadDetail();
-    setShowPaymentModal(false);
+  async function handleCheckPaymentStatus() {
+    try {
+      const { data } = await getBankTransferPaymentStatus(applicationCode);
+      const nextStatus = data?.paymentStatus || "UNPAID";
+      setPaymentInfo(data?.payment || null);
+      setPaymentStatus(nextStatus);
+      if (isPaidStatus(nextStatus)) {
+        stopPaymentPolling();
+        await loadDetail();
+        setShowPaymentModal(false);
+      }
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+    }
   }
 
   async function handleSupplementSubmit() {
@@ -209,6 +231,7 @@ export default function ApplicationDetail() {
   const paymentMethodKey = String(item?.paymentMethod || "").toUpperCase();
   const paymentStatusKey = String(item?.paymentStatus || "").toUpperCase();
   const feeText = `${currency.format(item?.fee || 0)} VNĐ`;
+  const hasUnpaidFee = Number(item?.fee || 0) > 0 && !isPaidStatus(paymentStatusKey);
   const formData = item?.formData || {};
   const timeline = item?.timeline || item?.history || [];
   const applicantInfo = [
@@ -280,7 +303,7 @@ export default function ApplicationDetail() {
                 <Info icon={<CreditCard />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatusKey] || PAYMENT_LABELS[paymentMethodKey] || paymentStatusLabel(paymentStatusKey || paymentMethodKey, "-")} accent="amber" />
               </div>
 
-              {item.status === "PENDING" && (
+              {hasUnpaidFee && (["DRAFT", "PENDING"].includes(statusKey) || ["UNPAID", "PENDING"].includes(paymentStatusKey)) && (
                 <div className="mx-5 mb-5 rounded-3xl border border-amber-200 bg-linear-to-r from-amber-50 to-orange-50 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
@@ -288,8 +311,8 @@ export default function ApplicationDetail() {
                         <WalletCards className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-black text-amber-900">Hồ sơ chưa thanh toán</p>
-                        <p className="mt-1 text-sm font-semibold text-amber-800">Vui lòng hoàn tất thanh toán để hồ sơ được tiếp nhận xử lý.</p>
+                        <p className="font-black text-amber-900">Hồ sơ đang lưu nháp</p>
+                        <p className="mt-1 text-sm font-semibold text-amber-800">Hoàn tất thanh toán để gửi hồ sơ sang bộ phận tiếp nhận xử lý.</p>
                       </div>
                     </div>
                     <button
@@ -375,10 +398,19 @@ export default function ApplicationDetail() {
                   <img src={qrCode} alt="Payment QR Code" className="w-full" />
                   {paymentExpireAt && <p className="mt-3 text-center text-xs text-red-600">Hết hạn: {new Date(paymentExpireAt).toLocaleString("vi-VN")}</p>}
                 </div>
+                {paymentInfo ? (
+                  <div className="mb-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <PaymentLine label="Ngân hàng" value={paymentInfo.bankCode || paymentInfo.bankName} />
+                    <PaymentLine label="Số tài khoản" value={paymentInfo.bankAccount || paymentInfo.accountNo} />
+                    <PaymentLine label="Chủ tài khoản" value={paymentInfo.bankAccountName || paymentInfo.accountName} />
+                    <PaymentLine label="Số tiền" value={paymentInfo.amount ? `${currency.format(paymentInfo.amount)} VNĐ` : feeText} />
+                    <PaymentLine label="Nội dung" value={paymentInfo.transferContent} strong />
+                  </div>
+                ) : null}
                 <div className="mb-4 text-center text-sm text-slate-600">{isPaidStatus(paymentStatus) ? "Thanh toán thành công!" : paymentStatusLabel(paymentStatus, "Đang chờ thanh toán...")}</div>
                 <div className="flex gap-2">
                   <button onClick={() => setShowPaymentModal(false)} className="flex-1 rounded-lg bg-slate-200 px-4 py-2 font-semibold">Đóng</button>
-                  <button onClick={handleMockPaymentComplete} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Thanh toán</button>
+                  <button onClick={handleCheckPaymentStatus} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Kiểm tra thanh toán</button>
                 </div>
               </div>
             ) : <div className="py-4 text-center text-red-600">Không thể tạo mã QR</div>}
@@ -420,6 +452,15 @@ function StatusBadge({ status, label }) {
       <CheckCircle2 className="h-4 w-4" />
       {label}
     </span>
+  );
+}
+
+function PaymentLine({ label, value, strong = false }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 font-semibold text-slate-500">{label}</span>
+      <span className={`text-right text-slate-900 ${strong ? "font-black" : "font-bold"}`}>{value || "-"}</span>
+    </div>
   );
 }
 
