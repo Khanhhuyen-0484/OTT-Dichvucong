@@ -14,6 +14,14 @@ const STATUS_LABELS = {
 };
 
 const STATUS_KEYS = ["pending", "processing", "needMore", "supplemented", "completed", "rejected"];
+const STATUS_COLORS = {
+  pending: "#64748b",
+  processing: "#0284c7",
+  needMore: "#f97316",
+  supplemented: "#6366f1",
+  completed: "#059669",
+  rejected: "#dc2626",
+};
 
 const tabs = [
   { key: "overview", label: "Tổng quan" },
@@ -158,6 +166,141 @@ function exportCsv(data) {
   link.download = "thong-ke-ho-so-doanh-thu.csv";
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function StatusDonut({ byStatus = {}, total = 0 }) {
+  const radius = 46;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  const segments = STATUS_KEYS.map((key) => {
+    const value = Number(byStatus[key] || 0);
+    const length = total ? (value / total) * circumference : 0;
+    const segment = { key, value, length, offset };
+    offset += length;
+    return segment;
+  }).filter((item) => item.value > 0);
+
+  if (!total) return <EmptyText>Chưa có dữ liệu trạng thái hồ sơ.</EmptyText>;
+
+  return (
+    <div className="grid gap-5 md:grid-cols-[220px_1fr] md:items-center">
+      <div className="relative mx-auto h-52 w-52">
+        <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
+          <circle cx="60" cy="60" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="14" />
+          {segments.map((item) => (
+            <circle
+              key={item.key}
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="none"
+              stroke={STATUS_COLORS[item.key]}
+              strokeWidth="14"
+              strokeDasharray={`${item.length} ${circumference - item.length}`}
+              strokeDashoffset={-item.offset}
+              strokeLinecap="round"
+            />
+          ))}
+        </svg>
+        <div className="absolute inset-0 grid place-items-center text-center">
+          <div>
+            <div className="text-3xl font-black text-[#003366]">{total}</div>
+            <div className="text-xs font-bold uppercase text-slate-500">Hồ sơ</div>
+          </div>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {STATUS_KEYS.map((key) => {
+          const value = Number(byStatus[key] || 0);
+          const percent = total ? Math.round((value / total) * 100) : 0;
+          return (
+            <div key={key} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLORS[key] }} />
+                <span className="truncate text-sm font-bold text-slate-700">{STATUS_LABELS[key]}</span>
+              </div>
+              <span className="shrink-0 text-sm font-black text-slate-900">{value} ({percent}%)</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RevenueLineChart({ items = [] }) {
+  if (!items.length) return <EmptyText>Chưa có dữ liệu doanh thu theo ngày.</EmptyText>;
+  const width = 640;
+  const height = 220;
+  const padding = 28;
+  const max = Math.max(1, ...items.map((item) => Number(item.revenue || 0)));
+  const stepX = items.length > 1 ? (width - padding * 2) / (items.length - 1) : 0;
+  const points = items.map((item, index) => {
+    const x = padding + index * stepX;
+    const y = height - padding - (Number(item.revenue || 0) / max) * (height - padding * 2);
+    return { ...item, x, y };
+  });
+  const line = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const area = `${padding},${height - padding} ${line} ${width - padding},${height - padding}`;
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-64 w-full rounded-2xl bg-slate-50">
+        <defs>
+          <linearGradient id="revenueArea" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+          const y = padding + ratio * (height - padding * 2);
+          return <line key={ratio} x1={padding} x2={width - padding} y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" />;
+        })}
+        <polygon points={area} fill="url(#revenueArea)" />
+        <polyline points={line} fill="none" stroke="#0369a1" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+        {points.map((point) => (
+          <g key={point.date}>
+            <circle cx={point.x} cy={point.y} r="5" fill="#ffffff" stroke="#0369a1" strokeWidth="3" />
+            <title>{`${point.date}: ${formatCurrency(point.revenue)} (${point.paidCount || 0} giao dịch)`}</title>
+          </g>
+        ))}
+      </svg>
+      <div className="mt-3 flex justify-between gap-3 text-xs font-semibold text-slate-500">
+        <span>{items[0]?.date || ""}</span>
+        <span>{items[items.length - 1]?.date || ""}</span>
+      </div>
+    </div>
+  );
+}
+
+function ServiceBarChart({ items = [], mode = "applications" }) {
+  if (!items.length) return <EmptyText>{mode === "revenue" ? "Chưa có doanh thu theo dịch vụ." : "Chưa có dữ liệu hồ sơ theo dịch vụ."}</EmptyText>;
+  const topItems = items.slice(0, 8);
+  const max = Math.max(1, ...topItems.map((item) => Number(mode === "revenue" ? item.revenue : item.total) || 0));
+  return (
+    <div className="space-y-4">
+      {topItems.map((item) => {
+        const value = Number(mode === "revenue" ? item.revenue : item.total) || 0;
+        const percent = Math.max(4, Math.round((value / max) * 100));
+        return (
+          <div key={`${mode}-${item.serviceId || item.serviceName}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-black text-slate-800">{item.serviceName || "Không rõ dịch vụ"}</div>
+                <div className="text-xs font-semibold text-slate-500">
+                  {mode === "revenue" ? `${item.paidCount || 0} giao dịch` : `Hoàn thành ${item.completed || 0}, từ chối ${item.rejected || 0}`}
+                </div>
+              </div>
+              <div className="shrink-0 text-sm font-black text-[#003366]">{mode === "revenue" ? formatCurrency(value) : value}</div>
+            </div>
+            <div className="h-4 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
+              <div className={`h-full rounded-full ${mode === "revenue" ? "bg-emerald-500" : "bg-[#0b5c9a]"}`} style={{ width: `${percent}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function AdminStatistics() {
@@ -345,17 +488,21 @@ export default function AdminStatistics() {
                   <StatCard label="Doanh thu hôm nay" value={formatCurrency(totals.todayRevenue)} />
                   <StatCard label="Doanh thu tháng này" value={formatCurrency(totals.monthRevenue)} />
                 </div>
+                <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+                  <Panel title="Tỷ lệ trạng thái hồ sơ" icon={<PieChart className="h-5 w-5" />}>
+                    <StatusDonut byStatus={data.byStatus || {}} total={statusTotal} />
+                  </Panel>
+                  <Panel title="Xu hướng doanh thu" icon={<TrendingUp className="h-5 w-5" />}>
+                    <RevenueLineChart items={revenueByDate} />
+                  </Panel>
+                </div>
               </section>
             ) : null}
 
             {activeTab === "applications" ? (
               <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
                 <Panel title="Hồ sơ theo trạng thái" icon={<PieChart className="h-5 w-5" />}>
-                  <div className="space-y-4">
-                    {STATUS_KEYS.map((key) => (
-                      <MiniBar key={key} label={STATUS_LABELS[key]} value={data.byStatus?.[key] || 0} total={statusTotal} />
-                    ))}
-                  </div>
+                  <StatusDonut byStatus={data.byStatus || {}} total={statusTotal} />
                 </Panel>
 
                 <Panel title="Hồ sơ mới nhất">
@@ -380,7 +527,8 @@ export default function AdminStatistics() {
 
                 <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
                   <Panel title="Doanh thu theo ngày">
-                    <div className="space-y-4">
+                    <RevenueLineChart items={revenueByDate} />
+                    <div className="mt-5 space-y-4">
                       {revenueByDate.length ? (
                         revenueByDate.map((item) => (
                           <RevenueBar
@@ -407,11 +555,12 @@ export default function AdminStatistics() {
             {activeTab === "services" ? (
               <section className="grid gap-6 lg:grid-cols-2">
                 <Panel title="Hồ sơ theo dịch vụ">
-                  <ApplicationsByService items={applicationsByService} />
+                  <ServiceBarChart items={applicationsByService} mode="applications" />
                 </Panel>
 
                 <Panel title="Doanh thu theo dịch vụ">
-                  <div className="space-y-4">
+                  <ServiceBarChart items={revenueByService} mode="revenue" />
+                  <div className="mt-5 space-y-4">
                     {revenueByService.length ? (
                       revenueByService.map((item) => (
                         <RevenueBar
