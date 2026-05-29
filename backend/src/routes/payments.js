@@ -298,6 +298,7 @@ router.post("/sepay-webhook", async (req, res) => {
 
       await updateByCode(payment.dossierId, {
         ...dossier,
+        status: String(dossier.status || "").toUpperCase() === "DRAFT" ? "PENDING" : dossier.status,
         paymentStatus: "PAID",
         updatedAt: nowIso(),
         timeline,

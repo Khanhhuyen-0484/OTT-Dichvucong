@@ -98,6 +98,14 @@ function getApplicationPaymentStatus(application) {
   return String(application?.paymentStatus || "UNPAID").trim().toUpperCase();
 }
 
+function normalizeApplicationStatus(application) {
+  const status = String(application?.status || "PENDING").trim().toUpperCase();
+  const paymentStatus = getApplicationPaymentStatus(application);
+  if (status === "DRAFT" && isPaidStatus(paymentStatus)) return "PENDING";
+  if (status === "SUBMITTED" || status === "RECEIVED" || status === "WAITING" || status === "WAITING_RECEIVE") return "PENDING";
+  return status;
+}
+
 function getDossierKey(item) {
   return String(
     item?.dossierId ||
@@ -133,7 +141,8 @@ function dedupeApplications(items = []) {
 }
 
 function isSubmittedApplication(application) {
-  return String(application?.status || "").trim().toUpperCase() !== "DRAFT";
+  const status = String(application?.status || "").trim().toUpperCase();
+  return status !== "DRAFT" || isPaidStatus(getApplicationPaymentStatus(application));
 }
 
 function isPaidStatus(status) {
@@ -242,7 +251,7 @@ async function getAdminStatistics(query = {}) {
       .filter(isSubmittedApplication)
       .map((application) => ({
         ...application,
-        status: String(application.status || "PENDING").trim().toUpperCase(),
+        status: normalizeApplicationStatus(application),
         createdAtDate: getApplicationDate(application),
       }));
 
@@ -256,10 +265,10 @@ async function getAdminStatistics(query = {}) {
       inRange(application.createdAtDate, fromDate, toDate)
     );
 
-    const todayApplications = filteredApplications.filter((application) =>
+    const todayApplications = applications.filter((application) =>
       inRange(application.createdAtDate, todayStart, todayEnd)
     );
-    const monthApplications = filteredApplications.filter((application) =>
+    const monthApplications = applications.filter((application) =>
       inRange(application.createdAtDate, monthStart, null)
     );
 
@@ -306,6 +315,7 @@ async function getAdminStatistics(query = {}) {
     const filteredPayments = normalizedPayments.filter((payment) =>
       inRange(payment.paidDate, fromDate, toDate)
     );
+    const paidPayments = normalizedPayments.filter((payment) => isPaidStatus(payment.status));
 
     const revenueByServiceMap = new Map();
     const revenueByDateMap = new Map();
@@ -321,9 +331,6 @@ async function getAdminStatistics(query = {}) {
       if (isPaidStatus(payment.status)) {
         totalRevenue += payment.amount;
         paidCount += 1;
-        if (inRange(payment.paidDate, todayStart, todayEnd)) todayRevenue += payment.amount;
-        if (inRange(payment.paidDate, monthStart, null)) monthRevenue += payment.amount;
-
         addRevenue(
           revenueByServiceMap,
           payment.serviceGroupKey || payment.serviceId,
@@ -346,6 +353,13 @@ async function getAdminStatistics(query = {}) {
         unpaidCount += 1;
       }
     });
+
+    todayRevenue = paidPayments
+      .filter((payment) => inRange(payment.paidDate, todayStart, todayEnd))
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    monthRevenue = paidPayments
+      .filter((payment) => inRange(payment.paidDate, monthStart, null))
+      .reduce((sum, payment) => sum + payment.amount, 0);
 
     filteredApplications.forEach((application) => {
       const code = getDossierKey(application);

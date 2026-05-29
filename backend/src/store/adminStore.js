@@ -27,6 +27,12 @@ let localDb = null;
 function ensureLocalDb() { if (!localDb) localDb = { conversations: [], ai: { id: "default", rulesText: DEFAULT_AI_RULES, history: [] } }; return localDb; }
 function nowIso() { return new Date().toISOString(); }
 function normalizeDossierStatus(status) { const s = String(status || "").trim().toUpperCase(); return DOSSIER_STATUS_FLOW.has(s) ? s : "PENDING"; }
+function getVisibleDossierStatus(app) {
+  const status = String(app?.status || "").trim().toUpperCase();
+  const paymentStatus = String(app?.paymentStatus || "").trim().toUpperCase();
+  if (status === "DRAFT" && (paymentStatus === "PAID" || paymentStatus === "COMPLETED")) return "PENDING";
+  return normalizeDossierStatus(status);
+}
 function normalizeTimelineItem(item) { return { status: normalizeDossierStatus(item?.status), action: String(item?.action || "").trim(), note: String(item?.note || "").trim(), actor: String(item?.actor || item?.by || "").trim(), createdAt: item?.createdAt || item?.at || nowIso() }; }
 async function getClient() { try { return getDynamoClient(); } catch { return null; } }
 async function safeScan(tableName) { const client = await getClient(); if (!client) return []; const rs = await client.send(new ScanCommand({ TableName: tableName })); return rs.Items || []; }
@@ -39,11 +45,11 @@ async function getDashboardStats() {
     const dossiers = (await readApplications()).filter(isPaidApplication);
     const conversations = await safeScan(SUPPORT_CONVERSATIONS_TABLE);
     return {
-      totalPending: dossiers.filter((x) => String(x.status || "").toUpperCase() === "PENDING").length,
-      totalProcessing: dossiers.filter((x) => String(x.status || "").toUpperCase() === "PROCESSING").length,
-      totalNeedMore: dossiers.filter((x) => String(x.status || "").toUpperCase() === "NEED_MORE").length,
-      totalCompleted: dossiers.filter((x) => String(x.status || "").toUpperCase() === "COMPLETED").length,
-      totalRejected: dossiers.filter((x) => String(x.status || "").toUpperCase() === "REJECTED").length,
+      totalPending: dossiers.filter((x) => getVisibleDossierStatus(x) === "PENDING").length,
+      totalProcessing: dossiers.filter((x) => getVisibleDossierStatus(x) === "PROCESSING").length,
+      totalNeedMore: dossiers.filter((x) => getVisibleDossierStatus(x) === "NEED_MORE").length,
+      totalCompleted: dossiers.filter((x) => getVisibleDossierStatus(x) === "COMPLETED").length,
+      totalRejected: dossiers.filter((x) => getVisibleDossierStatus(x) === "REJECTED").length,
       waitingMessages: conversations.filter((x) => x.status === "active" || x.status === "waiting").length
     };
   } catch (error) {
@@ -57,6 +63,7 @@ async function listDossiers(query = "") {
     const dossiers = await readApplications();
     const visibleDossiers = dossiers
       .filter(isPaidApplication)
+      .map((dossier) => ({ ...dossier, status: getVisibleDossierStatus(dossier) }))
       .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
     const q = String(query || "").trim().toLowerCase();
     if (!q) return visibleDossiers;
