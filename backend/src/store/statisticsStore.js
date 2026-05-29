@@ -316,12 +316,12 @@ async function getAdminStatistics(query = {}) {
 
     const revenueByServiceMap = new Map();
     const revenueByDateMap = new Map();
-    const countedPaidDossiers = new Set();
+    const dossiersWithAnyPayment = new Set();
     let pendingPaymentCount = 0;
     let unpaidCount = 0;
 
     const revenueRecords = paidPayments.map((payment) => {
-      if (payment.dossierId) countedPaidDossiers.add(payment.dossierId);
+      if (payment.dossierId) dossiersWithAnyPayment.add(payment.dossierId);
       return {
         paymentId: payment.paymentId,
         dossierId: payment.dossierId,
@@ -338,6 +338,7 @@ async function getAdminStatistics(query = {}) {
     });
 
     normalizedPayments.forEach((payment) => {
+      if (payment.dossierId) dossiersWithAnyPayment.add(payment.dossierId);
       if (isPaidStatus(payment.status)) return;
       if (PENDING_PAYMENT_STATUSES.has(payment.status)) {
         pendingPaymentCount += 1;
@@ -349,7 +350,7 @@ async function getAdminStatistics(query = {}) {
     applications.forEach((application) => {
       const code = getDossierKey(application);
       const paymentStatus = getApplicationPaymentStatus(application);
-      if (!isPaidStatus(paymentStatus) || countedPaidDossiers.has(code)) return;
+      if (!isPaidStatus(paymentStatus) || dossiersWithAnyPayment.has(code)) return;
 
       const amount = safeNumber(application.fee || application.paymentAmount);
       if (amount <= 0) return;
