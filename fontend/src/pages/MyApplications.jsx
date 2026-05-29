@@ -16,6 +16,7 @@ import {
 import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import { getAllMyApplications, getApiErrorMessage, getServiceNotifications } from "../lib/api";
+import { useAuth } from "../context/AuthContext.jsx";
 import { connectSocket } from "../lib/socket.js";
 import { applicationStatusLabel, paymentStatusLabel } from "../lib/statusLabels.js";
 
@@ -71,10 +72,38 @@ function applicationCodeOf(item) {
 }
 
 function applicationUrlOf(item) {
+  if (item?.localDraft && item?.serviceId) return `/services/${item.serviceId}`;
   return `/my-applications/${item?.dossierId || item?.applicationId || item?.applicationCode || item?.dossierCode || item?.id || ""}`;
 }
 
+function readLocalDrafts(user) {
+  const userKey = user?.id || user?.email || user?.phone || "guest";
+  const drafts = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith("dvc-draft-")) continue;
+    try {
+      const draft = JSON.parse(localStorage.getItem(key) || "{}");
+      if (!draft?.serviceId) continue;
+      if (draft.userKey && draft.userKey !== userKey) continue;
+      drafts.push({
+        ...draft,
+        localDraft: true,
+        id: key,
+        applicationCode: `DRAFT-${draft.serviceId}`,
+        serviceName: draft.serviceName || "Hồ sơ lưu nháp",
+        fee: draft.fee || 0,
+        status: "DRAFT",
+        paymentStatus: "UNPAID",
+        createdAt: draft.updatedAt || draft.createdAt,
+      });
+    } catch {}
+  }
+  return drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+}
+
 export default function MyApplications() {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [submitted, setSubmitted] = useState([]);
@@ -91,7 +120,8 @@ export default function MyApplications() {
         getServiceNotifications().catch(() => ({ data: { notifications: [] } })),
       ]);
       setItems(data.applications || []);
-      setDrafts(data.drafts || []);
+      const localDrafts = readLocalDrafts(user);
+      setDrafts([...(data.drafts || []), ...localDrafts]);
       setSubmitted(data.submitted || []);
       setNote(data.note || "");
       setNotifications(notificationRes.data.notifications || []);
@@ -306,6 +336,7 @@ function ApplicationCard({ item }) {
   const paymentStatus = String(item.paymentStatus || "").toUpperCase();
   const paymentMethod = String(item.paymentMethod || "").toUpperCase();
   const code = applicationCodeOf(item);
+  const detailUrl = applicationUrlOf(item);
   const actionLabel = status === "NEED_MORE" ? "Bổ sung hồ sơ" : status === "DRAFT" || paymentStatus === "UNPAID" ? "Tiếp tục hồ sơ" : "Xem chi tiết";
   const actionClass = status === "NEED_MORE"
     ? "bg-orange-600 text-white ring-orange-600 hover:bg-orange-700"
@@ -321,7 +352,7 @@ function ApplicationCard({ item }) {
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-lg font-black text-slate-950">{item.serviceName || "Dịch vụ công"}</h2>
-              <p className="mt-1 wrap-break-word text-xs font-bold text-slate-500">Mã hồ sơ: {code || "-"}</p>
+              <p className="mt-1 wrap-break-word text-xs font-bold text-slate-500">{item.localDraft ? `Đang dừng ở bước ${item.step || 1}/4${item.stepTitle ? ` - ${item.stepTitle}` : ""}` : `Mã hồ sơ: ${code || "-"}`}</p>
             </div>
           </div>
 
@@ -337,7 +368,7 @@ function ApplicationCard({ item }) {
             {STATUS_LABELS[status] || applicationStatusLabel(status || item.status)}
           </span>
           <Link
-            to={`/my-applications/${code}`}
+            to={detailUrl}
             className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black ring-1 transition ${actionClass}`}
           >
             {actionLabel}

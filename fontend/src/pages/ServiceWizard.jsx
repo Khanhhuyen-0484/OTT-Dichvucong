@@ -112,6 +112,11 @@ const wizardSteps = [
 const currency = new Intl.NumberFormat("vi-VN");
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
+function clampStep(value) {
+  const next = Number(value || 1);
+  return Number.isFinite(next) ? Math.min(4, Math.max(1, next)) : 1;
+}
+
 export default function ServiceWizard() {
   const { serviceId } = useParams();
   const navigate = useNavigate();
@@ -142,6 +147,9 @@ export default function ServiceWizard() {
   const [submitting, setSubmitting] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [dragKey, setDragKey] = useState("");
+  const userDraftKey = user?.id || user?.email || user?.phone || "guest";
+  const draftStorageKey = `dvc-draft-${userDraftKey}-${serviceId}`;
+  const legacyDraftStorageKey = `dvc-draft-${serviceId}`;
 
   useEffect(() => {
     let ignore = false;
@@ -164,6 +172,37 @@ export default function ServiceWizard() {
       ignore = true;
     };
   }, [serviceId]);
+
+  useEffect(() => {
+    const rawDraft = localStorage.getItem(draftStorageKey) || localStorage.getItem(legacyDraftStorageKey);
+    if (!rawDraft) return;
+    try {
+      const draft = JSON.parse(rawDraft);
+      if (!draft || String(draft.serviceId) !== String(serviceId)) return;
+      setFormData((prev) => ({ ...prev, ...(draft.formData || {}) }));
+      setStep(clampStep(draft.step));
+      if (draft.submitResult) setSubmitResult(draft.submitResult);
+      if (draft.paymentInfo) setPaymentInfo(draft.paymentInfo);
+      if (draft.paymentExpireAt) setPaymentExpireAt(draft.paymentExpireAt);
+      if (draft.savedPaymentStatus) setPaymentStatus(draft.savedPaymentStatus);
+      if (draft.files && typeof draft.files === "object") {
+        setFileItems(
+          Object.fromEntries(
+            Object.entries(draft.files).map(([key, item]) => [
+              key,
+              {
+                name: item?.name || "File đã lưu nháp",
+                type: item?.type || "",
+                size: item?.size || 0,
+                uploadStatus: "saved",
+                progress: 100,
+              },
+            ])
+          )
+        );
+      }
+    } catch {}
+  }, [draftStorageKey, legacyDraftStorageKey, serviceId]);
 
   const docs = useMemo(() => service?.documents || [], [service]);
   const requiredDocs = useMemo(() => docs.filter((doc) => doc.required), [docs]);
@@ -215,6 +254,7 @@ export default function ServiceWizard() {
     const next = {};
     if (missingDocs.length) next.files = `Bạn còn thiếu ${missingDocs.length} giấy tờ bắt buộc`;
     Object.entries(fileItems).forEach(([key, item]) => {
+      if (!item.file) next[key] = "Vui lòng chọn lại file trước khi nộp hồ sơ";
       if (item.file?.size > MAX_FILE_SIZE) next[key] = "File vượt quá 10MB";
     });
     setFormErrors((prev) => ({ ...prev, ...next }));
@@ -271,12 +311,26 @@ export default function ServiceWizard() {
   async function saveDraft() {
     const draft = {
       serviceId,
+      serviceName: service?.name || "",
+      categoryName: service?.categoryName || service?.category || "",
+      fee: feeAmount,
+      step,
+      stepTitle: currentStep.title,
+      status: "DRAFT",
+      paymentStatus: "UNPAID",
+      userKey: userDraftKey,
       formData,
       files: Object.fromEntries(Object.entries(fileItems).map(([key, item]) => [key, { name: item.name, size: item.size, type: item.type }])),
+      submitResult,
+      paymentInfo,
+      paymentExpireAt,
+      savedPaymentStatus: paymentStatus,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    localStorage.setItem(`dvc-draft-${serviceId}`, JSON.stringify(draft));
-    alert("Đã lưu nháp trên trình duyệt hiện tại.");
+    localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    localStorage.removeItem(legacyDraftStorageKey);
+    alert(`Đã lưu nháp tại bước ${step}/4 - ${currentStep.title}.`);
   }
 
   async function submitApplication() {
@@ -319,6 +373,8 @@ export default function ServiceWizard() {
       if (!dossierId) throw new Error("Thiếu mã hồ sơ từ phản hồi nộp hồ sơ");
 
       setSubmitResult(data);
+      localStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(legacyDraftStorageKey);
       setPaymentExpireAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
       setPaymentStatus("PENDING");
 
