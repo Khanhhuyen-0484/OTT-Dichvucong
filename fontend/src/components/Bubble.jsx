@@ -162,7 +162,7 @@ function Bubble({
 
   if (isCallLog) {
     const isMissedCall = callLog?.status === "missed";
-    const callLabel = isMissedCall ? "Cuộc gọi nhỡ" : "Cuộc gọi";
+    const callLabel = isMissedCall ? "Cuộc gọi nhỡ" : "Cuộc gọi đã kết thúc";
     return (
       <div className="inline-flex py-1">
         <div className={`rounded-[15px] border bg-white px-3 py-2 shadow-sm ${isMissedCall ? "text-red-600" : "text-gray-600"}`}>
@@ -278,7 +278,7 @@ function Bubble({
         {!onlyImageMessage &&
           hasTextContent &&
           !isLocationMessage && (
-            <div className="whitespace-pre-wrap break-words">
+            <div className="whitespace-pre-wrap wrap-break-word">
               {text}
             </div>
           )}

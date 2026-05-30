@@ -696,18 +696,26 @@ export default function ChatPage() {
     if (isCalling || videoCallState) return;
     const currentRoom = rooms.find((r) => r.id === activeRoomId);
     if (!currentRoom) return;
+    // Only the caller creates the WebRTC signaling room id. Callees must reuse this exact value.
     const callRoomId = `call_${activeRoomId}_${Date.now()}`;
+    console.log("[ROOM_DEBUG]", {
+      event: "createGroupCall",
+      userId: user.id,
+      roomId: callRoomId,
+      activeRoomId: callRoomId,
+      chatRoomId: activeRoomId,
+    });
 
     if (currentRoom.type === "group") {
       const otherMembers = (currentRoom.members || []).filter((m) => m.id !== user.id);
       if (!otherMembers.length) return;
       setIsCalling(true);
-      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserIds: otherMembers.map((m) => m.id), isCallee: false, isGroupCall: true });
+      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserIds: otherMembers.map((m) => m.id), isCallee: false, isGroupCall: true, isCallCreator: true });
     } else {
       const other = currentRoom.members?.find((m) => m.id !== user.id);
       if (!other) return;
       setIsCalling(true);
-      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserId: other.id, isCallee: false, isGroupCall: false });
+      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserId: other.id, isCallee: false, isGroupCall: false, isCallCreator: true });
     }
   }, [activeRoomId, rooms, user, isCalling, videoCallState]);
 
@@ -1602,6 +1610,8 @@ export default function ChatPage() {
           isCallee={videoCallState.isCallee}
           callerOffer={videoCallState.callerOffer}
           callerOffers={videoCallState.callerOffers}
+          isCallCreator={Boolean(videoCallState.isCallCreator)}
+          currentUserId={user.id}
           currentUserName={user.fullName}
           activeRoom={videoActiveRoom}
           onClose={() => {

@@ -29,6 +29,14 @@ function fallbackRoomFromCall(call, user) {
   };
 }
 
+function normalizeId(value) {
+  return String(value ?? "").trim();
+}
+
+function sameCallRoom(a, b) {
+  return normalizeId(a) && normalizeId(a) === normalizeId(b);
+}
+
 export default function CallManager() {
   const { user, ready } = useAuth();
   const [incomingCall, setIncomingCall] = useState(null);
@@ -61,21 +69,54 @@ export default function CallManager() {
     };
     const handleIncomingCall = (data) => {
       console.log("[CallManager] incoming-call:", data);
+      console.log("[SIGNAL_DEBUG]", {
+        event: "recv:incoming-call",
+        fromUserId: data.fromUserId,
+        toUserId: user.id,
+        roomId: data.roomId,
+        socketId: socket.id,
+      });
 
       if (data.isGroupCall) {
         const chatRoomId = getChatRoomIdFromCallRoomId(data.roomId);
-        loadCallRoom(chatRoomId, data.groupName);
-        setIncomingCall((prev) => ({
-          isGroupCall: true,
-          groupName: data.groupName || prev?.groupName || "Cuộc gọi nhóm",
+        console.log("[ROOM_DEBUG]", {
+          event: "incoming-call",
+          userId: user.id,
           roomId: data.roomId,
-          chatRoomId: chatRoomId || prev?.chatRoomId || "",
-          callerOffers: { ...(prev?.callerOffers || {}), [data.fromUserId]: data.offer },
-          callerNames: (prev?.callerNames || []).includes(data.callerName)
-            ? (prev?.callerNames || [])
-            : [...(prev?.callerNames || []), data.callerName].filter(Boolean),
-          callerUserId: prev?.callerUserId || data.fromUserId,
-        }));
+          activeRoomId: data.roomId,
+          fromUserId: data.fromUserId,
+        });
+        loadCallRoom(chatRoomId, data.groupName);
+        setIncomingCall((prev) => {
+          const canMerge = prev?.isGroupCall && sameCallRoom(prev.roomId, data.roomId);
+          const base = canMerge ? prev : null;
+          if (prev?.roomId && !canMerge) {
+            console.warn("[SIGNAL_DEBUG]", {
+              event: "replace-incoming-call-room",
+              previousRoomId: prev.roomId,
+              nextRoomId: data.roomId,
+              socketId: socket.id,
+            });
+          }
+
+          return {
+            isGroupCall: true,
+            groupName: data.groupName || base?.groupName || "Cuộc gọi nhóm",
+            roomId: data.roomId,
+            chatRoomId: chatRoomId || base?.chatRoomId || "",
+            callerOffers: { ...(base?.callerOffers || {}), [data.fromUserId]: data.offer },
+            groupMemberIds: Array.from(new Set([
+              ...(base?.groupMemberIds || []),
+              ...(data.groupMemberIds || []),
+              data.fromUserId,
+              user.id,
+            ].map(normalizeId).filter(Boolean))),
+            callerNames: (base?.callerNames || []).includes(data.callerName)
+              ? (base?.callerNames || [])
+              : [...(base?.callerNames || []), data.callerName].filter(Boolean),
+            callerUserId: base?.callerUserId || data.fromUserId,
+          };
+        });
         return;
       }
 
@@ -90,8 +131,12 @@ export default function CallManager() {
       setCallRoom(fallbackRoomFromCall(nextCall, user));
       setIncomingCall(nextCall);
     };
-    const handleIncomingCallEnded = () => {
-      setIncomingCall(null);
+    const handleIncomingCallEnded = ({ roomId } = {}) => {
+      setIncomingCall((prev) => {
+        if (!prev) return null;
+        if (roomId && !sameCallRoom(prev.roomId, roomId)) return prev;
+        return null;
+      });
     };
 
     socket.on("incoming-call", handleIncomingCall);
@@ -110,25 +155,60 @@ export default function CallManager() {
     return callRoom || fallbackRoomFromCall(incomingCall || videoCallState, user);
   }, [callRoom, incomingCall, user, videoCallState]);
 
-  const acceptCall = useCallback((call) => {
+  const acceptCall = useCallback(async (call) => {
     if (!call) return;
     if (call.isGroupCall) {
       const offers = call.callerOffers || { [call.callerUserId]: call.offer };
-      const roomMembers = activeCallRoom?.members || [];
+      const chatRoomId = call.chatRoomId || getChatRoomIdFromCallRoomId(call.roomId);
+      let roomMembers = activeCallRoom?.members || [];
+
+      if ((!roomMembers.length || roomMembers.length <= Object.keys(offers).length + 1) && chatRoomId) {
+        try {
+          const { data } = await getChatRooms();
+          const found = (data.rooms || []).find((room) => room.id === chatRoomId);
+          if (found) {
+            roomMembers = found.members || [];
+            setCallRoom(found);
+          }
+        } catch (err) {
+          console.warn("[CallManager] Không tải kịp thành viên nhóm trước khi nhận cuộc gọi:", err?.message || err);
+        }
+      }
+
       const groupTargetIds = roomMembers
-        .map((member) => String(member?.id || member?.userId || member || "").trim())
-        .filter((id) => id && id !== String(user?.id || ""));
-      const offeredIds = Object.keys(offers).filter(Boolean);
-      const targetUserIds = groupTargetIds.length
-        ? Array.from(new Set([...groupTargetIds, ...offeredIds]))
-        : offeredIds;
+        .map((member) => normalizeId(member?.id || member?.userId || member))
+        .filter((id) => id && id !== normalizeId(user?.id));
+      const signaledMemberIds = (call.groupMemberIds || [])
+        .map(normalizeId)
+        .filter((id) => id && id !== normalizeId(user?.id));
+      const offeredIds = Object.keys(offers).map(normalizeId).filter(Boolean);
+      const targetUserIds = Array.from(new Set([...groupTargetIds, ...signaledMemberIds, ...offeredIds]))
+        .filter((id) => id && id !== normalizeId(user?.id));
+
+      console.log("[MESH_TARGET_DEBUG]", {
+        selfUserId: normalizeId(user?.id),
+        callRoomId: call.roomId,
+        roomMemberIds: groupTargetIds,
+        signaledMemberIds,
+        offeredIds,
+        targetUserIds,
+      });
+      console.log("[ROOM_DEBUG]", {
+        event: "joinGroupCall",
+        userId: user.id,
+        roomId: call.roomId,
+        activeRoomId: call.roomId,
+        targetUserIds,
+      });
+
       setVideoCallState({
         roomId: call.roomId,
-        chatRoomId: call.chatRoomId || getChatRoomIdFromCallRoomId(call.roomId),
+        chatRoomId,
         targetUserIds,
         isCallee: true,
         callerOffers: offers,
         isGroupCall: true,
+        isCallCreator: false,
       });
     } else {
       setVideoCallState({
@@ -138,6 +218,7 @@ export default function CallManager() {
         isCallee: true,
         callerOffer: call.offer,
         isGroupCall: false,
+        isCallCreator: false,
       });
     }
     setIncomingCall(null);
@@ -182,6 +263,8 @@ export default function CallManager() {
           isCallee={videoCallState.isCallee}
           callerOffer={videoCallState.callerOffer}
           callerOffers={videoCallState.callerOffers}
+          isCallCreator={Boolean(videoCallState.isCallCreator)}
+          currentUserId={user.id}
           currentUserName={user.fullName || "Bạn"}
           activeRoom={activeCallRoom}
           onClose={() => {
