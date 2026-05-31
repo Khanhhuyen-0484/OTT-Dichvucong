@@ -84,18 +84,18 @@ export default function ServiceList() {
   return (
     <div className="min-h-screen bg-slate-50">
       <GovHeader />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
         <BackToDashboardButton variant="soft" className="mb-5 self-start" />
 
         <section className="relative z-20 rounded-3xl border border-blue-100 bg-white shadow-xl shadow-blue-950/8">
-          <div className="rounded-t-3xl bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-6 text-white">
+          <div className="rounded-t-3xl bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-4 text-white sm:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/85 ring-1 ring-white/20">
                   <Sparkles className="h-3.5 w-3.5" />
                   Trang dịch vụ công
                 </div>
-                <h1 className="mt-4 text-3xl font-black leading-tight md:text-4xl">Tìm dịch vụ nhanh hơn, rõ ràng hơn</h1>
+                <h1 className="mt-4 text-2xl font-black leading-tight md:text-4xl">Tìm dịch vụ nhanh hơn, rõ ràng hơn</h1>
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-blue-50">
                   Tra cứu dịch vụ theo từ khóa, nhóm thủ tục và mức phí trên mọi thiết bị.
                 </p>
@@ -111,7 +111,7 @@ export default function ServiceList() {
             </div>
           </div>
 
-          <div className="space-y-5 p-5">
+          <div className="space-y-4 p-4 sm:space-y-5 sm:p-5">
             <div className="grid gap-3 lg:grid-cols-[1.3fr_0.9fr]">
               <div className="flex min-h-13 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 shadow-sm transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100">
                 <Search className="h-5 w-5 shrink-0 text-slate-400" />
@@ -171,7 +171,7 @@ export default function ServiceList() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
               {stats.map((stat) => (
                 <ServiceStat key={stat.label} {...stat} />
               ))}
@@ -186,7 +186,7 @@ export default function ServiceList() {
         ) : null}
 
         {loading ? (
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-5 grid gap-4 sm:mt-6 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-3xl bg-white ring-1 ring-slate-200" />)}
           </div>
         ) : services.length === 0 ? (
@@ -200,7 +200,7 @@ export default function ServiceList() {
             </p>
           </div>
         ) : (
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-5 grid gap-4 sm:mt-6 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
             {services.map((service) => {
               const id = service.serviceId || service.id;
               return (
@@ -237,7 +237,7 @@ function ServiceCard({ service, id }) {
   return (
     <Link
       to={`/services/${id}`}
-      className="group flex min-h-72 flex-col rounded-3xl border border-slate-200 bg-white p-5 text-slate-950 shadow-sm transition hover:-translate-y-1 hover:border-blue-100 hover:shadow-xl hover:shadow-blue-950/8"
+      className="group flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-white p-4 sm:min-h-72 sm:p-5 text-slate-950 shadow-sm transition hover:-translate-y-1 hover:border-blue-100 hover:shadow-xl hover:shadow-blue-950/8"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-(--gov-navy) ring-1 ring-blue-100">
@@ -249,7 +249,7 @@ function ServiceCard({ service, id }) {
         </span>
       </div>
 
-      <h3 className="mt-5 text-xl font-black leading-snug text-slate-950 transition group-hover:text-(--gov-navy)">
+      <h3 className="mt-4 text-lg font-black leading-snug text-slate-950 sm:mt-5 sm:text-xl transition group-hover:text-(--gov-navy)">
         {service.name}
       </h3>
       <p className="mt-3 line-clamp-3 flex-1 text-sm font-semibold leading-relaxed text-slate-500">
@@ -267,9 +267,9 @@ function ServiceCard({ service, id }) {
         </span>
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+      <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs font-semibold leading-relaxed text-slate-500">Xem quy trình, hồ sơ và nộp trực tuyến</span>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-2xl bg-blue-50 px-3 py-2 text-xs font-black text-(--gov-navy) transition group-hover:bg-(--gov-navy) group-hover:text-white">
+        <span className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-blue-50 px-3 py-2 sm:w-auto text-xs font-black text-(--gov-navy) transition group-hover:bg-(--gov-navy) group-hover:text-white">
           Mở dịch vụ
           <ArrowRight className="h-3.5 w-3.5" />
         </span>

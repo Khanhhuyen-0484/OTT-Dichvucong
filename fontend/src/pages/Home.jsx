@@ -337,7 +337,7 @@ export default function Home() {
             <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
             <div className="absolute bottom-0 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-blue-300/10 blur-3xl" />
           </div>
-          <div className="relative mx-auto flex max-w-7xl items-center px-4 py-10 sm:py-12 lg:min-h-[560px] lg:py-0">
+          <div className="relative mx-auto flex max-w-7xl items-center px-3 py-8 sm:px-4 sm:py-12 lg:min-h-[560px] lg:py-0">
             <div className="grid w-full items-center gap-8 lg:grid-cols-12 lg:gap-12">
               <div className="lg:col-span-7">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-bold text-sky-50 ring-1 ring-white/20 backdrop-blur">
@@ -352,11 +352,11 @@ export default function Home() {
                   Nộp hồ sơ, thanh toán lệ phí, theo dõi tiến độ và nhận hỗ trợ trực tuyến trên một nền tảng thống nhất.
                 </p>
 
-                <div className="mt-6 flex flex-wrap gap-3">
+                <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
                   <button
                     type="button"
                     onClick={() => navigate("/services")}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#003366] shadow-lg shadow-blue-950/20 transition hover:-translate-y-0.5 hover:bg-sky-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#003366] shadow-lg shadow-blue-950/20 transition hover:-translate-y-0.5 hover:bg-sky-50"
                   >
                     <SendHorizonal className="h-4 w-4" />
                     Nộp hồ sơ ngay
@@ -364,7 +364,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => navigate("/track")}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/35 bg-white/10 px-5 py-3 text-sm font-black text-white shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/18"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/35 bg-white/10 px-5 py-3 text-sm font-black text-white shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/18"
                   >
                     <ClipboardList className="h-4 w-4" />
                     Tra cứu hồ sơ
@@ -394,8 +394,8 @@ export default function Home() {
               <div className="min-w-0 lg:col-span-5">
                 <div className="group relative mx-auto w-full max-w-[430px] transition duration-500 hover:-translate-y-1">
                   <div className="absolute -inset-2 rounded-[38px] bg-cyan-300/20 blur-2xl transition duration-500 group-hover:bg-cyan-300/30 sm:-inset-4" />
-                  <div className="relative rounded-[32px] border border-white/25 bg-white/12 p-4 shadow-2xl shadow-blue-950/25 backdrop-blur-xl [animation:smart-float_6s_ease-in-out_infinite]">
-                  <div className="rounded-[26px] border border-white/45 bg-white/88 p-5 text-slate-900 shadow-xl backdrop-blur [animation:smart-fade_.55s_ease-out_both]">
+                  <div className="relative rounded-[28px] border border-white/25 bg-white/12 p-3 sm:rounded-[32px] sm:p-4 shadow-2xl shadow-blue-950/25 backdrop-blur-xl [animation:smart-float_6s_ease-in-out_infinite]">
+                  <div className="rounded-[24px] border border-white/45 bg-white/88 p-4 sm:rounded-[26px] sm:p-5 text-slate-900 shadow-xl backdrop-blur [animation:smart-fade_.55s_ease-out_both]">
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <div className="text-base font-black text-[#003366]">Trung tâm hỗ trợ thông minh</div>
@@ -452,20 +452,20 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="relative z-10 mx-auto -mt-10 max-w-7xl px-4 sm:-mt-12">
+        <section className="relative z-10 mx-auto -mt-8 max-w-7xl px-3 sm:-mt-12 sm:px-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {stats.map((stat) => <StatCard key={stat.label} stat={stat} />)}
           </div>
         </section>
 
-        <section id="dichvu" className="mx-auto max-w-7xl px-4 py-14">
+        <section id="dichvu" className="mx-auto max-w-7xl px-3 py-10 sm:px-4 sm:py-14">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
                 <Sparkles className="h-3.5 w-3.5" />
                 Dịch vụ phổ biến
               </div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Thủ tục được sử dụng nhiều</h2>
+              <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl text-slate-950">Thủ tục được sử dụng nhiều</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Ưu tiên các nghiệp vụ người dân và doanh nghiệp thường cần nộp trực tuyến.</p>
             </div>
             <button
@@ -485,7 +485,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="bg-[#f6f9fc] px-4 py-14">
+        <section className="bg-[#f6f9fc] px-3 py-10 sm:px-4 sm:py-14">
           <div className="mx-auto max-w-[1200px]">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
@@ -493,7 +493,7 @@ export default function Home() {
                 <Newspaper className="h-3.5 w-3.5" />
                 Tin tức & thông báo
               </div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-[#0f2f57]">Cập nhật thông tin dịch vụ công</h2>
+              <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl text-[#0f2f57]">Cập nhật thông tin dịch vụ công</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                 Tin mới về chuyển đổi số, chính phủ điện tử, hướng dẫn sử dụng dịch vụ công và thông báo vận hành hệ thống.
               </p>
@@ -600,7 +600,7 @@ export default function Home() {
         <section className="bg-white py-14">
           <div className="mx-auto max-w-7xl px-4">
             <div className="max-w-2xl">
-              <h2 className="text-3xl font-black tracking-tight text-slate-950">Quy trình thực hiện</h2>
+              <h2 className="text-2xl font-black tracking-tight sm:text-3xl text-slate-950">Quy trình thực hiện</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">Bốn bước rõ ràng giúp người dân chuẩn bị hồ sơ, thanh toán và nhận kết quả thuận tiện.</p>
             </div>
             <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
@@ -625,7 +625,7 @@ export default function Home() {
 
         <section className="mx-auto grid max-w-7xl gap-6 px-4 py-14 lg:grid-cols-12">
           <div className="lg:col-span-7">
-            <h2 className="text-3xl font-black tracking-tight text-slate-950">Hỗ trợ trực tuyến</h2>
+            <h2 className="text-2xl font-black tracking-tight sm:text-3xl text-slate-950">Hỗ trợ trực tuyến</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Kết nối nhanh đến AI, cán bộ hỗ trợ, hướng dẫn nghiệp vụ và câu hỏi thường gặp.</p>
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
               {supportItems.map((item) => {
@@ -687,29 +687,29 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="px-4 pb-14">
-          <div className="mx-auto max-w-7xl overflow-hidden rounded-[34px] bg-gradient-to-br from-[#003366] via-[#0b4b86] to-[#1280bd] p-8 text-white shadow-2xl shadow-blue-950/15 md:p-10">
+        <section className="px-3 pb-10 sm:px-4 sm:pb-14">
+          <div className="mx-auto max-w-7xl overflow-hidden rounded-[34px] bg-gradient-to-br from-[#003366] via-[#0b4b86] to-[#1280bd] p-5 text-white shadow-2xl shadow-blue-950/15 sm:p-8 md:p-10">
             <div className="grid items-center gap-6 lg:grid-cols-[1fr_auto]">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-xs font-black ring-1 ring-white/20">
                   <Sparkles className="h-3.5 w-3.5" />
                   Sẵn sàng phục vụ người dân và doanh nghiệp
                 </div>
-                <h2 className="mt-4 text-3xl font-black tracking-tight md:text-4xl">Bắt đầu sử dụng dịch vụ công trực tuyến ngay hôm nay</h2>
+                <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-3xl md:text-4xl">Bắt đầu sử dụng dịch vụ công trực tuyến ngay hôm nay</h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/78">
                   Chọn thủ tục cần thực hiện, nộp hồ sơ trực tuyến, thanh toán lệ phí và nhận hỗ trợ khi cần trên cùng một nền tảng.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 lg:justify-end">
-                <button type="button" onClick={() => navigate("/services")} className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#003366] transition hover:bg-sky-50">
+                <button type="button" onClick={() => navigate("/services")} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#003366] transition hover:bg-sky-50">
                   <SendHorizonal className="h-4 w-4" />
                   Nộp hồ sơ
                 </button>
-                <button type="button" onClick={() => navigate("/track")} className="inline-flex items-center gap-2 rounded-2xl border border-white/35 bg-white/10 px-5 py-3 text-sm font-black text-white backdrop-blur transition hover:bg-white/18">
+                <button type="button" onClick={() => navigate("/track")} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/35 bg-white/10 px-5 py-3 text-sm font-black text-white backdrop-blur transition hover:bg-white/18">
                   <ClipboardList className="h-4 w-4" />
                   Tra cứu hồ sơ
                 </button>
-                <button type="button" onClick={() => navigate(user ? "/chat" : "/auth")} className="inline-flex items-center gap-2 rounded-2xl border border-white/35 bg-white/10 px-5 py-3 text-sm font-black text-white backdrop-blur transition hover:bg-white/18">
+                <button type="button" onClick={() => navigate(user ? "/chat" : "/auth")} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/35 bg-white/10 px-5 py-3 text-sm font-black text-white backdrop-blur transition hover:bg-white/18">
                   <MessageCircle className="h-4 w-4" />
                   Chat hỗ trợ
                 </button>

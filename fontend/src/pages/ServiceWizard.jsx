@@ -466,8 +466,8 @@ export default function ServiceWizard() {
   if (error || !service) return <PageState text={error || "Không tìm thấy dịch vụ"} />;
 
   return (
-    <div className="min-h-screen bg-[#f4f8fd] pb-[120px] text-slate-800">
-      <main className="mx-auto max-w-[1200px] px-4 py-5 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#f4f8fd] pb-[136px] text-slate-800 sm:pb-[120px]">
+      <main className="mx-auto max-w-[1200px] px-3 py-4 sm:px-6 sm:py-5 lg:px-8">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
           <Link to="/" className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
             <ArrowLeft className="h-4 w-4" /> Trang chủ
@@ -478,13 +478,13 @@ export default function ServiceWizard() {
           <span className="truncate">{service.name}</span>
         </div>
 
-        <section className="mb-4 rounded-[24px] border border-blue-100 bg-gradient-to-br from-[#073763] via-[#0b5c9a] to-[#1687c7] p-4 text-white shadow-xl shadow-blue-950/10 sm:p-5">
+        <section className="mb-4 rounded-[22px] border border-blue-100 bg-gradient-to-br from-[#073763] via-[#0b5c9a] to-[#1687c7] p-4 text-white shadow-xl shadow-blue-950/10 sm:rounded-[24px] sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <span className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-black ring-1 ring-white/20">
                 <FileText className="h-4 w-4" /> Nộp hồ sơ trực tuyến
               </span>
-              <h1 className="text-2xl font-black leading-tight sm:text-3xl">{service.name}</h1>
+              <h1 className="text-xl font-black leading-tight sm:text-3xl">{service.name}</h1>
               <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold">
                 <MetaPill icon={Clock3} text={service.processingTime || "Theo quy định"} />
                 <MetaPill icon={Banknote} text={isFree ? "Miễn phí" : `${currency.format(feeAmount)}đ`} />
@@ -494,7 +494,7 @@ export default function ServiceWizard() {
             <button
               type="button"
               onClick={() => setShowInfoModal(true)}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-blue-800 shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5"
+              className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-blue-800 shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 sm:w-auto"
             >
               <Info className="h-4 w-4" /> Xem thông tin dịch vụ
             </button>
@@ -585,7 +585,7 @@ function MetaPill({ icon: Icon, text }) {
 
 function ProgressSteps({ step }) {
   return (
-    <div className="rounded-[20px] border border-slate-200 bg-white p-2 shadow-sm">
+    <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white p-2 shadow-sm">
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {wizardSteps.map((item) => {
           const Icon = item.icon;
@@ -594,7 +594,7 @@ function ProgressSteps({ step }) {
           return (
             <div
               key={item.id}
-              className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition ${
+              className={`min-w-0 flex items-center gap-2 rounded-2xl px-2 py-2 text-xs font-black transition sm:px-3 sm:text-sm ${
                 active ? "bg-blue-700 text-white shadow-lg shadow-blue-700/20" : done ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-500"
               }`}
             >
@@ -759,14 +759,14 @@ function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpire
             <p className="text-lg font-black text-[#0f2f57]">Thanh toán trực tuyến</p>
             <p className="mt-1 text-sm font-semibold text-slate-500">Quét mã VietQR hoặc chuyển khoản đúng nội dung để hệ thống tự đối soát.</p>
             {qrImage && (
-              <img src={qrImage} alt="Mã QR thanh toán" className="mt-4 h-56 w-56 rounded-2xl border border-slate-200 object-contain p-2" />
+              <img src={qrImage} alt="Mã QR thanh toán" className="mx-auto mt-4 h-56 w-56 max-w-full rounded-2xl border border-slate-200 object-contain p-2 sm:mx-0" />
             )}
             <div className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-3 text-sm font-semibold">
               <InfoRow label="Ngân hàng" value={paymentInfo?.bankCode || paymentInfo?.bankName || "Theo cấu hình hệ thống"} />
               <InfoRow label="Số tài khoản" value={paymentInfo?.bankAccount || paymentInfo?.accountNo || "Đang cập nhật"} />
               <InfoRow label="Nội dung" value={paymentInfo?.transferContent || currentDossierId} />
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
               <button type="button" onClick={onCopy} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-700 hover:bg-slate-50">
                 <Copy className="h-4 w-4" /> Sao chép nội dung
               </button>
@@ -831,7 +831,7 @@ function UploadCard({ doc, item, error, active, onFile, onRemove, onDragState })
         </label>
 
         {item && (
-          <div className="flex items-center gap-3 sm:w-[240px]">
+          <div className="flex w-full items-center gap-3 sm:w-[240px]">
             {item.previewUrl ? (
               <img src={item.previewUrl} alt={item.name} className="h-14 w-14 rounded-xl object-cover" />
             ) : (
@@ -955,13 +955,13 @@ function ActionBar({ step, currentStep, submitting, checkingPayment, onBack, onS
           <p className="text-sm font-black text-[#0f2f57]">Bước {step}/4 - {currentStep.title}</p>
         </div>
         <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
-          <button type="button" onClick={onBack} disabled={step === 1 || submitting} className="h-11 rounded-2xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={onBack} disabled={step === 1 || submitting} className="h-11 rounded-2xl border border-slate-200 px-2 text-xs font-black text-slate-700 transition sm:px-3 sm:text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
             Quay lại
           </button>
-          <button type="button" onClick={onSave} disabled={submitting} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:opacity-50">
+          <button type="button" onClick={onSave} disabled={submitting} className="inline-flex h-11 items-center justify-center gap-1 rounded-2xl border border-blue-100 bg-blue-50 px-2 text-xs font-black text-blue-700 transition sm:gap-2 sm:px-3 sm:text-sm hover:bg-blue-100 disabled:opacity-50">
             <Save className="h-4 w-4" /> Lưu nháp
           </button>
-          <button type="button" onClick={onNext} disabled={submitting || checkingPayment} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#073763] to-[#1167ad] px-4 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
+          <button type="button" onClick={onNext} disabled={submitting || checkingPayment} className="inline-flex h-11 items-center justify-center gap-1 rounded-2xl bg-gradient-to-r from-[#073763] to-[#1167ad] px-2 text-xs font-black text-white shadow-lg shadow-blue-900/20 transition sm:gap-2 sm:px-4 sm:text-sm hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
             {submitting || checkingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Tiếp tục
           </button>

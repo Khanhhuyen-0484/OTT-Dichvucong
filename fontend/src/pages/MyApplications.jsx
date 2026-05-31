@@ -186,25 +186,25 @@ export default function MyApplications() {
   return (
     <div className="min-h-screen bg-slate-50">
       <GovHeader />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
         <BackToDashboardButton to="/" replace variant="soft" className="mb-5 self-start" />
 
         <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-xl shadow-blue-950/8">
-          <div className="bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-6 text-white">
+          <div className="bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-4 text-white sm:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/85 ring-1 ring-white/20">
                   <FileText className="h-3.5 w-3.5" />
                   Quản lý hồ sơ
                 </div>
-                <h1 className="mt-4 text-3xl font-black leading-tight md:text-4xl">Hồ sơ của tôi</h1>
+                <h1 className="mt-4 text-2xl font-black leading-tight md:text-4xl">Hồ sơ của tôi</h1>
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-blue-50">
                   Theo dõi hồ sơ đã nộp, hồ sơ lưu nháp và các yêu cầu bổ sung trong một màn hình gọn gàng.
                 </p>
               </div>
               <Link
                 to="/services"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-(--gov-navy) shadow-lg shadow-blue-950/20 transition hover:-translate-y-0.5 hover:bg-blue-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-(--gov-navy) shadow-lg shadow-blue-950/20 transition hover:-translate-y-0.5 hover:bg-blue-50 sm:w-auto"
               >
                 <Plus className="h-4 w-4" />
                 Nộp hồ sơ mới
@@ -212,7 +212,7 @@ export default function MyApplications() {
             </div>
           </div>
 
-          <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-5 lg:grid-cols-4">
             {stats.map((stat) => (
               <StatCard key={stat.label} {...stat} />
             ))}
@@ -354,7 +354,7 @@ function ApplicationCard({ item }) {
               <FileText className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-black text-slate-950">{item.serviceName || "Dịch vụ công"}</h2>
+              <h2 className="line-clamp-2 text-lg font-black text-slate-950">{item.serviceName || "Dịch vụ công"}</h2>
               <p className="mt-1 wrap-break-word text-xs font-bold text-slate-500">{item.localDraft || String(item.draftType || "").toUpperCase() === "WIZARD" ? `Đang dừng ở bước ${item.step || 1}/4${item.stepTitle ? ` - ${item.stepTitle}` : ""}` : `Mã hồ sơ: ${code || "-"}`}</p>
             </div>
           </div>
@@ -366,13 +366,13 @@ function ApplicationCard({ item }) {
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
+        <div className="flex w-full shrink-0 flex-col items-start gap-3 sm:w-auto lg:items-end">
           <span className={`inline-flex rounded-full px-3 py-1 text-sm font-black ring-1 ${statusClass(status)}`}>
             {STATUS_LABELS[status] || applicationStatusLabel(status || item.status)}
           </span>
           <Link
             to={detailUrl}
-            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black ring-1 transition ${actionClass}`}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black ring-1 transition sm:w-auto ${actionClass}`}
           >
             {actionLabel}
             <ArrowRight className="h-4 w-4" />
