@@ -88,6 +88,8 @@ export async function postAdminSupportResolve(id) { return api.post(`/admin/supp
 export async function getAdminAiHistory() { return api.get("/admin/ai/history"); }
 export async function getAdminAiRules() { return api.get("/admin/ai/rules"); }
 export async function putAdminAiRules(rulesText) { return api.put("/admin/ai/rules", { rulesText }); }
+export async function getAdminUsers(params = {}) { return api.get("/admin/users", { params }); }
+export async function updateAdminUserRole(userId, role) { return api.put(`/admin/users/${userId}/role`, { role }); }
 export async function createService(payload) { return api.post("/services/admin", payload); }
 export async function seedServices() { return api.post("/services/admin/seed"); }
 export async function updateService(serviceId, payload) { return api.put(`/services/admin/${serviceId}`, payload); }

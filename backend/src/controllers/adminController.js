@@ -14,7 +14,7 @@ const {
 const { getAdminStatistics } = require("../store/statisticsStore");
 const { updateApplicationStatus } = require("./serviceController");
 const { sendMessage } = require("../store/supportConversationsStore");
-const { findById, updateUserRole } = require("../store/userStore");
+const { findById, listUsers, updateUserRole } = require("../store/userStore");
 const { getIo } = require("../socket");
 
 exports.dashboard = async (req, res) => {
@@ -232,6 +232,52 @@ exports.getStatistics = async (req, res) => {
     return res.json(stats);
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi lấy thống kê" });
+  }
+};
+
+function toAdminUser(user) {
+  return {
+    id: user?.id || "",
+    fullName: user?.fullName || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    role: user?.role || "citizen",
+    avatarUrl: user?.avatarUrl || "",
+    createdAt: user?.createdAt || "",
+    updatedAt: user?.updatedAt || "",
+    friendCount: Array.isArray(user?.friendIds) ? user.friendIds.length : 0,
+    blockedCount: Array.isArray(user?.blockedUserIds) ? user.blockedUserIds.length : 0,
+  };
+}
+
+exports.userList = async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim().toLowerCase();
+    const role = String(req.query.role || "all").trim().toLowerCase();
+    const users = await listUsers();
+    const filtered = users
+      .map(toAdminUser)
+      .filter((item) => {
+        const matchesRole = role === "all" || !role || String(item.role || "").toLowerCase() === role;
+        const matchesQuery =
+          !q ||
+          [item.fullName, item.email, item.phone, item.id]
+            .map((value) => String(value || "").toLowerCase())
+            .some((value) => value.includes(q));
+        return matchesRole && matchesQuery;
+      })
+      .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+
+    return res.json({
+      users: filtered,
+      summary: {
+        total: users.length,
+        admins: users.filter((item) => String(item.role || "").toLowerCase() === "admin").length,
+        citizens: users.filter((item) => String(item.role || "citizen").toLowerCase() !== "admin").length,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy danh sách người dùng" });
   }
 };
 

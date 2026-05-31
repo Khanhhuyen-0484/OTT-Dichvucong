@@ -55,6 +55,7 @@ export default function App() {
           <Route path="/admin/documents" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
           <Route path="/admin/dossiers/:dossierId" element={isAdmin ? <AdminDossierDetail /> : <Navigate to="/auth" replace />} />
           <Route path="/admin/ai" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
+          <Route path="/admin/users" element={isAdmin ? <AdminPanel /> : <Navigate to="/auth" replace />} />
           <Route path="/admin/services" element={isAdmin ? <AdminServices /> : <Navigate to="/auth" replace />} />
           <Route path="/admin/services/create" element={isAdmin ? <AdminCreateService /> : <Navigate to="/auth" replace />} />
           <Route path="/admin/services/:serviceId/edit" element={isAdmin ? <AdminCreateService /> : <Navigate to="/auth" replace />} />

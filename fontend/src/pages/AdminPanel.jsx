@@ -19,6 +19,8 @@ import {
   Send,
   ShieldCheck,
   TrendingUp,
+  UserCog,
+  UsersRound,
 } from "lucide-react";
 import UserAvatar from "../components/UserAvatar.jsx";
 import AdminDossierWorkspace from "../components/admin/AdminDossierWorkspace.jsx";
@@ -28,11 +30,13 @@ import {
   getAdminAiRules,
   getAdminDashboard,
   getAdminDossiers,
+  getAdminUsers,
   getAdminSupportConversation,
   getAdminSupportConversations,
   postAdminSupportMessage,
   postAdminSupportResolve,
   putAdminAiRules,
+  updateAdminUserRole,
 } from "../lib/api";
 
 const NAV_ITEMS = [
@@ -40,6 +44,7 @@ const NAV_ITEMS = [
   { key: "records", label: "Quản lý hồ sơ", icon: ClipboardList, path: "/admin/documents" },
   { key: "services", label: "Quản lý dịch vụ", icon: FileText, path: "/admin/services" },
   { key: "statistics", label: "Thống kê", icon: TrendingUp, path: "/admin/statistics" },
+  { key: "users", label: "Quản lý người dùng", icon: UsersRound, path: "/admin/users" },
   { key: "support", label: "Chat 1v1", icon: MessageCircleMore, path: "/admin/chat" },
   { key: "ai", label: "Quản trị AI", icon: Bot, path: "/admin/ai" },
 ];
@@ -140,6 +145,10 @@ export default function AdminPanel() {
   const [chatText, setChatText] = useState("");
   const [ruleText, setRuleText] = useState("");
   const [aiHistory, setAiHistory] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [userSummary, setUserSummary] = useState({ total: 0, admins: 0, citizens: 0 });
+  const [userQuery, setUserQuery] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [busy, setBusy] = useState(false);
@@ -150,6 +159,7 @@ export default function AdminPanel() {
     if (path === "/admin/chat") return "support";
     if (path === "/admin/documents") return "records";
     if (path === "/admin/ai") return "ai";
+    if (path === "/admin/users") return "users";
     return "dashboard";
   }, [location.pathname]);
 
@@ -186,13 +196,15 @@ export default function AdminPanel() {
   const pageTitle = activeNavItem?.label || "Quản trị viên";
   const pageDescription = activeTab === "records"
     ? "Theo dõi dữ liệu, xử lý hồ sơ và phản hồi người dân trên cùng một không gian."
+    : activeTab === "users"
+      ? "Theo dõi tài khoản công dân, cán bộ và phân quyền truy cập hệ thống."
     : activeTab === "support"
       ? "Theo dõi hội thoại, hỗ trợ người dân và xử lý phản hồi nhanh hơn."
       : activeTab === "ai"
         ? "Cấu hình quy tắc phản hồi, kiểm soát tri thức và theo dõi lịch sử AI."
         : "Theo dõi hoạt động và vận hành hệ thống dịch vụ công.";
   const isRecordsPage = activeTab === "records";
-  const isWideAdminPage = activeTab === "dashboard" || activeTab === "records" || activeTab === "support" || activeTab === "ai";
+  const isWideAdminPage = activeTab === "dashboard" || activeTab === "records" || activeTab === "support" || activeTab === "ai" || activeTab === "users";
 
   async function loadDashboard() {
     const [statsRes, dossierRes, convRes] = await Promise.all([getAdminDashboard(), getAdminDossiers(""), getAdminSupportConversations()]);
@@ -225,6 +237,12 @@ export default function AdminPanel() {
     setRuleText(rulesRes.data.rulesText || "");
   }
 
+  async function loadUsers() {
+    const res = await getAdminUsers({ q: userQuery, role: userRoleFilter });
+    setUsers(res.data.users || []);
+    setUserSummary(res.data.summary || { total: 0, admins: 0, citizens: 0 });
+  }
+
   useEffect(() => {
     loadDashboard().catch(() => setMessage("Không tải được dữ liệu quản trị"));
   }, []);
@@ -236,6 +254,10 @@ export default function AdminPanel() {
   useEffect(() => {
     if (activeTab === "ai") loadAiData().catch(() => setMessage("Không tải được dữ liệu AI"));
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "users") loadUsers().catch(() => setMessage("Không tải được danh sách người dùng"));
+  }, [activeTab, userRoleFilter]);
 
   async function sendSupportMessage() {
     const text = chatText.trim();
@@ -274,6 +296,32 @@ export default function AdminPanel() {
       setMessage("Đã cập nhật bộ quy tắc AI");
     } catch {
       setMessage("Lưu bộ quy tắc AI thất bại");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function searchUsers(e) {
+    e?.preventDefault?.();
+    setBusy(true);
+    try {
+      await loadUsers();
+    } catch {
+      setMessage("Không tìm được danh sách người dùng");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeUserRole(userId, role) {
+    if (!userId || !role) return;
+    setBusy(true);
+    try {
+      await updateAdminUserRole(userId, role);
+      await loadUsers();
+      setMessage("Đã cập nhật vai trò người dùng");
+    } catch {
+      setMessage("Cập nhật vai trò người dùng thất bại");
     } finally {
       setBusy(false);
     }
@@ -434,6 +482,111 @@ export default function AdminPanel() {
                   );
                 })}
                 {!filteredDossiers.length && <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm font-semibold text-slate-500">Không có hồ sơ phù hợp bộ lọc.</div>}
+              </section>
+            </div>
+          )}
+
+          {activeTab === "users" && (
+            <div className="space-y-5">
+              <section className="rounded-4xl border border-white/80 bg-white/90 p-6 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-blue-700">
+                      <UsersRound className="h-4 w-4" />
+                      Người dùng hệ thống
+                    </div>
+                    <h1 className="mt-3 text-3xl font-black text-slate-950">Quản lý người dùng</h1>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Theo dõi tài khoản công dân/cán bộ, tìm kiếm nhanh và phân quyền truy cập hệ thống.</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-2xl font-black text-slate-950">{userSummary.total || 0}</div>
+                      <div className="mt-1 text-xs font-black uppercase text-slate-500">Tổng tài khoản</div>
+                    </div>
+                    <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
+                      <div className="text-2xl font-black text-blue-800">{userSummary.admins || 0}</div>
+                      <div className="mt-1 text-xs font-black uppercase text-blue-700">Cán bộ/Admin</div>
+                    </div>
+                    <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
+                      <div className="text-2xl font-black text-emerald-800">{userSummary.citizens || 0}</div>
+                      <div className="mt-1 text-xs font-black uppercase text-emerald-700">Người dân</div>
+                    </div>
+                  </div>
+                </div>
+
+                <form onSubmit={searchUsers} className="mt-5 grid gap-3 lg:grid-cols-[1fr_220px_auto]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      placeholder="Tìm theo tên, email, số điện thoại..."
+                      className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                  </div>
+                  <select
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  >
+                    <option value="all">Tất cả vai trò</option>
+                    <option value="citizen">Người dân</option>
+                    <option value="admin">Cán bộ/Admin</option>
+                  </select>
+                  <button type="submit" disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-800 disabled:opacity-60">
+                    <Search className="h-4 w-4" />
+                    Tìm kiếm
+                  </button>
+                </form>
+              </section>
+
+              <section className="overflow-hidden rounded-4xl border border-white/80 bg-white/90 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur">
+                <div className="grid grid-cols-[minmax(260px,1.4fr)_minmax(160px,0.8fr)_140px_180px] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500 max-lg:hidden">
+                  <div>Người dùng</div>
+                  <div>Liên hệ</div>
+                  <div>Vai trò</div>
+                  <div>Thao tác</div>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {users.map((item) => {
+                    const isCurrentUser = item.id === user?.id;
+                    return (
+                      <div key={item.id} className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(260px,1.4fr)_minmax(160px,0.8fr)_140px_180px] lg:items-center">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <UserAvatar user={item} src={item.avatarUrl} size={46} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-black text-slate-950">{item.fullName || "Người dùng"}</div>
+                            <div className="mt-1 truncate text-xs font-semibold text-slate-500">ID: {item.id || "-"}</div>
+                          </div>
+                        </div>
+                        <div className="min-w-0 text-sm font-semibold text-slate-700">
+                          <div className="truncate">{item.email || "-"}</div>
+                          <div className="mt-1 truncate text-xs text-slate-500">{item.phone || "-"}</div>
+                        </div>
+                        <div>
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${item.role === "admin" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                            {item.role === "admin" ? "Cán bộ/Admin" : "Người dân"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <UserCog className="h-4 w-4 text-slate-400" />
+                          <select
+                            value={item.role === "admin" ? "admin" : "citizen"}
+                            disabled={busy || isCurrentUser}
+                            onChange={(e) => changeUserRole(item.id, e.target.value)}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            <option value="citizen">Người dân</option>
+                            <option value="admin">Cán bộ/Admin</option>
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!users.length ? (
+                    <div className="p-10 text-center text-sm font-semibold text-slate-500">Không có người dùng phù hợp bộ lọc.</div>
+                  ) : null}
+                </div>
               </section>
             </div>
           )}

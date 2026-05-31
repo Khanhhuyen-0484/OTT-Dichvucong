@@ -30,6 +30,7 @@ router.get("/ai/rules", c.aiRulesGet);
 router.put("/ai/rules", c.aiRulesUpdate);
 
 // User role management
+router.get("/users", c.userList);
 router.put("/users/:userId/role", c.updateUserRole);
 
 module.exports = router;
