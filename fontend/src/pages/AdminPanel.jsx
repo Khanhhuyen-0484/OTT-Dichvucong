@@ -58,6 +58,8 @@ const STATUS_META = {
   COMPLETED: { text: "Hoàn thành", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
 };
 
+STATUS_META.RESULT_DELIVERED = { text: "Đã trả kết quả", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 };
+
 function formatDate(value) {
   return value ? new Date(value).toLocaleString("vi-VN") : "-";
 }
@@ -452,6 +454,7 @@ export default function AdminPanel() {
                       <option value="SUPPLEMENTED">Đã bổ sung</option>
                       <option value="REJECTED">Từ chối</option>
                       <option value="COMPLETED">Hoàn thành</option>
+                      <option value="RESULT_DELIVERED">Đã trả kết quả</option>
                     </select>
                   </div>
                 </div>

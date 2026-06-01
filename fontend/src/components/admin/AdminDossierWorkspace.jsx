@@ -53,10 +53,11 @@ const STAT_THEMES = {
   processing: "from-sky-500 via-blue-500 to-indigo-500 text-white ring-sky-200",
   needMore: "from-orange-500 via-amber-500 to-yellow-400 text-white ring-orange-200",
   completed: "from-emerald-500 via-teal-500 to-cyan-500 text-white ring-emerald-200",
+  delivered: "from-green-700 via-emerald-600 to-teal-500 text-white ring-emerald-200",
   overdue: "from-rose-600 via-red-500 to-orange-500 text-white ring-rose-200",
 };
 
-const WORKFLOW_STATUSES = ["PENDING", "PROCESSING", "NEED_MORE", "COMPLETED", "REJECTED"];
+const WORKFLOW_STATUSES = ["PENDING", "PROCESSING", "NEED_MORE", "COMPLETED", "RESULT_DELIVERED", "REJECTED"];
 STATUS_META.RESULT_DELIVERED = { label: "Đã trả kết quả", tone: "bg-emerald-100 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500", icon: FileCheck2 };
 
 const DRAWER_TABS = [
@@ -158,7 +159,7 @@ function getDueDate(item) {
 
 function isClosed(item) {
   const status = normalizeStatus(item?.status);
-  return status === "COMPLETED" || status === "APPROVED" || status === "REJECTED";
+  return status === "COMPLETED" || status === "APPROVED" || status === "RESULT_DELIVERED" || status === "REJECTED";
 }
 
 function isOverdue(item) {
@@ -304,7 +305,8 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
       pending: byStatus("PENDING"),
       processing: byStatus("PROCESSING"),
       needMore: byStatus("NEED_MORE"),
-      completed: enriched.filter((item) => ["COMPLETED", "APPROVED", "RESULT_DELIVERED"].includes(normalizeStatus(item.status))).length,
+      completed: enriched.filter((item) => ["COMPLETED", "APPROVED"].includes(normalizeStatus(item.status))).length,
+      delivered: byStatus("RESULT_DELIVERED"),
       overdue: enriched.filter((item) => item._overdue).length,
     };
   }, [enriched]);
@@ -530,6 +532,7 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
         <StatTile label="Đang xử lý" value={stats.processing} icon={Play} theme={STAT_THEMES.processing} active={filters.status === "PROCESSING"} onClick={() => setFilter("status", "PROCESSING")} />
         <StatTile label="Cần bổ sung" value={stats.needMore} icon={AlertTriangle} theme={STAT_THEMES.needMore} active={filters.status === "NEED_MORE"} onClick={() => setFilter("status", "NEED_MORE")} />
         <StatTile label="Đã hoàn thành" value={stats.completed} icon={FileCheck2} theme={STAT_THEMES.completed} active={filters.status === "COMPLETED"} onClick={() => setFilter("status", "COMPLETED")} />
+        <StatTile label="Đã trả kết quả" value={stats.delivered} icon={Download} theme={STAT_THEMES.delivered} active={filters.status === "RESULT_DELIVERED"} onClick={() => setFilter("status", "RESULT_DELIVERED")} />
         <StatTile label="Quá hạn" value={stats.overdue} icon={CalendarClock} theme={STAT_THEMES.overdue} active={filters.status === "OVERDUE"} onClick={() => setFilter("status", "OVERDUE")} />
       </section>
 
