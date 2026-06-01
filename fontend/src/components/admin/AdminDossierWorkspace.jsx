@@ -23,10 +23,13 @@ import {
   RefreshCw,
   Search,
   Send,
+  Upload,
   UserRound,
   X,
 } from "lucide-react";
 import {
+  deliverAdminDossierResult,
+  downloadApplicationResult,
   getAdminSupportConversation,
   postAdminSupportMessage,
   resolvedApiBaseUrl,
@@ -54,6 +57,8 @@ const STAT_THEMES = {
 };
 
 const WORKFLOW_STATUSES = ["PENDING", "PROCESSING", "NEED_MORE", "COMPLETED", "REJECTED"];
+STATUS_META.RESULT_DELIVERED = { label: "Đã trả kết quả", tone: "bg-emerald-100 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500", icon: FileCheck2 };
+
 const DRAWER_TABS = [
   { key: "info", label: "Thông tin hồ sơ", icon: FileText },
   { key: "documents", label: "Tài liệu", icon: Archive },
@@ -282,6 +287,7 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
   const [chatDetail, setChatDetail] = useState(null);
   const [chatText, setChatText] = useState("");
   const [noteModal, setNoteModal] = useState(null);
+  const [resultModal, setResultModal] = useState({ dossier: null, file: null, note: "" });
 
   const enriched = useMemo(
     () =>
@@ -298,7 +304,7 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
       pending: byStatus("PENDING"),
       processing: byStatus("PROCESSING"),
       needMore: byStatus("NEED_MORE"),
-      completed: enriched.filter((item) => ["COMPLETED", "APPROVED"].includes(normalizeStatus(item.status))).length,
+      completed: enriched.filter((item) => ["COMPLETED", "APPROVED", "RESULT_DELIVERED"].includes(normalizeStatus(item.status))).length,
       overdue: enriched.filter((item) => item._overdue).length,
     };
   }, [enriched]);
@@ -393,6 +399,50 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
       setMessage?.("Không cập nhật được trạng thái hồ sơ");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function submitResultDelivery() {
+    const dossier = resultModal.dossier;
+    if (!dossier?._code) return;
+    if (!resultModal.file) {
+      setMessage?.("Vui lòng chọn file PDF kết quả");
+      return;
+    }
+    if (resultModal.file.type !== "application/pdf") {
+      setMessage?.("Chỉ chấp nhận file PDF");
+      return;
+    }
+    if (resultModal.file.size > 10 * 1024 * 1024) {
+      setMessage?.("File PDF tối đa 10MB");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", resultModal.file);
+      formData.append("note", resultModal.note || "");
+      const { data } = await deliverAdminDossierResult(dossier._code, formData);
+      const updated = { ...(data.dossier || {}), _code: dossier._code };
+      setActiveDossier((current) => (current?._code === dossier._code ? { ...current, ...updated } : current));
+      setResultModal({ dossier: null, file: null, note: "" });
+      setMessage?.(data.emailFailed ? "Đã trả kết quả, nhưng gửi email thất bại" : "Đã trả kết quả hồ sơ");
+      await onReload?.();
+    } catch (error) {
+      setMessage?.(error?.response?.data?.message || "Không gửi được file kết quả");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openResultFile(dossier) {
+    try {
+      const { data } = await downloadApplicationResult(dossier._code);
+      const url = data?.result?.resultFileUrl || dossier.resultFileUrl;
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setMessage?.(error?.response?.data?.message || "Không tải được file kết quả");
     }
   }
 
@@ -576,6 +626,8 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
           setTab={setDrawerTab}
           onClose={() => setActiveDossier(null)}
           onUpdate={(status) => requestStatusUpdate([activeDossier], status)}
+          onOpenDeliver={() => setResultModal({ dossier: activeDossier, file: null, note: "" })}
+          onOpenResult={() => openResultFile(activeDossier)}
           activeConversation={activeConversation}
           chatDetail={chatDetail}
           chatText={chatText}
@@ -598,6 +650,19 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
             setNoteModal(null);
             updateStatus(next.items, next.status, next.note);
           }}
+          busy={busy}
+        />
+      ) : null}
+
+      {resultModal.dossier ? (
+        <ResultDeliveryModal
+          dossier={resultModal.dossier}
+          file={resultModal.file}
+          note={resultModal.note}
+          setFile={(file) => setResultModal((prev) => ({ ...prev, file }))}
+          setNote={(note) => setResultModal((prev) => ({ ...prev, note }))}
+          onClose={() => setResultModal({ dossier: null, file: null, note: "" })}
+          onSubmit={submitResultDelivery}
           busy={busy}
         />
       ) : null}
@@ -629,6 +694,35 @@ function NoteModal({ status, count, note, setNote, onClose, onSubmit, busy }) {
           <button type="button" onClick={onSubmit} disabled={busy || String(note || "").trim().length < 5} className="flex-1 rounded-2xl bg-[#003366] px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50">
             Xác nhận
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultDeliveryModal({ dossier, file, note, setFile, setNote, onClose, onSubmit, busy }) {
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-black text-slate-950">Trả kết quả hồ sơ</h3>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Upload file PDF kết quả cho hồ sơ {dossier._code}.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+        </div>
+        <label className="mt-5 block text-sm font-black text-slate-700">
+          File PDF kết quả
+          <input type="file" accept="application/pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-2 block w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold" />
+        </label>
+        {file ? <div className="mt-2 text-xs font-semibold text-slate-500">{file.name} · {Math.round(file.size / 1024)} KB</div> : null}
+        <label className="mt-4 block text-sm font-black text-slate-700">
+          Ghi chú trả kết quả
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder="Nhập ghi chú gửi cho người dân..." className="mt-2 w-full rounded-2xl border border-slate-200 p-3 text-sm font-semibold outline-none focus:border-[#003366] focus:ring-4 focus:ring-blue-100" />
+        </label>
+        <div className="mt-5 flex gap-2">
+          <button type="button" onClick={onClose} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-200">Hủy</button>
+          <button type="button" onClick={onSubmit} disabled={busy || !file} className="flex-1 rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white hover:bg-emerald-800 disabled:opacity-50">{busy ? "Đang gửi..." : "Gửi kết quả"}</button>
         </div>
       </div>
     </div>
@@ -864,7 +958,7 @@ function KanbanBoard({ items, onOpen, onDropStatus }) {
   );
 }
 
-function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, activeConversation, chatDetail, chatText, setChatText, loadChat, sendChat, busy }) {
+function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, onOpenDeliver, onOpenResult, activeConversation, chatDetail, chatText, setChatText, loadChat, sendChat, busy }) {
   const formData = dossier.formData || {};
   const attachments = Array.isArray(dossier.attachments) ? dossier.attachments : [];
   const supplementAttachments = attachments.filter(isSupplementAttachment);
@@ -897,6 +991,10 @@ function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, activeConversa
             <button type="button" disabled={busy} onClick={() => onUpdate("PROCESSING")} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Chuyển xử lý</button>
             <button type="button" disabled={busy} onClick={() => onUpdate("NEED_MORE")} className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Yêu cầu bổ sung</button>
             <button type="button" disabled={busy} onClick={() => onUpdate("COMPLETED")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Hoàn thành</button>
+            <button type="button" disabled={busy} onClick={onOpenDeliver} className="inline-flex items-center gap-1 rounded-lg bg-emerald-800 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+              <Upload className="h-3.5 w-3.5" />
+              Trả kết quả
+            </button>
             <button type="button" disabled={busy} onClick={() => onUpdate("REJECTED")} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Từ chối</button>
           </div>
         </header>
@@ -929,6 +1027,17 @@ function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, activeConversa
               <div className="sm:col-span-2">
                 <MiniField label="Nội dung yêu cầu" value={formData.requestContent || formData.note || dossier.description || "-"} />
               </div>
+              {(dossier.resultFileUrl || normalizeStatus(dossier.status) === "RESULT_DELIVERED") ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:col-span-2">
+                  <div className="text-sm font-black text-emerald-950">Kết quả hồ sơ</div>
+                  <div className="mt-1 text-sm font-semibold text-emerald-800">Hồ sơ đã có file kết quả PDF.</div>
+                  {dossier.resultNote ? <div className="mt-2 text-sm text-emerald-900">{dossier.resultNote}</div> : null}
+                  <button type="button" onClick={onOpenResult} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white hover:bg-emerald-800">
+                    <Download className="h-4 w-4" />
+                    Tải file PDF
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
