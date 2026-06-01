@@ -467,7 +467,7 @@ async function updateUserRole(id, role) {
     if (!id) return null;
     const client = getClient();
     if (!client) return null;
-    const validRoles = ["citizen", "admin"];
+    const validRoles = ["citizen", "admin", "staff"];
     if (!validRoles.includes(role)) {
       const err = new Error("Invalid role");
       err.code = "INVALID_ROLE";

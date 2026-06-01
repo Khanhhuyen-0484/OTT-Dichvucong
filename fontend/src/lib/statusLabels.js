@@ -16,6 +16,7 @@ const APPLICATION_STATUS_LABELS = {
   CANCELLED: "Đã hủy",
   CANCELED: "Đã hủy",
   OVERDUE: "Quá hạn",
+  RESULT_DELIVERED: "Đã trả kết quả",
 };
 
 const PAYMENT_STATUS_LABELS = {

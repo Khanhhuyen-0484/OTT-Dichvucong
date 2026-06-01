@@ -6,7 +6,7 @@ const TABLE_NAME = process.env.DYNAMODB_SERVICE_APPLICATIONS_TABLE || process.en
 
 function getClient() { return getDynamoClient(); }
 
-const ALLOWED_STATUSES = new Set(["DRAFT", "PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "REJECTED"]);
+const ALLOWED_STATUSES = new Set(["DRAFT", "PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "RESULT_DELIVERED", "REJECTED"]);
 
 function normalizeTimeline(items) {
   if (!Array.isArray(items)) return [];

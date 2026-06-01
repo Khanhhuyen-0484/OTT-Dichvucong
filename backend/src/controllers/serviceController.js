@@ -1,8 +1,9 @@
-const { listServices, getService, upsertService, seedServicesToDynamo } = require("../store/serviceCatalogStore");
+﻿const { listServices, getService, upsertService, seedServicesToDynamo } = require("../store/serviceCatalogStore");
 const { listCategories, seedDefaultCategories } = require("../store/serviceCategoryStore");
 const { createNotification, getNotificationsByUser } = require("../store/notificationStore");
 const { savePayment, getPaymentsByDossierId } = require("../store/paymentStore");
 const { create, findByCode, readAll, updateByCode, deleteByCode } = require("../store/serviceApplicationStore");
+const { createPresignedGet } = require("../config/s3");
 const { getIo } = require("../socket");
 
 const ALLOWED_STATUSES = new Set([
@@ -11,40 +12,41 @@ const ALLOWED_STATUSES = new Set([
   "NEED_MORE",
   "SUPPLEMENTED",
   "COMPLETED",
+  "RESULT_DELIVERED",
   "REJECTED"
 ]);
 
 const STATUS_LABELS = {
-  DRAFT: "Bản nháp",
-  PENDING: "Hồ sơ đã nộp",
-  PROCESSING: "Đang xử lý",
-  NEED_MORE: "Yêu cầu bổ sung",
-  SUPPLEMENTED: "Đã bổ sung",
-  COMPLETED: "Đã hoàn thành",
-  REJECTED: "Đã từ chối"
+  DRAFT: "Báº£n nhÃ¡p",
+  PENDING: "Há»“ sÆ¡ Ä‘Ã£ ná»™p",
+  PROCESSING: "Äang xá»­ lÃ½",
+  NEED_MORE: "YÃªu cáº§u bá»• sung",
+  SUPPLEMENTED: "ÄÃ£ bá»• sung",
+  COMPLETED: "ÄÃ£ hoÃ n thÃ nh",
+  REJECTED: "ÄÃ£ tá»« chá»‘i"
 };
 
 const DEFAULT_TIMELINE = [
-  "Tiếp nhận hồ sơ",
-  "Kiểm tra tính hợp lệ",
-  "Xử lý chuyên viên",
-  "Phê duyệt / bổ sung",
-  "Trả kết quả"
+  "Tiáº¿p nháº­n há»“ sÆ¡",
+  "Kiá»ƒm tra tÃ­nh há»£p lá»‡",
+  "Xá»­ lÃ½ chuyÃªn viÃªn",
+  "PhÃª duyá»‡t / bá»• sung",
+  "Tráº£ káº¿t quáº£"
 ];
 
 const fallbackServices = {
   "ho-tich-khai-sinh": {
     serviceId: "ho-tich-khai-sinh",
     id: "ho-tich-khai-sinh",
-    name: "Đăng ký khai sinh",
-    description: "Tiếp nhận, xử lý và trả kết quả đăng ký khai sinh trực tuyến cho công dân.",
-    categoryName: "Hộ tịch",
-    processingTime: "3 ngày làm việc",
+    name: "ÄÄƒng kÃ½ khai sinh",
+    description: "Tiáº¿p nháº­n, xá»­ lÃ½ vÃ  tráº£ káº¿t quáº£ Ä‘Äƒng kÃ½ khai sinh trá»±c tuyáº¿n cho cÃ´ng dÃ¢n.",
+    categoryName: "Há»™ tá»‹ch",
+    processingTime: "3 ngÃ y lÃ m viá»‡c",
     fee: 0,
     documents: [
-      { key: "birthCert", label: "Giấy chứng sinh", required: true },
-      { key: "idCard", label: "CCCD/CMND người nộp", required: true },
-      { key: "marriageCert", label: "Giấy đăng ký kết hôn (nếu có)", required: false }
+      { key: "birthCert", label: "Giáº¥y chá»©ng sinh", required: true },
+      { key: "idCard", label: "CCCD/CMND ngÆ°á»i ná»™p", required: true },
+      { key: "marriageCert", label: "Giáº¥y Ä‘Äƒng kÃ½ káº¿t hÃ´n (náº¿u cÃ³)", required: false }
     ],
     timeline: DEFAULT_TIMELINE,
     faq: []
@@ -52,14 +54,14 @@ const fallbackServices = {
   "dat-dai-bien-dong": {
     serviceId: "dat-dai-bien-dong",
     id: "dat-dai-bien-dong",
-    name: "Đăng ký biến động đất đai",
-    description: "Tiếp nhận hồ sơ thay đổi, sang tên hoặc cập nhật thông tin quyền sử dụng đất.",
-    categoryName: "Đất đai",
-    processingTime: "5 ngày làm việc",
+    name: "ÄÄƒng kÃ½ biáº¿n Ä‘á»™ng Ä‘áº¥t Ä‘ai",
+    description: "Tiáº¿p nháº­n há»“ sÆ¡ thay Ä‘á»•i, sang tÃªn hoáº·c cáº­p nháº­t thÃ´ng tin quyá»n sá»­ dá»¥ng Ä‘áº¥t.",
+    categoryName: "Äáº¥t Ä‘ai",
+    processingTime: "5 ngÃ y lÃ m viá»‡c",
     fee: 20000,
     documents: [
-      { key: "landCert", label: "Giấy chứng nhận quyền sử dụng đất", required: true },
-      { key: "mutationForm", label: "Đơn đăng ký biến động", required: true },
+      { key: "landCert", label: "Giáº¥y chá»©ng nháº­n quyá»n sá»­ dá»¥ng Ä‘áº¥t", required: true },
+      { key: "mutationForm", label: "ÄÆ¡n Ä‘Äƒng kÃ½ biáº¿n Ä‘á»™ng", required: true },
       { key: "idCard", label: "CCCD/CMND", required: true }
     ],
     timeline: DEFAULT_TIMELINE,
@@ -68,14 +70,14 @@ const fallbackServices = {
   "xay-dung-cap-phep": {
     serviceId: "xay-dung-cap-phep",
     id: "xay-dung-cap-phep",
-    name: "Xin cấp phép xây dựng",
-    description: "Nộp hồ sơ đề nghị cấp phép xây dựng và theo dõi trạng thái xử lý.",
-    categoryName: "Xây dựng",
-    processingTime: "7 ngày làm việc",
+    name: "Xin cáº¥p phÃ©p xÃ¢y dá»±ng",
+    description: "Ná»™p há»“ sÆ¡ Ä‘á» nghá»‹ cáº¥p phÃ©p xÃ¢y dá»±ng vÃ  theo dÃµi tráº¡ng thÃ¡i xá»­ lÃ½.",
+    categoryName: "XÃ¢y dá»±ng",
+    processingTime: "7 ngÃ y lÃ m viá»‡c",
     fee: 50000,
     documents: [
-      { key: "landCert", label: "Giấy tờ quyền sử dụng đất", required: true },
-      { key: "design", label: "Bản vẽ thiết kế", required: true },
+      { key: "landCert", label: "Giáº¥y tá» quyá»n sá»­ dá»¥ng Ä‘áº¥t", required: true },
+      { key: "design", label: "Báº£n váº½ thiáº¿t káº¿", required: true },
       { key: "idCard", label: "CCCD/CMND", required: true }
     ],
     timeline: DEFAULT_TIMELINE,
@@ -84,14 +86,14 @@ const fallbackServices = {
   "gplx-doi": {
     serviceId: "gplx-doi",
     id: "gplx-doi",
-    name: "Đổi giấy phép lái xe",
-    description: "Tiếp nhận hồ sơ đổi giấy phép lái xe theo quy trình điện tử.",
-    categoryName: "Giao thông",
-    processingTime: "4 ngày làm việc",
+    name: "Äá»•i giáº¥y phÃ©p lÃ¡i xe",
+    description: "Tiáº¿p nháº­n há»“ sÆ¡ Ä‘á»•i giáº¥y phÃ©p lÃ¡i xe theo quy trÃ¬nh Ä‘iá»‡n tá»­.",
+    categoryName: "Giao thÃ´ng",
+    processingTime: "4 ngÃ y lÃ m viá»‡c",
     fee: 150000,
     documents: [
-      { key: "oldLicense", label: "Giấy phép lái xe cũ", required: true },
-      { key: "health", label: "Giấy khám sức khỏe", required: true },
+      { key: "oldLicense", label: "Giáº¥y phÃ©p lÃ¡i xe cÅ©", required: true },
+      { key: "health", label: "Giáº¥y khÃ¡m sá»©c khá»e", required: true },
       { key: "idCard", label: "CCCD/CMND", required: true }
     ],
     timeline: DEFAULT_TIMELINE,
@@ -100,13 +102,13 @@ const fallbackServices = {
   "ho-chieu-pho-thong": {
     serviceId: "ho-chieu-pho-thong",
     id: "ho-chieu-pho-thong",
-    name: "Cấp hộ chiếu phổ thông",
-    description: "Tiếp nhận hồ sơ cấp hộ chiếu phổ thông cho công dân đủ điều kiện.",
-    categoryName: "Hộ chiếu",
-    processingTime: "8 ngày làm việc",
+    name: "Cáº¥p há»™ chiáº¿u phá»• thÃ´ng",
+    description: "Tiáº¿p nháº­n há»“ sÆ¡ cáº¥p há»™ chiáº¿u phá»• thÃ´ng cho cÃ´ng dÃ¢n Ä‘á»§ Ä‘iá»u kiá»‡n.",
+    categoryName: "Há»™ chiáº¿u",
+    processingTime: "8 ngÃ y lÃ m viá»‡c",
     fee: 200000,
     documents: [
-      { key: "photo", label: "Ảnh chân dung", required: true },
+      { key: "photo", label: "áº¢nh chÃ¢n dung", required: true },
       { key: "idCard", label: "CCCD/CMND", required: true }
     ],
     timeline: DEFAULT_TIMELINE,
@@ -115,22 +117,22 @@ const fallbackServices = {
   "doanh-nghiep-thanh-lap": {
     serviceId: "doanh-nghiep-thanh-lap",
     id: "doanh-nghiep-thanh-lap",
-    name: "Đăng ký thành lập doanh nghiệp",
-    description: "Nộp hồ sơ đăng ký doanh nghiệp và theo dõi tiến trình xử lý.",
-    categoryName: "Doanh nghiệp",
-    processingTime: "3-5 ngày làm việc",
+    name: "ÄÄƒng kÃ½ thÃ nh láº­p doanh nghiá»‡p",
+    description: "Ná»™p há»“ sÆ¡ Ä‘Äƒng kÃ½ doanh nghiá»‡p vÃ  theo dÃµi tiáº¿n trÃ¬nh xá»­ lÃ½.",
+    categoryName: "Doanh nghiá»‡p",
+    processingTime: "3-5 ngÃ y lÃ m viá»‡c",
     fee: 100000,
     documents: [
-      { key: "charter", label: "Điều lệ công ty", required: true },
-      { key: "memberList", label: "Danh sách thành viên/cổ đông", required: true },
-      { key: "idCard", label: "CCCD/CMND người đại diện", required: true }
+      { key: "charter", label: "Äiá»u lá»‡ cÃ´ng ty", required: true },
+      { key: "memberList", label: "Danh sÃ¡ch thÃ nh viÃªn/cá»• Ä‘Ã´ng", required: true },
+      { key: "idCard", label: "CCCD/CMND ngÆ°á»i Ä‘áº¡i diá»‡n", required: true }
     ],
     timeline: DEFAULT_TIMELINE,
     faq: []
   }
 };
 
-/** ID demo trên trang chủ -> ID dịch vụ trong catalog backend */
+/** ID demo trÃªn trang chá»§ -> ID dá»‹ch vá»¥ trong catalog backend */
 const SERVICE_ALIASES = {
   "demo-ho-tich": "ho-tich-khai-sinh",
   "demo-dat-dai": "dat-dai-bien-dong",
@@ -147,11 +149,11 @@ function generateDossierCode() {
 
 function validateForm(formData) {
   const errors = {};
-  if (!formData?.fullName?.trim()) errors.fullName = "Họ tên là bắt buộc";
-  if (!/^[0-9]{12}$/.test(formData?.citizenId || "")) errors.citizenId = "CCCD phải đủ 12 số";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData?.email || "")) errors.email = "Email không đúng định dạng";
-  if (!/^[0-9]{10,11}$/.test(formData?.phone || "")) errors.phone = "Số điện thoại không hợp lệ";
-  if (!formData?.address?.trim()) errors.address = "Địa chỉ là bắt buộc";
+  if (!formData?.fullName?.trim()) errors.fullName = "Há» tÃªn lÃ  báº¯t buá»™c";
+  if (!/^[0-9]{12}$/.test(formData?.citizenId || "")) errors.citizenId = "CCCD pháº£i Ä‘á»§ 12 sá»‘";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData?.email || "")) errors.email = "Email khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng";
+  if (!/^[0-9]{10,11}$/.test(formData?.phone || "")) errors.phone = "Sá»‘ Ä‘iá»‡n thoáº¡i khÃ´ng há»£p lá»‡";
+  if (!formData?.address?.trim()) errors.address = "Äá»‹a chá»‰ lÃ  báº¯t buá»™c";
   return errors;
 }
 
@@ -232,12 +234,12 @@ function generateStepId() {
 
 function validateServicePayload(body) {
   const errors = {};
-  if (!String(body?.name || "").trim()) errors.name = "Tên dịch vụ là bắt buộc";
-  if (!String(body?.categoryId || "").trim()) errors.categoryId = "Danh mục là bắt buộc";
+  if (!String(body?.name || "").trim()) errors.name = "TÃªn dá»‹ch vá»¥ lÃ  báº¯t buá»™c";
+  if (!String(body?.categoryId || "").trim()) errors.categoryId = "Danh má»¥c lÃ  báº¯t buá»™c";
   const fee = Number(body?.fee ?? 0);
-  if (Number.isNaN(fee) || fee < 0) errors.fee = "Lệ phí phải lớn hơn hoặc bằng 0";
-  if (!String(body?.processingTime || "").trim()) errors.processingTime = "Thời gian xử lý không được để trống";
-  if (!String(body?.agency || "").trim()) errors.agency = "Cơ quan xử lý là bắt buộc";
+  if (Number.isNaN(fee) || fee < 0) errors.fee = "Lá»‡ phÃ­ pháº£i lá»›n hÆ¡n hoáº·c báº±ng 0";
+  if (!String(body?.processingTime || "").trim()) errors.processingTime = "Thá»i gian xá»­ lÃ½ khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng";
+  if (!String(body?.agency || "").trim()) errors.agency = "CÆ¡ quan xá»­ lÃ½ lÃ  báº¯t buá»™c";
   return errors;
 }
 
@@ -247,17 +249,17 @@ exports.getServiceCategories = async (_req, res) => {
     return res.json({ categories });
   } catch (error) {
     console.error("[getServiceCategories] error:", error);
-    return res.status(500).json({ message: error.message || "Không tải được danh mục" });
+    return res.status(500).json({ message: error.message || "KhÃ´ng táº£i Ä‘Æ°á»£c danh má»¥c" });
   }
 };
 
 exports.seedServiceCategories = async (_req, res) => {
   try {
     const result = await seedDefaultCategories();
-    return res.json({ message: "Đã seed danh mục mặc định", ...result });
+    return res.json({ message: "ÄÃ£ seed danh má»¥c máº·c Ä‘á»‹nh", ...result });
   } catch (error) {
     console.error("[seedServiceCategories] error:", error);
-    return res.status(500).json({ message: error.message || "Không seed được danh mục" });
+    return res.status(500).json({ message: error.message || "KhÃ´ng seed Ä‘Æ°á»£c danh má»¥c" });
   }
 };
 
@@ -277,20 +279,20 @@ exports.getServices = async (req, res) => {
 
 exports.getServiceById = async (req, res) => {
   const service = await resolveService(req.params.serviceId);
-  if (!service) return res.status(404).json({ message: "Không tìm thấy dịch vụ" });
+  if (!service) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y dá»‹ch vá»¥" });
   res.json(service);
 };
 
 exports.submitApplication = async (req, res) => {
   const { serviceId, formData = {}, attachments = [], paymentMethod = "BANK_TRANSFER" } = req.body;
-  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+  if (!serviceId) return res.status(400).json({ message: "Thiáº¿u serviceId" });
 
   const service = await resolveService(serviceId);
-  if (!service) return res.status(404).json({ message: "Dịch vụ không tồn tại" });
+  if (!service) return res.status(404).json({ message: "Dá»‹ch vá»¥ khÃ´ng tá»“n táº¡i" });
 
   const errors = validateForm(formData);
   if (Object.keys(errors).length) {
-    return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors });
+    return res.status(400).json({ message: "Dá»¯ liá»‡u khÃ´ng há»£p lá»‡", errors });
   }
 
   const dossierCode = generateDossierCode();
@@ -304,7 +306,7 @@ exports.submitApplication = async (req, res) => {
         {
           status: "PENDING",
           action: "submit",
-          note: "Hồ sơ đã được nộp",
+          note: "Há»“ sÆ¡ Ä‘Ã£ Ä‘Æ°á»£c ná»™p",
           actor: userId(req) || "user",
           createdAt
         }
@@ -336,7 +338,7 @@ exports.submitApplication = async (req, res) => {
 
   await create(application);
   res.status(201).json({
-    message: shouldGoToAdmin ? "Nộp hồ sơ thành công" : "Đã lưu nháp hồ sơ, vui lòng thanh toán để gửi hồ sơ",
+    message: shouldGoToAdmin ? "Ná»™p há»“ sÆ¡ thÃ nh cÃ´ng" : "ÄÃ£ lÆ°u nhÃ¡p há»“ sÆ¡, vui lÃ²ng thanh toÃ¡n Ä‘á»ƒ gá»­i há»“ sÆ¡",
     dossierId,
     dossierCode,
     application,
@@ -347,7 +349,12 @@ exports.submitApplication = async (req, res) => {
 exports.getApplicationByCode = async (req, res) => {
   const dossierId = String(req.params.dossierId || req.params.applicationCode || "").trim();
   const application = await findByCode(dossierId);
-  if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+  if (!application) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡" });
+  const role = String(req.user?.role || "").toLowerCase();
+  const isAdmin = role === "admin" || role === "staff";
+  if (!isAdmin && application.userId && userId(req) && String(application.userId) !== String(userId(req))) {
+    return res.status(403).json({ message: "Không có quyền xem hồ sơ này" });
+  }
 
   const payments = await getPaymentsByDossierId(application.dossierId || dossierId);
   const notifications = application.userId ? await getNotificationsByUser(application.userId) : [];
@@ -356,13 +363,18 @@ exports.getApplicationByCode = async (req, res) => {
     Number(application.fee || 0) <= 0 || paymentStatus === "COMPLETED" || paymentStatus === "PAID"
       ? application
       : { ...application, status: "DRAFT", timeline: [], history: [] };
+  const publicApplication = {
+    ...visibleApplication,
+    resultFileUrl: undefined,
+    resultFileKey: undefined
+  };
 
   res.json({
-    application: visibleApplication,
+    application: publicApplication,
     payments,
     notifications,
-    timeline: visibleApplication.timeline || visibleApplication.history || [],
-    statusDescription: STATUS_LABELS[visibleApplication.status] || visibleApplication.status
+    timeline: publicApplication.timeline || publicApplication.history || [],
+    statusDescription: STATUS_LABELS[publicApplication.status] || publicApplication.status
   });
 };
 
@@ -401,8 +413,8 @@ function findWizardDraft(items, uid, serviceId) {
 exports.getServiceDraft = async (req, res) => {
   const uid = userId(req);
   const serviceId = String(req.params.serviceId || "").trim();
-  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
-  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+  if (!uid) return res.status(401).json({ message: "Vui lÃ²ng Ä‘Äƒng nháº­p" });
+  if (!serviceId) return res.status(400).json({ message: "Thiáº¿u serviceId" });
 
   const items = await readAll();
   const draft = findWizardDraft(items, uid, serviceId);
@@ -412,11 +424,11 @@ exports.getServiceDraft = async (req, res) => {
 exports.saveServiceDraft = async (req, res) => {
   const uid = userId(req);
   const serviceId = String(req.params.serviceId || req.body?.serviceId || "").trim();
-  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
-  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+  if (!uid) return res.status(401).json({ message: "Vui lÃ²ng Ä‘Äƒng nháº­p" });
+  if (!serviceId) return res.status(400).json({ message: "Thiáº¿u serviceId" });
 
   const service = await resolveService(serviceId);
-  if (!service) return res.status(404).json({ message: "Dịch vụ không tồn tại" });
+  if (!service) return res.status(404).json({ message: "Dá»‹ch vá»¥ khÃ´ng tá»“n táº¡i" });
 
   const items = await readAll();
   const existing = findWizardDraft(items, uid, serviceId);
@@ -460,25 +472,25 @@ exports.saveServiceDraft = async (req, res) => {
   };
 
   const saved = existing ? await updateByCode(existing.dossierId, draft) : await create(draft);
-  return res.json({ message: "Đã lưu nháp hồ sơ", draft: saved });
+  return res.json({ message: "ÄÃ£ lÆ°u nhÃ¡p há»“ sÆ¡", draft: saved });
 };
 
 exports.deleteServiceDraft = async (req, res) => {
   const uid = userId(req);
   const serviceId = String(req.params.serviceId || "").trim();
-  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
-  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+  if (!uid) return res.status(401).json({ message: "Vui lÃ²ng Ä‘Äƒng nháº­p" });
+  if (!serviceId) return res.status(400).json({ message: "Thiáº¿u serviceId" });
 
   const items = await readAll();
   const draft = findWizardDraft(items, uid, serviceId);
   if (draft?.dossierId) await deleteByCode(draft.dossierId);
-  return res.json({ message: "Đã xoá bản nháp" });
+  return res.json({ message: "ÄÃ£ xoÃ¡ báº£n nhÃ¡p" });
 };
 
 exports.trackApplication = async (req, res) => {
   const dossierId = String(req.params.dossierId || req.params.applicationCode || "").trim();
   const application = await findByCode(dossierId);
-  if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+  if (!application) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡" });
 
   const payments = await getPaymentsByDossierId(application.dossierId || dossierId);
   const notifications = application.userId ? await getNotificationsByUser(application.userId) : [];
@@ -487,13 +499,18 @@ exports.trackApplication = async (req, res) => {
     Number(application.fee || 0) <= 0 || paymentStatus === "COMPLETED" || paymentStatus === "PAID"
       ? application
       : { ...application, status: "DRAFT", timeline: [], history: [] };
+  const publicApplication = {
+    ...visibleApplication,
+    resultFileUrl: undefined,
+    resultFileKey: undefined
+  };
 
   res.json({
-    application: visibleApplication,
+    application: publicApplication,
     payments,
     notifications,
-    timeline: visibleApplication.timeline || visibleApplication.history || [],
-    statusDescription: STATUS_LABELS[visibleApplication.status] || visibleApplication.status
+    timeline: publicApplication.timeline || publicApplication.history || [],
+    statusDescription: STATUS_LABELS[publicApplication.status] || publicApplication.status
   });
 };
 
@@ -512,7 +529,7 @@ exports.payForApplication = async (req, res) => {
   const { dossierId, dossierCode, paymentMethod = "BANK_TRANSFER", amount } = req.body;
   const targetDossierId = String(dossierId || dossierCode || "").trim();
   const application = await findByCode(targetDossierId);
-  if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+  if (!application) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡" });
 
   const paymentId = `PAY-${Date.now()}`;
   const transferContent = `DH${Date.now()}`;
@@ -543,14 +560,14 @@ exports.payForApplication = async (req, res) => {
     updatedAt: nowIso()
   });
 
-  return res.status(200).json({ message: "Đã tạo bản ghi thanh toán PENDING", payment });
+  return res.status(200).json({ message: "ÄÃ£ táº¡o báº£n ghi thanh toÃ¡n PENDING", payment });
 };
 
 exports.adminCreateService = async (req, res) => {
   const body = req.body || {};
   const validationErrors = validateServicePayload(body);
   if (Object.keys(validationErrors).length) {
-    return res.status(400).json({ message: "Dữ liệu dịch vụ không hợp lệ", errors: validationErrors });
+    return res.status(400).json({ message: "Dá»¯ liá»‡u dá»‹ch vá»¥ khÃ´ng há»£p lá»‡", errors: validationErrors });
   }
 
   const serviceId = generateServiceId();
@@ -563,7 +580,7 @@ exports.adminCreateService = async (req, res) => {
     name: String(body.name || "").trim(),
     description: String(body.description || "").trim(),
     categoryId: String(body.categoryId || "").trim(),
-    categoryName: String(body.categoryName || body.category || "Khác").trim(),
+    categoryName: String(body.categoryName || body.category || "KhÃ¡c").trim(),
     fee: Number(body.fee || 0),
     processingTime: String(body.processingTime || ""),
     documents: Array.isArray(body.documents) ? body.documents.map((doc) => ({ ...doc, requirementId, id: requirementId })) : [],
@@ -578,26 +595,26 @@ exports.adminCreateService = async (req, res) => {
     updatedAt: new Date().toISOString(),
     createdAt: body.createdAt || new Date().toISOString(),
     agency: String(body.agency || "").trim(),
-    level: String(body.level || "Mức 3").trim()
+    level: String(body.level || "Má»©c 3").trim()
   };
 
   await upsertService(item);
-  res.status(201).json({ message: "Đã lưu dịch vụ", service: item, serviceId, requirementId, faqId, stepId });
+  res.status(201).json({ message: "ÄÃ£ lÆ°u dá»‹ch vá»¥", service: item, serviceId, requirementId, faqId, stepId });
 };
 
 exports.seedServices = async (_req, res) => {
   const result = await seedServicesToDynamo();
-  res.json({ message: "Đã seed dịch vụ vào DynamoDB", ...result });
+  res.json({ message: "ÄÃ£ seed dá»‹ch vá»¥ vÃ o DynamoDB", ...result });
 };
 
 exports.adminUpdateService = async (req, res) => {
   const serviceId = req.params.serviceId;
   const current = await resolveService(serviceId);
-  if (!current) return res.status(404).json({ message: "Không tìm thấy dịch vụ" });
+  if (!current) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y dá»‹ch vá»¥" });
 
   const next = { ...current, ...req.body, serviceId, id: serviceId, updatedAt: nowIso() };
   await upsertService(next);
-  res.json({ message: "Đã cập nhật dịch vụ", service: next });
+  res.json({ message: "ÄÃ£ cáº­p nháº­t dá»‹ch vá»¥", service: next });
 };
 
 exports.updateApplicationStatus = async (req, res) => {
@@ -611,14 +628,14 @@ exports.updateApplicationStatus = async (req, res) => {
         ""
     ).trim();
     const application = await findByCode(dossierId);
-    if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+    if (!application) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡" });
 
     const status = normalizeStatus(req.body?.status);
     const note = String(req.body?.note || "").trim();
     const action = String(req.body?.action || req.method?.toLowerCase() || status.toLowerCase()).trim();
-    if (!ALLOWED_STATUSES.has(status)) return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+    if (!ALLOWED_STATUSES.has(status)) return res.status(400).json({ message: "Tráº¡ng thÃ¡i khÃ´ng há»£p lá»‡" });
     if ((status === "NEED_MORE" || status === "REJECTED") && !note) {
-      return res.status(400).json({ message: "Vui lòng nhập lý do" });
+      return res.status(400).json({ message: "Vui lÃ²ng nháº­p lÃ½ do" });
     }
 
     const now = nowIso();
@@ -637,17 +654,17 @@ exports.updateApplicationStatus = async (req, res) => {
       history: timeline,
       decisionNote: note || application.decisionNote || ""
     });
-    if (!updated) return res.status(500).json({ message: "Không cập nhật được hồ sơ" });
+    if (!updated) return res.status(500).json({ message: "KhÃ´ng cáº­p nháº­t Ä‘Æ°á»£c há»“ sÆ¡" });
 
     try {
       if (updated.userId) {
         const isNeedMore = status === "NEED_MORE";
         const title = isNeedMore
-          ? `Hồ sơ ${updated.dossierId} cần bổ sung`
-          : `Hồ sơ ${updated.dossierId} cập nhật trạng thái`;
+          ? `Há»“ sÆ¡ ${updated.dossierId} cáº§n bá»• sung`
+          : `Há»“ sÆ¡ ${updated.dossierId} cáº­p nháº­t tráº¡ng thÃ¡i`;
         const message = isNeedMore
-          ? `${updated.serviceName || "Hồ sơ"} cần bổ sung thông tin. Lý do: ${note}`
-          : `${updated.serviceName || "Hồ sơ"} đã chuyển sang trạng thái ${STATUS_LABELS[status] || status}.`;
+          ? `${updated.serviceName || "Há»“ sÆ¡"} cáº§n bá»• sung thÃ´ng tin. LÃ½ do: ${note}`
+          : `${updated.serviceName || "Há»“ sÆ¡"} Ä‘Ã£ chuyá»ƒn sang tráº¡ng thÃ¡i ${STATUS_LABELS[status] || status}.`;
         const notification = await createNotification({
           notificationId: `NTF-${Date.now()}`,
           userId: updated.userId,
@@ -671,22 +688,22 @@ exports.updateApplicationStatus = async (req, res) => {
       console.warn("[updateApplicationStatus] notification/socket error:", socketErr?.message || socketErr);
     }
 
-    return res.json({ message: "Đã cập nhật trạng thái hồ sơ", application: updated });
+    return res.json({ message: "ÄÃ£ cáº­p nháº­t tráº¡ng thÃ¡i há»“ sÆ¡", application: updated });
   } catch (err) {
     console.error("[updateApplicationStatus] error:", err);
-    return res.status(500).json({ message: err.message || "Lỗi cập nhật trạng thái hồ sơ" });
+    return res.status(500).json({ message: err.message || "Lá»—i cáº­p nháº­t tráº¡ng thÃ¡i há»“ sÆ¡" });
   }
 };
 
 exports.addApplicationSupplement = async (req, res) => {
   const dossierId = String(req.params.dossierId || req.params.applicationCode || "").trim();
   const application = await findByCode(dossierId);
-  if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+  if (!application) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡" });
   if (application.userId && userId(req) && String(application.userId) !== String(userId(req))) {
-    return res.status(403).json({ message: "Không có quyền bổ sung hồ sơ này" });
+    return res.status(403).json({ message: "KhÃ´ng cÃ³ quyá»n bá»• sung há»“ sÆ¡ nÃ y" });
   }
   if (String(application.status || "").toUpperCase() !== "NEED_MORE") {
-    return res.status(400).json({ message: "Hồ sơ hiện không ở trạng thái yêu cầu bổ sung" });
+    return res.status(400).json({ message: "Há»“ sÆ¡ hiá»‡n khÃ´ng á»Ÿ tráº¡ng thÃ¡i yÃªu cáº§u bá»• sung" });
   }
 
   const { formData = {}, attachments = [], note = "" } = req.body || {};
@@ -712,7 +729,7 @@ exports.addApplicationSupplement = async (req, res) => {
   const timeline = pushTimeline(application, {
     status: "SUPPLEMENTED",
     action: "supplement",
-    note: supplementNote || "Người dân đã bổ sung hồ sơ",
+    note: supplementNote || "NgÆ°á»i dÃ¢n Ä‘Ã£ bá»• sung há»“ sÆ¡",
     actor: userId(req) || "citizen",
     createdAt: nowIso()
   });
@@ -739,15 +756,48 @@ exports.addApplicationSupplement = async (req, res) => {
     });
   } catch {}
 
-  return res.json({ message: "Đã bổ sung hồ sơ", application: updated });
+  return res.json({ message: "ÄÃ£ bá»• sung há»“ sÆ¡", application: updated });
 };
 
 exports.downloadApplicationResult = async (req, res) => {
   const dossierId = String(req.params.dossierId || req.params.applicationCode || "").trim();
   const application = await findByCode(dossierId);
-  if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
-  if (String(application.status || "").toUpperCase() !== "COMPLETED") {
-    return res.status(400).json({ message: "Hồ sơ chưa hoàn thành" });
+  if (!application) return res.status(404).json({ message: "Không tìm th?y h? so" });
+
+  const role = String(req.user?.role || "").toLowerCase();
+  const isAdmin = role === "admin" || role === "staff";
+  if (!isAdmin && application.userId && userId(req) && String(application.userId) !== String(userId(req))) {
+    return res.status(403).json({ message: "Không có quy?n t?i k?t qu? h? so này" });
+  }
+
+  const status = String(application.status || "").toUpperCase();
+  const hasResultFile = Boolean(application.resultFileKey || application.resultFileUrl);
+  if (!hasResultFile && status !== "COMPLETED" && status !== "RESULT_DELIVERED") {
+    return res.status(400).json({ message: "H? so chua có k?t qu?" });
+  }
+
+  if (hasResultFile) {
+    let downloadUrl = application.resultFileUrl || "";
+    if (application.resultFileKey) {
+      try {
+        downloadUrl = await createPresignedGet(application.resultFileKey, 300);
+      } catch (err) {
+        console.warn("[downloadApplicationResult] presign failed:", err?.message || err);
+      }
+    }
+    return res.json({
+      message: "T?i k?t qu? thành công",
+      result: {
+        dossierId: application.dossierId,
+        dossierCode: application.dossierCode,
+        serviceName: application.serviceName,
+        status: application.status,
+        resultFileUrl: downloadUrl,
+        resultFileKey: application.resultFileKey,
+        resultDeliveredAt: application.resultDeliveredAt,
+        resultNote: application.resultNote || ""
+      }
+    });
   }
 
   const payload = {
@@ -758,18 +808,18 @@ exports.downloadApplicationResult = async (req, res) => {
     completedAt: nowIso(),
     decisionNote: application.decisionNote || ""
   };
-  res.json({ message: "Tải kết quả thành công", result: payload });
+  return res.json({ message: "T?i k?t qu? thành công", result: payload });
 };
 
 exports.adminDeleteService = async (req, res) => {
   const serviceId = req.params.serviceId;
   const current = await resolveService(serviceId);
-  if (!current) return res.status(404).json({ message: "Không tìm thấy dịch vụ" });
+  if (!current) return res.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y dá»‹ch vá»¥" });
   await upsertService({
     ...current,
     active: false,
     deletedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
-  res.json({ message: "Đã xóa dịch vụ" });
+  res.json({ message: "ÄÃ£ xÃ³a dá»‹ch vá»¥" });
 };

@@ -42,6 +42,7 @@ const STATUS_LABELS = {
   SUPPLEMENTED: "Đã bổ sung",
   COMPLETED: "Đã hoàn thành",
   REJECTED: "Đã từ chối",
+  RESULT_DELIVERED: "Đã trả kết quả",
 };
 
 const STATUS_STYLES = {
@@ -52,6 +53,7 @@ const STATUS_STYLES = {
   SUPPLEMENTED: "border-indigo-200 bg-indigo-50 text-indigo-700",
   COMPLETED: "border-emerald-200 bg-emerald-50 text-emerald-700",
   REJECTED: "border-red-200 bg-red-50 text-red-700",
+  RESULT_DELIVERED: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 const PAYMENT_LABELS = {
@@ -220,7 +222,12 @@ export default function ApplicationDetail() {
   async function handleDownloadResult() {
     try {
       const { data } = await downloadApplicationResult(applicationCode);
-      setResult(data.result);
+      const url = data?.result?.resultFileUrl;
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } else {
+        setResult(data.result);
+      }
     } catch (e) {
       alert(getApiErrorMessage(e));
     }
@@ -282,7 +289,7 @@ export default function ApplicationDetail() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                     <StatusBadge status={statusKey} label={statusLabel} />
-                    {item.status === "COMPLETED" ? (
+                    {(statusKey === "COMPLETED" || statusKey === "RESULT_DELIVERED" || item.resultFileUrl) ? (
                       <button
                         type="button"
                         onClick={handleDownloadResult}
@@ -326,6 +333,31 @@ export default function ApplicationDetail() {
                 </div>
               )}
             </section>
+
+            {(statusKey === "RESULT_DELIVERED" || item.resultFileUrl) && (
+              <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+                      <Download className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-emerald-950">Kết quả hồ sơ</h2>
+                      <p className="mt-1 text-sm font-semibold text-emerald-800">Hồ sơ của bạn đã có kết quả.</p>
+                      {item.resultNote ? <p className="mt-2 text-sm font-semibold text-emerald-900">Ghi chú: {item.resultNote}</p> : null}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadResult}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/15 transition hover:-translate-y-0.5 hover:bg-emerald-800"
+                  >
+                    <Download className="h-4 w-4" />
+                    Tải file PDF
+                  </button>
+                </div>
+              </section>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
               <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">

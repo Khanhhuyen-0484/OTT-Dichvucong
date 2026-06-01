@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BadgeCheck,
@@ -35,11 +35,11 @@ import {
   UserRoundCheck,
   UsersRound,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 import GovHeader from "../components/GovHeader.jsx";
 import HomeChatSection from "../components/HomeChatSection.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getServices } from "../lib/api";
 
 const fallbackServices = [
   {
@@ -134,6 +134,46 @@ const announcements = [
 ];
 
 const iconPool = [Baby, HeartHandshake, Building2, FolderKanban, CarFront, BriefcaseBusiness, Landmark, FileText];
+
+const featuredServices = [
+  {
+    id: "dat-dai-bien-dong",
+    icon: Building2,
+    title: "Đất đai & Nhà ở",
+    description: "Cấp giấy chứng nhận quyền sử dụng đất, đăng ký biến động, chuyển mục đích sử dụng và các thủ tục liên quan đến bất động sản.",
+    tags: ["Cấp mới GCN", "Đăng ký thừa kế", "Chuyển nhượng"],
+    className: "lg:col-span-2",
+    accent: "border-t-[#0b7c91]",
+  },
+  {
+    id: "ho-tich-khai-sinh",
+    icon: UsersRound,
+    title: "Hộ tịch & Cá nhân",
+    description: "Đăng ký khai sinh, kết hôn, xác nhận tình trạng hôn nhân và các giấy tờ hộ tịch quan trọng khác.",
+    highlighted: true,
+  },
+  {
+    id: "doanh-nghiep-thanh-lap",
+    icon: BriefcaseBusiness,
+    title: "Đăng ký Kinh doanh",
+    description: "Thành lập doanh nghiệp, thay đổi nội dung đăng ký, giải thể và tạm ngừng hoạt động.",
+    accent: "border-t-[#d8a12b]",
+  },
+  {
+    id: "y-te-bao-hiem",
+    icon: ShieldCheck,
+    title: "Y tế & Bảo hiểm",
+    description: "Cấp thẻ BHYT, giải quyết chế độ BHXH, đăng ký khám chữa bệnh và quản lý hồ sơ sức khỏe điện tử.",
+    accent: "border-t-[#2aaf4f]",
+  },
+  {
+    id: "xay-dung-cap-phep",
+    icon: Wrench,
+    title: "Xây dựng & Quy hoạch",
+    description: "Cấp phép xây dựng, thông tin quy hoạch và các thủ tục liên quan đến hạ tầng kỹ thuật.",
+    accent: "border-t-[#0b7c91]",
+  },
+];
 
 const newsItems = [
   {
@@ -230,28 +270,61 @@ function StatCard({ stat }) {
 
 function PopularServiceCard({ service, onClick }) {
   const Icon = service.icon || FileText;
-  return (
-    <article className="group flex h-full flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/10">
-      <div className="flex items-start justify-between gap-4">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-[#0b4b86] ring-1 ring-blue-100">
-          <Icon className="h-6 w-6" />
-        </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{service.categoryName}</span>
-      </div>
-      <h3 className="mt-5 text-lg font-black leading-snug text-slate-950">{service.name}</h3>
-      <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{service.description}</p>
-      <div className="mt-5 flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600">
-        <Clock3 className="h-4 w-4 text-blue-700" />
-        {service.processingTime}
-      </div>
-      <button
-        type="button"
+  if (service.highlighted) {
+    return (
+      <article
+        role="button"
+        tabIndex={0}
         onClick={onClick}
-        className="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#003366] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#052b53]"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onClick();
+        }}
+        className="group flex h-full min-h-[260px] cursor-pointer flex-col rounded-[18px] bg-[#073f73] p-7 text-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/15"
       >
-        Xem chi tiết
-        <ChevronRight className="h-4 w-4" />
-      </button>
+        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
+          <Icon className="h-7 w-7" />
+        </div>
+        <h3 className="mt-8 text-lg font-black leading-snug">{service.title}</h3>
+        <p className="mt-4 flex-1 text-sm font-semibold leading-6 text-white/82">{service.description}</p>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick();
+          }}
+          className="mt-6 inline-flex w-fit items-center gap-2 text-sm font-black text-sky-200 transition hover:text-white"
+        >
+          Bắt đầu ngay
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </article>
+    );
+  }
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onClick();
+      }}
+      className={`group flex h-full min-h-[210px] cursor-pointer flex-col rounded-[18px] border border-slate-100 border-t-4 ${service.accent || "border-t-[#0b7c91]"} bg-white p-7 shadow-[0_18px_35px_rgba(15,23,42,0.08)] transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/10 ${service.className || ""}`}
+    >
+      <div className="grid h-[52px] w-[52px] place-items-center rounded-2xl bg-slate-50 text-[#073f73] shadow-sm ring-1 ring-slate-100">
+        <Icon className="h-6 w-6" />
+      </div>
+      <h3 className="mt-7 text-lg font-black leading-snug text-slate-900">{service.title}</h3>
+      <p className="mt-4 flex-1 text-sm leading-6 text-slate-600">{service.description}</p>
+      {service.tags?.length ? (
+        <div className="mt-6 flex flex-wrap gap-2">
+          {service.tags.map((tag) => (
+            <span key={tag} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -286,30 +359,8 @@ export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [q, setQ] = useState("");
-  const [apiServices, setApiServices] = useState([]);
 
-  useEffect(() => {
-    let active = true;
-    async function loadServices() {
-      try {
-        const { data } = await getServices();
-        const list = Array.isArray(data?.services) ? data.services : [];
-        if (active) setApiServices(list.slice(0, 6));
-      } catch {
-        if (active) setApiServices([]);
-      }
-    }
-    loadServices();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const popularServices = useMemo(() => {
-    if (!apiServices.length) return fallbackServices;
-    const normalized = apiServices.map(normalizeService);
-    return normalized.length >= 6 ? normalized : [...normalized, ...fallbackServices].slice(0, 6);
-  }, [apiServices]);
+  const popularServices = featuredServices;
 
   const onSubmit = (e) => {
     e.preventDefault();
@@ -458,30 +509,32 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="dichvu" className="mx-auto max-w-7xl px-3 py-10 sm:px-4 sm:py-14">
+        <section id="dichvu" className="bg-[#f3f7fb] px-3 py-12 sm:px-4 sm:py-16">
+          <div className="mx-auto max-w-[1060px]">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                <Sparkles className="h-3.5 w-3.5" />
-                Dịch vụ phổ biến
-              </div>
-              <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl text-slate-950">Thủ tục được sử dụng nhiều</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Ưu tiên các nghiệp vụ người dân và doanh nghiệp thường cần nộp trực tuyến.</p>
+              <h2 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Dịch vụ nổi bật</h2>
+              <p className="mt-4 max-w-[560px] text-sm leading-6 text-slate-600">Khám phá các dịch vụ công phổ biến được người dân và doanh nghiệp sử dụng nhiều nhất.</p>
             </div>
             <button
               type="button"
               onClick={() => navigate("/services")}
-              className="inline-flex w-fit items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+              className="inline-flex w-fit items-center gap-2 rounded-xl px-1 py-2 text-sm font-black text-slate-900 transition hover:text-[#073f73]"
             >
               Xem tất cả dịch vụ
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {popularServices.map((service) => (
-              <PopularServiceCard key={service.id} service={service} onClick={() => navigate(`/services/${service.id}`)} />
+              <PopularServiceCard
+                key={service.id}
+                service={service}
+                onClick={() => navigate("/services")}
+              />
             ))}
+          </div>
           </div>
         </section>
 

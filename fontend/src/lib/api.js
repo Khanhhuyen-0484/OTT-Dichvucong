@@ -95,6 +95,7 @@ export async function seedServices() { return api.post("/services/admin/seed"); 
 export async function updateService(serviceId, payload) { return api.put(`/services/admin/${serviceId}`, payload); }
 export async function deleteService(serviceId) { return api.delete(`/services/admin/${serviceId}`); }
 export async function updateAdminDossierStatus(id, payload) { return api.patch(`/admin/dossiers/${id}/status`, payload); }
+export async function deliverAdminDossierResult(id, formData) { return api.post(`/admin/dossiers/${id}/deliver-result`, formData, { headers: { "Content-Type": "multipart/form-data" } }); }
 export async function getAdminServiceCategories() { return api.get("/admin/service-categories"); }
 export async function seedAdminServiceCategories() { return api.post("/admin/service-categories/seed"); }
 export async function createBankTransferPayment(payload) { return api.post("/payments/bank-transfer/create", payload); }

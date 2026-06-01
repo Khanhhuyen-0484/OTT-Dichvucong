@@ -28,6 +28,7 @@ const STATUS_LABELS = {
   SUPPLEMENTED: "Đã bổ sung",
   COMPLETED: "Đã hoàn thành",
   REJECTED: "Đã từ chối",
+  RESULT_DELIVERED: "Đã trả kết quả",
 };
 
 function formatDate(dateStr) {
@@ -47,6 +48,7 @@ function statusClass(status) {
     case "SUPPLEMENTED":
       return "bg-indigo-50 text-indigo-700 ring-indigo-200";
     case "COMPLETED":
+    case "RESULT_DELIVERED":
       return "bg-green-50 text-green-700 ring-green-200";
     case "REJECTED":
       return "bg-slate-100 text-slate-700 ring-slate-300";
@@ -166,8 +168,12 @@ export default function MyApplications() {
     });
   }, [notifications, items, submitted, drafts]);
 
+  const resultDeliveredNotifications = useMemo(() => {
+    return notifications.filter((item) => String(item.status || item.type || "").toUpperCase() === "RESULT_DELIVERED");
+  }, [notifications]);
+
   const stats = useMemo(() => {
-    const completed = items.filter((item) => String(item.status || "").toUpperCase() === "COMPLETED").length;
+    const completed = items.filter((item) => ["COMPLETED", "RESULT_DELIVERED"].includes(String(item.status || "").toUpperCase())).length;
     const processing = items.filter((item) => ["PENDING", "PROCESSING", "SUPPLEMENTED"].includes(String(item.status || "").toUpperCase())).length;
     return [
       { label: "Đã nộp", value: submitted.length, icon: <ClipboardList />, tone: "blue" },
@@ -252,6 +258,35 @@ export default function MyApplications() {
                     <div className="text-xs font-bold text-orange-600">{formatDate(notification.createdAt)}</div>
                     <Link to={notification.actionUrl || applicationUrlOf(notification)} className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2 text-sm font-black text-white transition hover:bg-orange-700">
                       Bổ sung hồ sơ
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loading && !err && resultDeliveredNotifications.length > 0 && (
+          <section className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-lg font-black text-emerald-950">Hồ sơ đã có kết quả</div>
+                <p className="mt-1 text-sm font-semibold text-emerald-800">Bạn có thể tải kết quả hồ sơ từ trang chi tiết.</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {resultDeliveredNotifications.slice(0, 5).map((notification) => (
+                <div key={notification.notificationId || notification.id} className="rounded-2xl bg-white p-4 text-sm ring-1 ring-emerald-100">
+                  <div className="font-black text-emerald-950">{notification.title || "Hồ sơ đã có kết quả"}</div>
+                  <div className="mt-1 font-semibold text-emerald-800">{notification.message || "Bạn có thể tải kết quả hồ sơ."}</div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs font-bold text-emerald-600">{formatDate(notification.createdAt)}</div>
+                    <Link to={notification.actionUrl || applicationUrlOf(notification)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-800">
+                      Xem kết quả
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </div>

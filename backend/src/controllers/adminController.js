@@ -15,6 +15,10 @@ const { getAdminStatistics } = require("../store/statisticsStore");
 const { updateApplicationStatus } = require("./serviceController");
 const { sendMessage } = require("../store/supportConversationsStore");
 const { findById, listUsers, updateUserRole } = require("../store/userStore");
+const { findByCode, updateByCode } = require("../store/serviceApplicationStore");
+const { createNotification } = require("../store/notificationStore");
+const { uploadBuffer, createPresignedGet } = require("../config/s3");
+const { sendMail } = require("../config/mailer");
 const { getIo } = require("../socket");
 
 exports.dashboard = async (req, res) => {
@@ -76,6 +80,141 @@ exports.updateDossierStatus = async (req, res) => {
     return await updateApplicationStatus(req, res);
   } catch (err) {
     return res.status(500).json({ message: err.message || "Lỗi cập nhật trạng thái hồ sơ" });
+  }
+};
+
+function pushResultTimeline(dossier, item) {
+  const current = Array.isArray(dossier?.timeline)
+    ? dossier.timeline
+    : Array.isArray(dossier?.history)
+      ? dossier.history
+      : [];
+  return [...current, item];
+}
+
+function resultEmailHtml({ fullName, dossierId, serviceName, downloadUrl, note }) {
+  const safeNote = String(note || "").trim();
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
+      <p>Chào ${fullName || "Quý công dân"},</p>
+      <p>Hồ sơ <strong>${dossierId}</strong> đã có kết quả.</p>
+      <p><strong>Tên dịch vụ:</strong> ${serviceName || "Dịch vụ công"}</p>
+      <p><strong>Trạng thái:</strong> Đã trả kết quả</p>
+      <p><a href="${downloadUrl}" target="_blank" rel="noopener">Tải file PDF kết quả</a></p>
+      ${safeNote ? `<p><strong>Ghi chú:</strong> ${safeNote}</p>` : ""}
+    </div>
+  `;
+}
+
+exports.deliverDossierResult = async (req, res) => {
+  try {
+    const dossierId = String(req.params.dossierId || req.params.id || "").trim();
+    if (!dossierId) return res.status(400).json({ message: "Thiếu mã hồ sơ" });
+    if (!req.file) return res.status(400).json({ message: "Vui lòng chọn file PDF kết quả" });
+    if (req.file.mimetype !== "application/pdf") {
+      return res.status(400).json({ message: "Chỉ chấp nhận file PDF" });
+    }
+    if (req.file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ message: "File PDF tối đa 10MB" });
+    }
+
+    const dossier = await findByCode(dossierId);
+    if (!dossier) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+
+    const now = new Date().toISOString();
+    const key = `results/${dossierId}/result-${Date.now()}.pdf`;
+    const uploaded = await uploadBuffer({ key, buffer: req.file.buffer, contentType: "application/pdf" });
+
+    let resultFileUrl = uploaded.publicUrl || uploaded.url || "";
+    try {
+      resultFileUrl = await createPresignedGet(key, 7 * 24 * 60 * 60);
+    } catch (err) {
+      console.warn("[deliverDossierResult] presign email URL failed:", err?.message || err);
+    }
+
+    const note = String(req.body?.note || "").trim();
+    const actor = req.user?.id || req.user?.email || "admin";
+    const timeline = pushResultTimeline(dossier, {
+      status: "RESULT_DELIVERED",
+      action: "deliver_result",
+      note: note || "Đã trả kết quả hồ sơ",
+      actor,
+      createdAt: now
+    });
+
+    const updated = await updateByCode(dossier.dossierId || dossierId, {
+      ...dossier,
+      status: "RESULT_DELIVERED",
+      resultFileUrl,
+      resultFileKey: key,
+      resultDeliveredAt: now,
+      resultNote: note,
+      timeline,
+      history: timeline,
+      updatedAt: now
+    });
+
+    let emailFailed = false;
+    try {
+      const fullName = updated.citizenName || updated.formData?.fullName || "Quý công dân";
+      const to = updated.email || updated.formData?.email;
+      if (to) {
+        await sendMail({
+          to,
+          subject: `Kết quả xử lý hồ sơ ${updated.dossierId || dossierId}`,
+          html: resultEmailHtml({ fullName, dossierId: updated.dossierId || dossierId, serviceName: updated.serviceName, downloadUrl: resultFileUrl, note }),
+          text: [
+            `Chào ${fullName}`,
+            `Hồ sơ ${updated.dossierId || dossierId} đã có kết quả`,
+            `Tên dịch vụ: ${updated.serviceName || "Dịch vụ công"}`,
+            "Trạng thái: Đã trả kết quả",
+            `Link tải file PDF: ${resultFileUrl}`,
+            note ? `Ghi chú: ${note}` : ""
+          ].filter(Boolean).join("\n")
+        });
+      }
+    } catch (err) {
+      emailFailed = true;
+      console.warn("[deliverDossierResult] email failed:", err?.message || err);
+    }
+
+    let notification = null;
+    try {
+      if (updated.userId) {
+        notification = await createNotification({
+          notificationId: `NTF-${Date.now()}`,
+          userId: updated.userId,
+          dossierId: updated.dossierId || dossierId,
+          title: "Hồ sơ đã có kết quả",
+          message: "Bạn có thể tải kết quả hồ sơ.",
+          type: "RESULT_DELIVERED",
+          status: "RESULT_DELIVERED",
+          actionUrl: `/my-applications/${updated.dossierId || dossierId}`,
+          createdAt: now
+        });
+        const io = getIo();
+        io?.to?.(`user_${updated.userId}`)?.emit?.("service-application-updated", {
+          dossierId: updated.dossierId || dossierId,
+          status: "RESULT_DELIVERED",
+          timeline,
+          resultFileUrl,
+          resultFileKey: key,
+          notification
+        });
+      }
+    } catch (err) {
+      console.warn("[deliverDossierResult] notification/socket failed:", err?.message || err);
+    }
+
+    return res.json({
+      message: emailFailed ? "Đã trả kết quả hồ sơ, nhưng gửi email thất bại" : "Đã trả kết quả hồ sơ",
+      dossier: updated,
+      notification,
+      emailFailed
+    });
+  } catch (err) {
+    console.error("[deliverDossierResult] error:", err);
+    return res.status(500).json({ message: err.message || "Lỗi trả kết quả hồ sơ" });
   }
 };
 

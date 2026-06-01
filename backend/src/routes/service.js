@@ -30,7 +30,7 @@ router.get("/payments/:applicationId", authMiddleware, getApplicationPayments);
 router.get("/drafts/:serviceId", authMiddleware, getServiceDraft);
 router.post("/drafts/:serviceId", authMiddleware, saveServiceDraft);
 router.delete("/drafts/:serviceId", authMiddleware, deleteServiceDraft);
-router.get("/application/code/:applicationCode", getApplicationByCode);
+router.get("/application/code/:applicationCode", authMiddleware, getApplicationByCode);
 router.get("/track/:applicationCode", trackApplication);
 router.get("/application/:applicationCode/result", authMiddleware, downloadApplicationResult);
 router.get("/:serviceId", getServiceById);

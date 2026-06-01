@@ -34,7 +34,7 @@ function normalizePublicUser(u) {
     fullName: u.fullName != null ? String(u.fullName) : "",
     phone: u.phone != null ? String(u.phone) : "",
     address: u.address != null ? String(u.address) : "",
-    role: u.role === "admin" ? "admin" : "citizen",
+    role: ["admin", "staff"].includes(u.role) ? u.role : "citizen",
     avatarUrl: av ? String(av).trim() : null,
     createdAt: u.createdAt
   };
@@ -407,7 +407,7 @@ exports.login = async (req, res) => {
       {
         id: user.id,
         email: user.email,
-        role: user.role === "admin" ? "admin" : "citizen"
+        role: ["admin", "staff"].includes(user.role) ? user.role : "citizen"
       },
       jwtSecret,
       { expiresIn: "1d" }
@@ -680,7 +680,7 @@ function normalizePublicUser(u) {
     fullName: u.fullName != null ? String(u.fullName) : "",
     phone: u.phone != null ? String(u.phone) : "",
     address: u.address != null ? String(u.address) : "",
-    role: u.role === "admin" ? "admin" : "citizen",
+    role: ["admin", "staff"].includes(u.role) ? u.role : "citizen",
     avatarUrl: av ? String(av).trim() : null,
     createdAt: u.createdAt
   };
@@ -1035,7 +1035,7 @@ exports.login = async (req, res) => {
       {
         id: user.id,
         email: user.email,
-        role: user.role === "admin" ? "admin" : "citizen"
+        role: ["admin", "staff"].includes(user.role) ? user.role : "citizen"
       },
       jwtSecret,
       { expiresIn: "1d" }
