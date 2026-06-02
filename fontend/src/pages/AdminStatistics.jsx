@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BarChart3, CreditCard, Download, PieChart, ReceiptText, RefreshCw, TrendingUp } from "lucide-react";
+import { BarChart3, CalendarDays, Clock3, CreditCard, Download, FileText, PieChart, ReceiptText, RefreshCw, TrendingUp, WalletCards } from "lucide-react";
 import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import { getAdminStatistics, getApiErrorMessage } from "../lib/api";
 import { applicationStatusLabel } from "../lib/statusLabels.js";
@@ -9,17 +9,21 @@ const STATUS_LABELS = {
   processing: "Đang xử lý",
   needMore: "Yêu cầu bổ sung",
   supplemented: "Đã bổ sung",
+  approved: "Đã duyệt",
   completed: "Hoàn thành",
+  resultDelivered: "Đã trả kết quả",
   rejected: "Từ chối",
 };
 
-const STATUS_KEYS = ["pending", "processing", "needMore", "supplemented", "completed", "rejected"];
+const STATUS_KEYS = ["pending", "processing", "needMore", "supplemented", "approved", "completed", "resultDelivered", "rejected"];
 const STATUS_COLORS = {
   pending: "#64748b",
   processing: "#0284c7",
   needMore: "#f97316",
   supplemented: "#6366f1",
+  approved: "#10b981",
   completed: "#059669",
+  resultDelivered: "#14b8a6",
   rejected: "#dc2626",
 };
 
@@ -44,8 +48,19 @@ function formatCurrency(amount) {
   return `${currency.format(Number(amount || 0))} VNĐ`;
 }
 
+function formatCompactCurrency(amount) {
+  const value = Number(amount || 0);
+  if (value >= 1000000) return `${Math.round(value / 1000000)}tr`;
+  if (value >= 1000) return `${Math.round(value / 1000)}k`;
+  return currency.format(value);
+}
+
 function formatDateInput(date) {
-  return date.toISOString().slice(0, 10);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function getQuickRange(range) {
@@ -169,24 +184,28 @@ function exportCsv(data) {
 }
 
 function StatusDonut({ byStatus = {}, total = 0 }) {
-  const radius = 46;
+  const visibleItems = STATUS_KEYS
+    .map((key) => ({ key, value: Number(byStatus[key] || 0) }))
+    .filter((item) => item.value > 0);
+  const chartTotal = visibleItems.reduce((sum, item) => sum + item.value, 0);
+  const displayTotal = chartTotal || total || 0;
+  const radius = 42;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
-  const segments = STATUS_KEYS.map((key) => {
-    const value = Number(byStatus[key] || 0);
-    const length = total ? (value / total) * circumference : 0;
-    const segment = { key, value, length, offset };
+  const segments = visibleItems.map((item) => {
+    const length = displayTotal ? (item.value / displayTotal) * circumference : 0;
+    const segment = { ...item, length, offset };
     offset += length;
     return segment;
-  }).filter((item) => item.value > 0);
+  });
 
-  if (!total) return <EmptyText>Chưa có dữ liệu trạng thái hồ sơ.</EmptyText>;
+  if (!displayTotal) return <EmptyText>Chưa có dữ liệu trạng thái hồ sơ.</EmptyText>;
 
   return (
-    <div className="grid gap-5 md:grid-cols-[220px_1fr] md:items-center">
-      <div className="relative mx-auto h-52 w-52">
+    <div className="grid gap-5 md:grid-cols-[190px_1fr] md:items-center">
+      <div className="relative mx-auto h-44 w-44">
         <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-          <circle cx="60" cy="60" r={radius} fill="none" stroke="#e0f2fe" strokeWidth="14" />
+          <circle cx="60" cy="60" r={radius} fill="none" stroke="#e0f2fe" strokeWidth="13" />
           {segments.map((item) => (
             <circle
               key={item.key}
@@ -195,7 +214,7 @@ function StatusDonut({ byStatus = {}, total = 0 }) {
               r={radius}
               fill="none"
               stroke={STATUS_COLORS[item.key]}
-              strokeWidth="14"
+              strokeWidth="13"
               strokeDasharray={`${item.length} ${circumference - item.length}`}
               strokeDashoffset={-item.offset}
               strokeLinecap="round"
@@ -204,22 +223,21 @@ function StatusDonut({ byStatus = {}, total = 0 }) {
         </svg>
         <div className="absolute inset-0 grid place-items-center text-center">
           <div>
-            <div className="text-3xl font-black text-blue-700">{total}</div>
-            <div className="text-xs font-bold uppercase text-slate-500">Hồ sơ</div>
+            <div className="text-4xl font-black tracking-tight text-blue-700">{displayTotal}</div>
+            <div className="mt-1 text-xs font-bold uppercase text-slate-500">Hồ sơ</div>
           </div>
         </div>
       </div>
-      <div className="space-y-3">
-        {STATUS_KEYS.map((key) => {
-          const value = Number(byStatus[key] || 0);
-          const percent = total ? Math.round((value / total) * 100) : 0;
+      <div className="space-y-2.5">
+        {visibleItems.map(({ key, value }) => {
+          const percent = displayTotal ? Math.round((value / displayTotal) * 100) : 0;
           return (
-            <div key={key} className="flex items-center justify-between gap-3 rounded-2xl border border-white/70 bg-white/75 px-3 py-2 shadow-sm ring-1 ring-slate-200/70">
+            <div key={key} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white/80 px-3 py-2 shadow-sm">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLORS[key] }} />
                 <span className="truncate text-sm font-bold text-slate-700">{STATUS_LABELS[key]}</span>
               </div>
-              <span className="shrink-0 text-sm font-black text-slate-900">{value} ({percent}%)</span>
+              <span className="shrink-0 text-sm font-black text-slate-900">{value} - {percent}%</span>
             </div>
           );
         })}
@@ -231,39 +249,54 @@ function StatusDonut({ byStatus = {}, total = 0 }) {
 function RevenueLineChart({ items = [] }) {
   if (!items.length) return <EmptyText>Chưa có dữ liệu doanh thu theo ngày.</EmptyText>;
   const width = 640;
-  const height = 220;
-  const padding = 28;
-  const max = Math.max(1, ...items.map((item) => Number(item.revenue || 0)));
-  const stepX = items.length > 1 ? (width - padding * 2) / (items.length - 1) : 0;
+  const height = 210;
+  const paddingX = 52;
+  const paddingY = 24;
+  const values = items.map((item) => Number(item.revenue || 0));
+  const maxValue = Math.max(10000, ...values);
+  const roundedMax = Math.ceil(maxValue / 10000) * 10000;
+  const stepX = items.length > 1 ? (width - paddingX * 2) / (items.length - 1) : 0;
   const points = items.map((item, index) => {
-    const x = padding + index * stepX;
-    const y = height - padding - (Number(item.revenue || 0) / max) * (height - padding * 2);
+    const x = items.length > 1 ? paddingX + index * stepX : width - paddingX;
+    const y = height - paddingY - (Number(item.revenue || 0) / roundedMax) * (height - paddingY * 2);
     return { ...item, x, y };
   });
   const line = points.map((point) => `${point.x},${point.y}`).join(" ");
-  const area = `${padding},${height - padding} ${line} ${width - padding},${height - padding}`;
+  const area = `${paddingX},${height - paddingY} ${line} ${points[points.length - 1]?.x || width - paddingX},${height - paddingY}`;
+  const ticks = [0, 0.5, 1].map((ratio) => Math.round(roundedMax * ratio));
+  const lastPoint = points[points.length - 1];
 
   return (
-    <div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-64 w-full rounded-3xl bg-linear-to-br from-slate-50 via-blue-50/70 to-cyan-50/60 ring-1 ring-slate-200/70">
+    <div className="group relative">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-60 w-full rounded-3xl bg-linear-to-br from-slate-50 via-blue-50/60 to-cyan-50/50 ring-1 ring-slate-200/70">
         <defs>
           <linearGradient id="revenueArea" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.32" />
-            <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="#2563eb" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.03" />
           </linearGradient>
         </defs>
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-          const y = padding + ratio * (height - padding * 2);
-          return <line key={ratio} x1={padding} x2={width - padding} y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" />;
+        {ticks.map((tick) => {
+          const y = height - paddingY - (tick / roundedMax) * (height - paddingY * 2);
+          return (
+            <g key={tick}>
+              <line x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+              <text x="12" y={y + 4} className="fill-slate-400 text-[11px] font-bold">{formatCompactCurrency(tick)}</text>
+            </g>
+          );
         })}
         <polygon points={area} fill="url(#revenueArea)" />
-        <polyline points={line} fill="none" stroke="#2563eb" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={line} fill="none" stroke="#2563eb" strokeWidth="3.5" strokeLinejoin="round" strokeLinecap="round" />
         {points.map((point) => (
           <g key={point.date}>
-            <circle cx={point.x} cy={point.y} r="5" fill="#ffffff" stroke="#2563eb" strokeWidth="3" />
+            <circle cx={point.x} cy={point.y} r="5.5" fill="#2563eb" stroke="#ffffff" strokeWidth="3" />
             <title>{`${point.date}: ${formatCurrency(point.revenue)} (${point.paidCount || 0} giao dịch)`}</title>
           </g>
         ))}
+        {lastPoint ? (
+          <text x={Math.max(82, Math.min(lastPoint.x - 28, width - 135))} y={Math.max(20, lastPoint.y - 12)} className="fill-blue-700 text-[12px] font-black">
+            {formatCurrency(lastPoint.revenue)}
+          </text>
+        ) : null}
       </svg>
       <div className="mt-3 flex justify-between gap-3 text-xs font-semibold text-slate-500">
         <span>{items[0]?.date || ""}</span>
@@ -376,6 +409,24 @@ export default function AdminStatistics() {
     () => Math.max(1, ...revenueByDate.map((item) => Number(item.revenue || 0))),
     [revenueByDate]
   );
+  const statGroups = [
+    {
+      title: "Nhóm hồ sơ",
+      cards: [
+        { label: "Tổng hồ sơ", value: totals.totalApplications || 0, description: "Tổng số hồ sơ hiện có", icon: FileText },
+        { label: "Hồ sơ hôm nay", value: totals.todayApplications || 0, description: "Phát sinh trong hôm nay", icon: CalendarDays },
+        { label: "Hồ sơ tháng này", value: totals.monthApplications || 0, description: "Phát sinh trong tháng này", icon: Clock3 },
+      ],
+    },
+    {
+      title: "Nhóm doanh thu",
+      cards: [
+        { label: "Tổng doanh thu", value: formatCurrency(totals.totalRevenue), description: "Doanh thu tích lũy", icon: WalletCards },
+        { label: "Doanh thu hôm nay", value: formatCurrency(totals.todayRevenue), description: "Thanh toán trong hôm nay", icon: CreditCard },
+        { label: "Doanh thu tháng này", value: formatCurrency(totals.monthRevenue), description: "Thanh toán trong tháng này", icon: TrendingUp },
+      ],
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_34%),radial-gradient(circle_at_top_right,rgba(20,184,166,0.16),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#effcff_48%,#f8fafc_100%)] text-slate-900">
@@ -479,23 +530,42 @@ export default function AdminStatistics() {
           <div className="mt-6">
             {activeTab === "overview" ? (
               <section>
-                <div className="mb-3 flex items-center gap-2 text-lg font-black text-slate-900">
+                <div className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900">
                   <BarChart3 className="h-5 w-5" />
                   Tổng quan
                 </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                  <StatCard label="Tổng hồ sơ" value={totals.totalApplications || 0} />
-                  <StatCard label="Hồ sơ hôm nay" value={totals.todayApplications || 0} />
-                  <StatCard label="Hồ sơ tháng này" value={totals.monthApplications || 0} />
-                  <StatCard label="Tổng doanh thu" value={formatCurrency(totals.totalRevenue)} />
-                  <StatCard label="Doanh thu hôm nay" value={formatCurrency(totals.todayRevenue)} />
-                  <StatCard label="Doanh thu tháng này" value={formatCurrency(totals.monthRevenue)} />
+                <div className="grid gap-5 xl:grid-cols-2">
+                  {statGroups.map((group) => (
+                    <section key={group.title} className="rounded-[24px] border border-white/80 bg-white/80 p-4 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/70">
+                      <div className="mb-3 text-sm font-black uppercase tracking-wide text-slate-500">{group.title}</div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {group.cards.map((card) => (
+                          <StatCard
+                            key={card.label}
+                            label={card.label}
+                            value={card.value}
+                            description={card.description}
+                            icon={card.icon}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
                 </div>
                 <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-                  <Panel title="Tỷ lệ trạng thái hồ sơ" icon={<PieChart className="h-5 w-5" />}>
+                  <Panel
+                    title="Tình trạng hồ sơ"
+                    description="Thống kê theo trạng thái xử lý"
+                    icon={<PieChart className="h-5 w-5" />}
+                  >
                     <StatusDonut byStatus={data.byStatus || {}} total={statusTotal} />
                   </Panel>
-                  <Panel title="Xu hướng doanh thu" icon={<TrendingUp className="h-5 w-5" />}>
+                  <Panel
+                    title="Xu hướng doanh thu"
+                    description="Doanh thu theo thời gian"
+                    icon={<TrendingUp className="h-5 w-5" />}
+                    action={<TimeRangeFilter active={quickRange} onChange={applyQuickRange} />}
+                  >
                     <RevenueLineChart items={revenueByDate} />
                   </Panel>
                 </div>
@@ -588,23 +658,39 @@ export default function AdminStatistics() {
   );
 }
 
-function StatCard({ label, value, subValue }) {
+function StatCard({ label, value, subValue, description, icon: Icon }) {
   return (
-    <div className="group relative overflow-hidden rounded-3xl border border-white/80 bg-white/90 p-5 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/70 transition hover:-translate-y-1 hover:shadow-xl">
-      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-cyan-200/55 blur-2xl transition group-hover:scale-125" />
-      <div className="relative text-sm font-black text-slate-600">{label}</div>
-      <div className="relative mt-2 text-3xl font-black tracking-tight text-blue-700">{value}</div>
+    <div className="group relative overflow-hidden rounded-[22px] border border-blue-100/70 bg-linear-to-br from-white to-blue-50/45 p-5 shadow-md shadow-slate-950/5 ring-1 ring-slate-200/60 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/10">
+      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-cyan-200/35 blur-2xl transition group-hover:scale-125" />
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-black text-slate-600">{label}</div>
+          <div className="mt-2 text-3xl font-black tracking-tight text-blue-700">{value}</div>
+        </div>
+        {Icon ? (
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-blue-100/80 text-blue-700 ring-1 ring-blue-200/70">
+            <Icon className="h-5 w-5" />
+          </span>
+        ) : null}
+      </div>
+      {description ? <div className="relative mt-3 text-xs font-semibold text-slate-500">{description}</div> : null}
       {subValue ? <div className="mt-2 text-xs font-medium text-slate-500">{subValue}</div> : null}
     </div>
   );
 }
 
-function Panel({ title, icon, children }) {
+function Panel({ title, description, icon, action, children }) {
   return (
-    <section className="rounded-4xl border border-white/80 bg-white/90 p-5 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur">
-      <div className="mb-4 flex items-center gap-2 text-base font-black text-slate-900">
-        {icon ? <span className="grid h-9 w-9 place-items-center rounded-2xl bg-blue-50 text-blue-700">{icon}</span> : null}
-        {title}
+    <section className="rounded-[24px] border border-white/80 bg-white/92 p-5 shadow-xl shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          {icon ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700">{icon}</span> : null}
+          <div>
+            <div className="text-base font-black text-slate-900">{title}</div>
+            {description ? <div className="mt-1 text-sm font-semibold text-slate-500">{description}</div> : null}
+          </div>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       {children}
     </section>
@@ -613,6 +699,33 @@ function Panel({ title, icon, children }) {
 
 function EmptyText({ children }) {
   return <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-5 text-sm font-semibold text-slate-500">{children}</div>;
+}
+
+function TimeRangeFilter({ active, onChange }) {
+  const items = [
+    { key: "today", label: "Hôm nay" },
+    { key: "7days", label: "7 ngày" },
+    { key: "month", label: "Tháng này" },
+  ];
+
+  return (
+    <div className="flex rounded-2xl bg-slate-100 p-1">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onChange(item.key)}
+          className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
+            active === item.key
+              ? "bg-white text-blue-700 shadow-sm ring-1 ring-blue-100"
+              : "text-slate-500 hover:text-blue-700"
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function MiniBar({ label, value, total }) {

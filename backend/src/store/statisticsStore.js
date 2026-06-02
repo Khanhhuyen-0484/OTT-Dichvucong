@@ -7,13 +7,22 @@ const PAYMENTS_TABLE = process.env.DYNAMO_PAYMENTS_TABLE || "Payments";
 const PAID_STATUSES = new Set(["PAID", "COMPLETED"]);
 const PENDING_PAYMENT_STATUSES = new Set(["PENDING"]);
 const UNPAID_PAYMENT_STATUSES = new Set(["UNPAID", "DRAFT", "FAILED", "CANCELLED", "CANCELED", "EXPIRED"]);
+const REPORT_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: REPORT_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 const STATUS_LABELS = {
   PENDING: "Chờ tiếp nhận",
   PROCESSING: "Đang xử lý",
   NEED_MORE: "Yêu cầu bổ sung",
   SUPPLEMENTED: "Đã bổ sung",
+  APPROVED: "Đã duyệt",
   COMPLETED: "Hoàn thành",
+  RESULT_DELIVERED: "Đã trả kết quả",
   REJECTED: "Từ chối",
 };
 
@@ -49,30 +58,31 @@ function startOfMonth(date) {
 
 function formatDateKey(date) {
   if (!date) return "Không rõ ngày";
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
+  return DATE_KEY_FORMATTER.format(date);
 }
 
-function inRange(date, fromDate, toDate) {
-  if (!date) return false;
-  if (fromDate && date < fromDate) return false;
-  if (toDate && date > toDate) return false;
+function normalizeDateKey(value) {
+  const raw = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = parseDate(raw);
+  return parsed ? formatDateKey(parsed) : "";
+}
+
+function inRange(dateKey, fromKey, toKey) {
+  if (!dateKey) return false;
+  if (fromKey && dateKey < fromKey) return false;
+  if (toKey && dateKey > toKey) return false;
   return true;
 }
 
 function normalizeDateRange(query = {}) {
   const now = new Date();
-  const from = parseDate(query.fromDate || query.from);
-  const to = parseDate(query.toDate || query.to);
+  const todayKey = formatDateKey(now);
   return {
-    fromDate: from ? startOfDay(from) : null,
-    toDate: to ? endOfDay(to) : null,
-    todayStart: startOfDay(now),
-    todayEnd: endOfDay(now),
-    monthStart: startOfMonth(now),
+    fromKey: normalizeDateKey(query.fromDate || query.from),
+    toKey: normalizeDateKey(query.toDate || query.to),
+    todayKey,
+    monthStartKey: `${todayKey.slice(0, 7)}-01`,
   };
 }
 
@@ -102,6 +112,7 @@ function normalizeApplicationStatus(application) {
   const status = String(application?.status || "PENDING").trim().toUpperCase();
   const paymentStatus = getApplicationPaymentStatus(application);
   if (status === "DRAFT" && isPaidStatus(paymentStatus)) return "PENDING";
+  if (status === "PAID") return "PENDING";
   if (status === "SUBMITTED" || status === "RECEIVED" || status === "WAITING" || status === "WAITING_RECEIVE") return "PENDING";
   return status;
 }
@@ -225,7 +236,7 @@ function normalizePayment(payment, applicationsByCode, serviceMap) {
     status,
     amount: safeNumber(payment.amount || payment.paymentAmount || application?.fee),
     paidDate,
-    paidDateKey: formatDateKey(paidDate),
+    paidDateKey: paidDate ? formatDateKey(paidDate) : "",
   };
 }
 
@@ -238,7 +249,7 @@ function addRevenue(map, key, base, amount) {
 
 async function getAdminStatistics(query = {}) {
   try {
-    const { fromDate, toDate, todayStart, todayEnd, monthStart } = normalizeDateRange(query);
+    const { fromKey, toKey, todayKey, monthStartKey } = normalizeDateRange(query);
     const [applicationsRaw, services, paymentsRaw] = await Promise.all([
       readApplications(),
       listServices(),
@@ -253,6 +264,7 @@ async function getAdminStatistics(query = {}) {
         ...application,
         status: normalizeApplicationStatus(application),
         createdAtDate: getApplicationDate(application),
+        createdAtKey: getApplicationDate(application) ? formatDateKey(getApplicationDate(application)) : "",
       }));
 
     const applicationsByCode = new Map();
@@ -262,14 +274,14 @@ async function getAdminStatistics(query = {}) {
     });
 
     const filteredApplications = applications.filter((application) =>
-      inRange(application.createdAtDate, fromDate, toDate)
+      inRange(application.createdAtKey, fromKey, toKey)
     );
 
     const todayApplications = applications.filter((application) =>
-      inRange(application.createdAtDate, todayStart, todayEnd)
+      inRange(application.createdAtKey, todayKey, todayKey)
     );
     const monthApplications = applications.filter((application) =>
-      inRange(application.createdAtDate, monthStart, null)
+      inRange(application.createdAtKey, monthStartKey, null)
     );
 
     const byStatus = {
@@ -277,7 +289,9 @@ async function getAdminStatistics(query = {}) {
       processing: 0,
       needMore: 0,
       supplemented: 0,
+      approved: 0,
       completed: 0,
+      resultDelivered: 0,
       rejected: 0,
     };
     const statusMap = {
@@ -285,7 +299,9 @@ async function getAdminStatistics(query = {}) {
       PROCESSING: "processing",
       NEED_MORE: "needMore",
       SUPPLEMENTED: "supplemented",
+      APPROVED: "approved",
       COMPLETED: "completed",
+      RESULT_DELIVERED: "resultDelivered",
       REJECTED: "rejected",
     };
 
@@ -371,22 +387,22 @@ async function getAdminStatistics(query = {}) {
         serviceGroupKey: serviceGroup.serviceGroupKey,
         amount,
         paidDate,
-        paidDateKey: formatDateKey(paidDate),
+        paidDateKey: paidDate ? formatDateKey(paidDate) : "",
         createdAt: application.createdAt,
         paidAt: paidDate?.toISOString?.() || application.updatedAt || application.createdAt,
         status: paymentStatus,
       });
     });
 
-    const filteredRevenueRecords = revenueRecords.filter((record) => inRange(record.paidDate, fromDate, toDate));
-    const totalRevenue = revenueRecords.reduce((sum, record) => sum + record.amount, 0);
+    const filteredRevenueRecords = revenueRecords.filter((record) => inRange(record.paidDateKey, fromKey, toKey));
+    const totalRevenue = filteredRevenueRecords.reduce((sum, record) => sum + record.amount, 0);
     const todayRevenue = revenueRecords
-      .filter((record) => inRange(record.paidDate, todayStart, todayEnd))
+      .filter((record) => inRange(record.paidDateKey, todayKey, todayKey))
       .reduce((sum, record) => sum + record.amount, 0);
     const monthRevenue = revenueRecords
-      .filter((record) => inRange(record.paidDate, monthStart, null))
+      .filter((record) => inRange(record.paidDateKey, monthStartKey, null))
       .reduce((sum, record) => sum + record.amount, 0);
-    const paidCount = revenueRecords.length;
+    const paidCount = filteredRevenueRecords.length;
 
     filteredRevenueRecords.forEach((record) => {
       addRevenue(
@@ -489,7 +505,7 @@ async function getAdminStatistics(query = {}) {
         unpaidCount: 0,
       },
       overview: { totalApplications: 0, todayApplications: 0, monthApplications: 0 },
-      byStatus: { pending: 0, processing: 0, needMore: 0, supplemented: 0, completed: 0, rejected: 0 },
+      byStatus: { pending: 0, processing: 0, needMore: 0, supplemented: 0, approved: 0, completed: 0, resultDelivered: 0, rejected: 0 },
       byService: [],
       revenueByService: [],
       revenueByDate: [],
