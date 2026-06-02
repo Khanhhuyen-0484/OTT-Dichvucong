@@ -2,7 +2,7 @@
 const { listCategories, seedDefaultCategories } = require("../store/serviceCategoryStore");
 const { createNotification, getNotificationsByUser } = require("../store/notificationStore");
 const { savePayment, getPaymentsByDossierId } = require("../store/paymentStore");
-const { create, findByCode, readAll, updateByCode, deleteByCode } = require("../store/serviceApplicationStore");
+const { create, findByCode, readAll, updateByCode, deleteByCode, findDuplicateByCitizenAndService } = require("../store/serviceApplicationStore");
 const { createPresignedGet } = require("../config/s3");
 const { getIo } = require("../socket");
 
@@ -18,11 +18,16 @@ const ALLOWED_STATUSES = new Set([
 
 const STATUS_LABELS = {
   DRAFT: "Báº£n nhÃ¡p",
+  PENDING_PAYMENT: "Chá» thanh toÃ¡n",
+  PAID: "ÄÃ£ thanh toÃ¡n",
   PENDING: "Há»“ sÆ¡ Ä‘Ã£ ná»™p",
   PROCESSING: "Äang xá»­ lÃ½",
   NEED_MORE: "YÃªu cáº§u bá»• sung",
+  APPROVED: "ÄÃ£ duyá»‡t",
   SUPPLEMENTED: "ÄÃ£ bá»• sung",
   COMPLETED: "ÄÃ£ hoÃ n thÃ nh",
+  RESULT_DELIVERED: "ÄÃ£ tráº£ káº¿t quáº£",
+  CANCELLED: "ÄÃ£ há»§y",
   REJECTED: "ÄÃ£ tá»« chá»‘i"
 };
 
@@ -283,6 +288,21 @@ exports.getServiceById = async (req, res) => {
   res.json(service);
 };
 
+exports.checkDuplicateDossier = async (req, res) => {
+  try {
+    const citizenId = String(req.body?.citizenId || req.body?.cccd || "").trim();
+    const serviceId = String(req.body?.serviceId || "").trim();
+    if (!/^[0-9]{9,12}$/.test(citizenId)) return res.status(400).json({ message: "CCCD/CMND không hợp lệ" });
+    if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+    const result = await checkDuplicateApplication(citizenId, serviceId);
+    return res.json(result);
+  } catch (error) {
+    console.error("[checkDuplicateDossier] error:", error);
+    return res.status(500).json({ message: error.message || "Không kiểm tra được hồ sơ trùng" });
+  }
+};
+
 exports.submitApplication = async (req, res) => {
   const { serviceId, formData = {}, attachments = [], paymentMethod = "BANK_TRANSFER" } = req.body;
   if (!serviceId) return res.status(400).json({ message: "Thiáº¿u serviceId" });
@@ -293,6 +313,14 @@ exports.submitApplication = async (req, res) => {
   const errors = validateForm(formData);
   if (Object.keys(errors).length) {
     return res.status(400).json({ message: "Dá»¯ liá»‡u khÃ´ng há»£p lá»‡", errors });
+  }
+
+  const duplicate = await checkDuplicateApplication(formData.citizenId, serviceId);
+  if (duplicate.duplicate) {
+    return res.status(409).json({
+      ...duplicate,
+      message: "Đã tồn tại hồ sơ cho dịch vụ này.",
+    });
   }
 
   const dossierCode = generateDossierCode();
@@ -408,6 +436,34 @@ function findWizardDraft(items, uid, serviceId) {
         String(item.draftType || "").toUpperCase() === "WIZARD"
     )
     .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))[0] || null;
+}
+
+function duplicatePayload(application) {
+  if (!application) return null;
+  const status = application.duplicateStatus || application.status || "";
+  return {
+    dossierId: application.dossierId || application.applicationCode || application.id || "",
+    dossierCode: application.dossierCode || application.applicationCode || application.dossierId || "",
+    status,
+    statusLabel: STATUS_LABELS[status] || status,
+    submittedAt: application.submittedAt || application.createdAt || application.updatedAt || "",
+    serviceId: application.serviceId || "",
+    serviceName: application.serviceName || "",
+    reason: application.decisionNote || application.rejectReason || application.resultNote || "",
+  };
+}
+
+async function checkDuplicateApplication(citizenId, serviceId) {
+  const result = await findDuplicateByCitizenAndService(citizenId, serviceId);
+  if (result.duplicate) {
+    return {
+      duplicate: true,
+      ...duplicatePayload(result.application),
+      message: "Bạn đã có hồ sơ cho dịch vụ này.",
+    };
+  }
+  const lastApplication = duplicatePayload(result.application);
+  return lastApplication ? { duplicate: false, lastApplication } : { duplicate: false };
 }
 
 exports.getServiceDraft = async (req, res) => {

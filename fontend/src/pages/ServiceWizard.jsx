@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   Banknote,
   Building2,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import {
   createBankTransferPayment,
+  checkDuplicateDossier,
   deleteServiceDraft,
   getApiErrorMessage,
   getBankTransferPaymentStatus,
@@ -37,7 +39,7 @@ import {
 } from "../lib/api";
 import { uploadToS3 } from "../lib/uploadToS3.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import { isPaidStatus, paymentStatusLabel } from "../lib/statusLabels.js";
+import { applicationStatusLabel, isPaidStatus, paymentStatusLabel } from "../lib/statusLabels.js";
 
 const defaultFaq = [
   {
@@ -148,6 +150,7 @@ export default function ServiceWizard() {
   const [formErrors, setFormErrors] = useState({});
   const [fileItems, setFileItems] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [duplicateCheck, setDuplicateCheck] = useState({ loading: false, result: null, error: "" });
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [dragKey, setDragKey] = useState("");
   const userDraftKey = user?.id || user?.email || user?.phone || "guest";
@@ -239,6 +242,33 @@ export default function ServiceWizard() {
   const isPaid = isPaidStatus(paymentStatus);
   const faq = service?.faq?.length ? service.faq : defaultFaq;
   const currentStep = wizardSteps.find((item) => item.id === step) || wizardSteps[0];
+  const duplicateResult = duplicateCheck.result;
+  const hasBlockingDuplicate = Boolean(duplicateResult?.duplicate);
+
+  useEffect(() => {
+    const citizenId = String(formData.citizenId || "").trim();
+    const targetServiceId = String(service?.serviceId || service?.id || serviceId || "").trim();
+    if (!user || !targetServiceId || !/^\d{9,12}$/.test(citizenId)) {
+      setDuplicateCheck({ loading: false, result: null, error: "" });
+      return;
+    }
+
+    let ignore = false;
+    setDuplicateCheck((prev) => ({ ...prev, loading: true, error: "" }));
+    const timer = window.setTimeout(async () => {
+      try {
+        const { data } = await checkDuplicateDossier({ citizenId, serviceId: targetServiceId });
+        if (!ignore) setDuplicateCheck({ loading: false, result: data || null, error: "" });
+      } catch (error) {
+        if (!ignore) setDuplicateCheck({ loading: false, result: null, error: getApiErrorMessage(error) });
+      }
+    }, 500);
+
+    return () => {
+      ignore = true;
+      window.clearTimeout(timer);
+    };
+  }, [formData.citizenId, service?.serviceId, service?.id, serviceId, user]);
 
   function getSubmitDossierId(result = {}) {
     return String(
@@ -290,6 +320,7 @@ export default function ServiceWizard() {
   function handleNext() {
     if (!user) return navigate("/auth");
     if (step === 1 && !validatePersonal()) return;
+    if (step === 1 && (duplicateCheck.loading || hasBlockingDuplicate)) return;
     if (step === 2 && !validateFiles()) return;
     setStep((current) => Math.min(4, current + 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -378,6 +409,10 @@ export default function ServiceWizard() {
       setStep(1);
       return;
     }
+    if (duplicateCheck.loading || hasBlockingDuplicate) {
+      setStep(1);
+      return;
+    }
     try {
       setSubmitting(true);
       const uploaded = [];
@@ -431,6 +466,11 @@ export default function ServiceWizard() {
       setStep(4);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
+      if (e?.response?.status === 409 && e.response?.data?.duplicate) {
+        setDuplicateCheck({ loading: false, result: e.response.data, error: "" });
+        setStep(1);
+        return;
+      }
       alert(getApiErrorMessage(e));
     } finally {
       setSubmitting(false);
@@ -510,7 +550,12 @@ export default function ServiceWizard() {
             <Card>
               <StepHeader step={step} currentStep={currentStep} />
               {step === 1 && (
-                <PersonalStep formData={formData} formErrors={formErrors} onChange={onChange} />
+                <PersonalStep
+                  formData={formData}
+                  formErrors={formErrors}
+                  duplicateCheck={duplicateCheck}
+                  onChange={onChange}
+                />
               )}
               {step === 2 && (
                 <FilesStep
@@ -558,6 +603,7 @@ export default function ServiceWizard() {
           currentStep={currentStep}
           submitting={submitting}
           checkingPayment={checkingPayment}
+          blocked={step === 1 && (duplicateCheck.loading || hasBlockingDuplicate)}
           onBack={() => setStep((current) => Math.max(1, current - 1))}
           onSave={saveDraft}
           onNext={handlePrimaryAction}
@@ -629,7 +675,7 @@ function StepHeader({ step, currentStep }) {
   );
 }
 
-function PersonalStep({ formData, formErrors, onChange }) {
+function PersonalStep({ formData, formErrors, duplicateCheck, onChange }) {
   return (
     <div className="space-y-5">
       <div>
@@ -640,6 +686,7 @@ function PersonalStep({ formData, formErrors, onChange }) {
           <Field label="Số điện thoại" name="phone" value={formData.phone} onChange={onChange} error={formErrors.phone} />
           <Field label="Email" name="email" value={formData.email} onChange={onChange} error={formErrors.email} />
         </div>
+        <DuplicateDossierNotice check={duplicateCheck} />
       </div>
       <div>
         <h3 className="mb-3 text-base font-black text-[#0f2f57]">Thông tin cư trú</h3>
@@ -660,6 +707,66 @@ function PersonalStep({ formData, formErrors, onChange }) {
           placeholder="Nhập nội dung cần cán bộ lưu ý, nếu có"
           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
         />
+      </div>
+    </div>
+  );
+}
+
+function DuplicateDossierNotice({ check }) {
+  if (check?.loading) {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700">
+        <Loader2 className="h-4 w-4 animate-spin" /> Đang kiểm tra hồ sơ...
+      </div>
+    );
+  }
+  if (check?.error) {
+    return <InlineAlert text={check.error} />;
+  }
+
+  const item = check?.result?.duplicate ? check.result : check?.result?.lastApplication;
+  if (!item) return null;
+
+  const status = String(item.status || "").toUpperCase();
+  const isDuplicate = Boolean(check?.result?.duplicate);
+  const isDone = status === "COMPLETED" || status === "RESULT_DELIVERED";
+  const isRejected = status === "REJECTED";
+  if (!isDuplicate && !isRejected) return null;
+
+  return (
+    <div className={`mt-3 rounded-2xl border p-4 ${isRejected ? "border-slate-200 bg-slate-50 text-slate-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+      <div className="flex items-start gap-3">
+        {isDone ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />}
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-black">
+            {isDone ? "Bạn đã hoàn thành dịch vụ này." : isRejected ? "Hồ sơ trước đã bị từ chối." : "Hồ sơ đã tồn tại"}
+          </p>
+          <div className="mt-3 grid gap-2 text-sm font-semibold sm:grid-cols-3">
+            <InfoRow label="Mã hồ sơ" value={item.dossierId || item.dossierCode || "-"} />
+            <InfoRow label="Trạng thái" value={item.statusLabel || applicationStatusLabel(status, "-")} />
+            <InfoRow label="Ngày nộp" value={formatDateTime(item.submittedAt)} />
+          </div>
+          {isRejected && item.reason && (
+            <p className="mt-3 text-sm font-semibold"><span className="font-black">Lý do:</span> {item.reason}</p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {isDuplicate && item.dossierId && (
+              <Link to={`/my-applications/${item.dossierId}`} className="inline-flex h-10 items-center rounded-xl bg-amber-600 px-4 text-sm font-black text-white hover:bg-amber-700">
+                Xem hồ sơ
+              </Link>
+            )}
+            {isDuplicate && (
+              <Link to="/my-applications" className="inline-flex h-10 items-center rounded-xl border border-amber-200 bg-white px-4 text-sm font-black text-amber-800 hover:bg-amber-100">
+                Về Hồ sơ của tôi
+              </Link>
+            )}
+            {isRejected && (
+              <span className="inline-flex h-10 items-center rounded-xl bg-emerald-50 px-4 text-sm font-black text-emerald-700">
+                Nộp hồ sơ mới
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -946,7 +1053,8 @@ function LoginGate({ navigate }) {
   );
 }
 
-function ActionBar({ step, currentStep, submitting, checkingPayment, onBack, onSave, onNext }) {
+function ActionBar({ step, currentStep, submitting, checkingPayment, blocked, onBack, onSave, onNext }) {
+  const busy = submitting || checkingPayment;
   return (
     <div className="fixed bottom-3 left-1/2 z-50 w-[calc(100%-24px)] -translate-x-1/2 rounded-[22px] border border-slate-200 bg-white/95 p-2 shadow-2xl shadow-slate-900/15 backdrop-blur md:bottom-6 md:w-[calc(100%-64px)] md:max-w-[1200px]">
       <div className="flex min-h-[56px] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -961,8 +1069,8 @@ function ActionBar({ step, currentStep, submitting, checkingPayment, onBack, onS
           <button type="button" onClick={onSave} disabled={submitting} className="inline-flex h-11 items-center justify-center gap-1 rounded-2xl border border-blue-100 bg-blue-50 px-2 text-xs font-black text-blue-700 transition sm:gap-2 sm:px-3 sm:text-sm hover:bg-blue-100 disabled:opacity-50">
             <Save className="h-4 w-4" /> Lưu nháp
           </button>
-          <button type="button" onClick={onNext} disabled={submitting || checkingPayment} className="inline-flex h-11 items-center justify-center gap-1 rounded-2xl bg-gradient-to-r from-[#073763] to-[#1167ad] px-2 text-xs font-black text-white shadow-lg shadow-blue-900/20 transition sm:gap-2 sm:px-4 sm:text-sm hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
-            {submitting || checkingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          <button type="button" onClick={onNext} disabled={busy || blocked} className="inline-flex h-11 items-center justify-center gap-1 rounded-2xl bg-gradient-to-r from-[#073763] to-[#1167ad] px-2 text-xs font-black text-white shadow-lg shadow-blue-900/20 transition sm:gap-2 sm:px-4 sm:text-sm hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Tiếp tục
           </button>
         </div>
@@ -1004,6 +1112,13 @@ function InlineAlert({ text }) {
       <AlertCircle className="h-4 w-4" /> {text}
     </div>
   );
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("vi-VN");
 }
 
 function formatSize(size = 0) {
