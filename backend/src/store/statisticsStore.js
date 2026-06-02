@@ -87,6 +87,40 @@ function inRange(dateKey, fromKey, toKey) {
   return true;
 }
 
+function addDaysToDateKey(dateKey, days) {
+  const match = String(dateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function buildDateSeries(fromKey, toKey, valueMap, fallbackRecords = []) {
+  const keys = [];
+  if (fromKey && toKey && fromKey <= toKey) {
+    let key = fromKey;
+    let guard = 0;
+    while (key && key <= toKey && guard < 370) {
+      keys.push(key);
+      key = addDaysToDateKey(key, 1);
+      guard += 1;
+    }
+  }
+
+  if (!keys.length) {
+    fallbackRecords.forEach((record) => {
+      if (record.paidDateKey) keys.push(record.paidDateKey);
+    });
+  }
+
+  return Array.from(new Set(keys))
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .map((date) => ({
+      date,
+      revenue: safeNumber(valueMap.get(date)?.revenue || 0),
+      paidCount: safeNumber(valueMap.get(date)?.paidCount || 0),
+    }));
+}
+
 function normalizeDateRange(query = {}) {
   const now = new Date();
   const todayKey = formatDateKey(now);
@@ -465,7 +499,7 @@ async function getAdminStatistics(query = {}) {
       inSelectedRange: inRange(record.paidDateKey, fromKey, toKey),
       isToday: inRange(record.paidDateKey, todayKey, todayKey),
     }));
-    const totalRevenue = filteredRevenueRecords.reduce((sum, record) => sum + record.amount, 0);
+    const totalRevenue = revenueRecords.reduce((sum, record) => sum + record.amount, 0);
     const todayRevenue = revenueRecords
       .filter((record) => inRange(record.paidDateKey, todayKey, todayKey))
       .reduce((sum, record) => sum + record.amount, 0);
@@ -493,7 +527,7 @@ async function getAdminStatistics(query = {}) {
       .sort((a, b) => b.total - a.total);
 
     const revenueByService = Array.from(revenueByServiceMap.values()).sort((a, b) => b.revenue - a.revenue);
-    const revenueByDate = Array.from(revenueByDateMap.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const revenueByDate = buildDateSeries(fromKey, toKey, revenueByDateMap, filteredRevenueRecords);
 
     const latestApplications = [...filteredApplications]
       .sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0))

@@ -259,8 +259,18 @@ function StatusDonut({ byStatus = {}, total = 0 }) {
   );
 }
 
-function RevenueLineChart({ items = [] }) {
-  if (!items.length) return <EmptyText>Chưa có dữ liệu doanh thu theo ngày.</EmptyText>;
+function getRevenueEmptyMessage(range) {
+  if (range === "today") return "Chưa có dữ liệu doanh thu hôm nay.";
+  if (range === "7days") return "Chưa có dữ liệu doanh thu trong 7 ngày gần nhất.";
+  if (range === "month") return "Chưa có dữ liệu doanh thu tháng này.";
+  return "Chưa có dữ liệu doanh thu theo ngày.";
+}
+
+function RevenueLineChart({ items = [], range = "custom" }) {
+  const hasRevenue = items.some((item) => Number(item.revenue || 0) > 0);
+  if (!items.length || (range === "today" && !hasRevenue)) {
+    return <EmptyText compact>{getRevenueEmptyMessage(range)}</EmptyText>;
+  }
   const width = 640;
   const height = 210;
   const paddingX = 52;
@@ -337,7 +347,7 @@ function ServiceBarChart({ items = [], mode = "applications" }) {
                   {mode === "revenue" ? `${item.paidCount || 0} giao dịch` : `Hoàn thành ${item.completed || 0}, từ chối ${item.rejected || 0}`}
                 </div>
               </div>
-              <div className="shrink-0 text-sm font-black text-[#003366]">{mode === "revenue" ? formatCurrency(value) : value}</div>
+              <div className="shrink-0 whitespace-nowrap text-sm font-black text-[#003366]">{mode === "revenue" ? formatCurrency(value) : value}</div>
             </div>
             <div className="h-4 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
               <div className={`h-full rounded-full bg-linear-to-r ${mode === "revenue" ? "from-emerald-500 to-teal-400" : "from-blue-600 to-cyan-400"}`} style={{ width: `${percent}%` }} />
@@ -547,11 +557,11 @@ export default function AdminStatistics() {
                   <BarChart3 className="h-5 w-5" />
                   Tổng quan
                 </div>
-                <div className="grid gap-5 xl:grid-cols-2">
+                <div className="grid items-stretch gap-4 xl:grid-cols-2">
                   {statGroups.map((group) => (
-                    <section key={group.title} className="rounded-[24px] border border-white/80 bg-white/80 p-4 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/70">
+                    <section key={group.title} className="flex h-full flex-col rounded-[24px] border border-white/80 bg-white/80 p-4 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/70">
                       <div className="mb-3 text-sm font-black uppercase tracking-wide text-slate-500">{group.title}</div>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid flex-1 auto-rows-fr gap-3 sm:grid-cols-3">
                         {group.cards.map((card) => (
                           <StatCard
                             key={card.label}
@@ -579,7 +589,7 @@ export default function AdminStatistics() {
                     icon={<TrendingUp className="h-5 w-5" />}
                     action={<TimeRangeFilter active={quickRange} onChange={applyQuickRange} />}
                   >
-                    <RevenueLineChart items={revenueByDate} />
+                    <RevenueLineChart items={revenueByDate} range={quickRange} />
                   </Panel>
                 </div>
               </section>
@@ -613,7 +623,7 @@ export default function AdminStatistics() {
 
                 <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
                   <Panel title="Doanh thu theo ngày">
-                    <RevenueLineChart items={revenueByDate} />
+                    <RevenueLineChart items={revenueByDate} range={quickRange} />
                     <div className="mt-5 space-y-4">
                       {revenueByDate.length ? (
                         revenueByDate.map((item) => (
@@ -673,20 +683,20 @@ export default function AdminStatistics() {
 
 function StatCard({ label, value, subValue, description, icon: Icon }) {
   return (
-    <div className="group relative overflow-hidden rounded-[22px] border border-blue-100/70 bg-linear-to-br from-white to-blue-50/45 p-5 shadow-md shadow-slate-950/5 ring-1 ring-slate-200/60 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/10">
+    <div className="group relative flex min-h-[128px] h-full flex-col overflow-hidden rounded-[22px] border border-blue-100/70 bg-linear-to-br from-white to-blue-50/45 p-4 shadow-md shadow-slate-950/5 ring-1 ring-slate-200/60 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/10">
       <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-cyan-200/35 blur-2xl transition group-hover:scale-125" />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-black text-slate-600">{label}</div>
-          <div className="mt-2 text-3xl font-black tracking-tight text-blue-700">{value}</div>
+      <div className="relative flex flex-1 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-black text-slate-600">{label}</div>
+          <div className="mt-2 whitespace-nowrap text-2xl font-black tracking-tight text-blue-700 2xl:text-3xl">{value}</div>
         </div>
         {Icon ? (
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-blue-100/80 text-blue-700 ring-1 ring-blue-200/70">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-blue-100/80 text-blue-700 ring-1 ring-blue-200/70">
             <Icon className="h-5 w-5" />
           </span>
         ) : null}
       </div>
-      {description ? <div className="relative mt-3 text-xs font-semibold text-slate-500">{description}</div> : null}
+      {description ? <div className="relative mt-3 line-clamp-1 text-xs font-semibold text-slate-500">{description}</div> : null}
       {subValue ? <div className="mt-2 text-xs font-medium text-slate-500">{subValue}</div> : null}
     </div>
   );
@@ -710,8 +720,12 @@ function Panel({ title, description, icon, action, children }) {
   );
 }
 
-function EmptyText({ children }) {
-  return <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-5 text-sm font-semibold text-slate-500">{children}</div>;
+function EmptyText({ children, compact = false }) {
+  return (
+    <div className={`rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 text-sm font-semibold text-slate-500 ${compact ? "p-4" : "p-5"}`}>
+      {children}
+    </div>
+  );
 }
 
 function TimeRangeFilter({ active, onChange }) {
@@ -765,7 +779,7 @@ function RevenueBar({ label, value, total, meta }) {
           <div className="truncate font-bold text-slate-700">{label}</div>
           {meta ? <div className="text-xs text-slate-500">{meta}</div> : null}
         </div>
-        <span className="shrink-0 font-bold text-blue-700">{formatCurrency(value)}</span>
+        <span className="shrink-0 whitespace-nowrap font-bold text-blue-700">{formatCurrency(value)}</span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-slate-100">
         <div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-teal-400" style={{ width: `${percent}%` }} />
@@ -846,7 +860,7 @@ function LatestPayments({ items }) {
               <td className="py-3 pr-4 font-semibold text-slate-800">{item.paymentId || "-"}</td>
               <td className="py-3 pr-4 text-slate-600">{item.dossierId || "-"}</td>
               <td className="py-3 pr-4 text-slate-600">{item.serviceName || "Không rõ dịch vụ"}</td>
-              <td className="py-3 pr-4 font-bold text-blue-700">{formatCurrency(item.amount)}</td>
+              <td className="whitespace-nowrap py-3 pr-4 font-bold text-blue-700">{formatCurrency(item.amount)}</td>
               <td className="py-3 pr-4 text-slate-500">{formatDate(item.paidAt || item.createdAt)}</td>
             </tr>
           ))}
