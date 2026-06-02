@@ -116,10 +116,29 @@ const wizardSteps = [
 
 const currency = new Intl.NumberFormat("vi-VN");
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const DOCUMENT_LABEL_BY_KEY = {
+  cccd: "CCCD/CMND",
+  idCard: "CCCD/CMND người nộp",
+  citizenId: "CCCD/CMND người nộp",
+  residenceProof: "Giấy tờ chứng minh chỗ ở hợp pháp",
+  residenceForm: "Tờ khai cư trú",
+  birthCert: "Giấy chứng sinh",
+  marriageCert: "Giấy đăng ký kết hôn",
+  landPaper: "Giấy tờ đất",
+  landCert: "Giấy chứng nhận quyền sử dụng đất",
+  requestForm: "Đơn đăng ký",
+  oldLicense: "Giấy phép lái xe cũ",
+  health: "Giấy khám sức khỏe",
+};
 
 function clampStep(value) {
   const next = Number(value || 1);
   return Number.isFinite(next) ? Math.min(4, Math.max(1, next)) : 1;
+}
+
+function documentLabel(doc) {
+  const key = String(doc?.key || doc?.id || "").trim();
+  return DOCUMENT_LABEL_BY_KEY[key] || doc?.label || "Giấy tờ";
 }
 
 export default function ServiceWizard() {
@@ -909,6 +928,7 @@ function Field({ label, name, value, onChange, error, className = "" }) {
 }
 
 function UploadCard({ doc, item, error, active, onFile, onRemove, onDragState }) {
+  const label = documentLabel(doc);
   return (
     <div className={`rounded-2xl border p-3 transition ${active ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-200 hover:shadow-sm"}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -930,7 +950,7 @@ function UploadCard({ doc, item, error, active, onFile, onRemove, onDragState })
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-black text-[#0f2f57]">
-              {doc.label} {doc.required && <b className="text-rose-500">*</b>}
+              {label} {doc.required && <b className="text-rose-500">*</b>}
             </span>
             <span className="block truncate text-xs font-semibold text-slate-500">{item ? item.name : "Kéo thả hoặc bấm để chọn file"}</span>
           </span>

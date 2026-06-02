@@ -9,6 +9,21 @@ const FALLBACK_FILE_CANDIDATES = [
   path.join(__dirname, "..", "..", "data", "services.json")
 ];
 
+const DOCUMENT_LABEL_BY_KEY = {
+  cccd: "CCCD/CMND",
+  idCard: "CCCD/CMND người nộp",
+  citizenId: "CCCD/CMND người nộp",
+  residenceProof: "Giấy tờ chứng minh chỗ ở hợp pháp",
+  residenceForm: "Tờ khai cư trú",
+  birthCert: "Giấy chứng sinh",
+  marriageCert: "Giấy đăng ký kết hôn",
+  landPaper: "Giấy tờ đất",
+  landCert: "Giấy chứng nhận quyền sử dụng đất",
+  requestForm: "Đơn đăng ký",
+  oldLicense: "Giấy phép lái xe cũ",
+  health: "Giấy khám sức khỏe",
+};
+
 function getClient() {
   return getDynamoClient();
 }
@@ -73,6 +88,12 @@ function normalizeItem(item) {
   item = normalizeTextFields(item);
   const serviceId = String(item.serviceId || item.id || "").trim();
   if (!serviceId) return null;
+  const documents = Array.isArray(item.documents)
+    ? item.documents.map((doc) => {
+        const key = String(doc?.key || doc?.id || "").trim();
+        return { ...doc, key, label: DOCUMENT_LABEL_BY_KEY[key] || String(doc?.label || "").trim() };
+      })
+    : [];
   return {
     ...item,
     serviceId,
@@ -83,7 +104,7 @@ function normalizeItem(item) {
     categoryName: String(item.categoryName || item.category || "Khác").trim(),
     processingTime: String(item.processingTime || "Không xác định"),
     fee: Number(item.fee || 0),
-    documents: Array.isArray(item.documents) ? item.documents : [],
+    documents,
     timeline: Array.isArray(item.timeline) && item.timeline.length
   ? item.timeline
   : [
