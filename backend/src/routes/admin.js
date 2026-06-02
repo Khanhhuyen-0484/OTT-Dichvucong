@@ -27,6 +27,7 @@ function handleResultUpload(req, res, next) {
 router.use(authMiddleware, adminOnly);
 
 router.get("/dashboard", c.dashboard);
+router.get("/statistics/debug", c.getStatisticsDebug);
 router.get("/statistics", c.getStatistics);
 router.get("/service-categories", serviceController.getServiceCategories);
 router.post("/service-categories/seed", serviceController.seedServiceCategories);

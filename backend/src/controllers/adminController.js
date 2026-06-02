@@ -397,6 +397,19 @@ exports.getStatistics = async (req, res) => {
   }
 };
 
+exports.getStatisticsDebug = async (req, res) => {
+  try {
+    const stats = await getAdminStatistics({
+      fromDate: req.query.fromDate,
+      toDate: req.query.toDate,
+      debug: true,
+    });
+    return res.json(stats);
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Lỗi lấy debug thống kê" });
+  }
+};
+
 function toAdminUser(user) {
   return {
     id: user?.id || "",

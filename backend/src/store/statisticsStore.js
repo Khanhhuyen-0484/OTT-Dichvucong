@@ -99,10 +99,22 @@ function normalizeDateRange(query = {}) {
 }
 
 function getApplicationDate(application) {
-  return parseDate(application?.createdAt || application?.submittedAt || application?.updatedAt);
+  return parseDate(application?.submittedAt || application?.createdAt || application?.updatedAt);
 }
 
-function getPaymentDate(payment) {
+function getApplicationPaymentDate(application) {
+  return parseDate(
+    application?.paidAt ||
+      application?.transactionDate ||
+      application?.paymentDate ||
+      application?.paymentCompletedAt ||
+      application?.completedAt ||
+      application?.updatedAt ||
+      application?.createdAt
+  );
+}
+
+function getPaymentDate(payment, application) {
   return parseDate(
     payment?.paidAt ||
       payment?.transactionDate ||
@@ -111,6 +123,19 @@ function getPaymentDate(payment) {
       payment?.completedAt ||
       payment?.updatedAt ||
       payment?.createdAt
+  ) || getApplicationPaymentDate(application);
+}
+
+function getPaymentPaidAt(payment) {
+  return (
+    payment?.paidAt ||
+    payment?.transactionDate ||
+    payment?.paymentDate ||
+    payment?.paymentCompletedAt ||
+    payment?.completedAt ||
+    payment?.updatedAt ||
+    payment?.createdAt ||
+    ""
   );
 }
 
@@ -229,7 +254,7 @@ function getServiceGroup(application, serviceMap, fallbackServiceId) {
   const nameKey = normalizeServiceGroupName(serviceName);
 
   return {
-    serviceGroupKey: nameKey ? `name:${nameKey}` : `id:${serviceId}`,
+    serviceGroupKey: serviceId && serviceId !== "unknown" ? `id:${serviceId}` : `name:${nameKey || "unknown"}`,
     serviceId,
     serviceName,
   };
@@ -240,7 +265,7 @@ function normalizePayment(payment, applicationsByCode, serviceMap) {
   const application = applicationsByCode.get(dossierId);
   const serviceGroup = getServiceGroup(application, serviceMap, payment.serviceId);
   const status = getPaymentStatus(payment);
-  const paidDate = getPaymentDate(payment);
+  const paidDate = getPaymentDate(payment, application);
 
   return {
     ...payment,
@@ -350,22 +375,46 @@ async function getAdminStatistics(query = {}) {
     const dossiersWithPaidPayment = new Set();
     let pendingPaymentCount = 0;
     let unpaidCount = 0;
+    const debug = {
+      dateRange: { fromKey, toKey, todayKey, monthStartKey, timeZone: REPORT_TIME_ZONE },
+      dossiersScanned: uniqueApplications.length,
+      dossiersSubmitted: applications.length,
+      paymentsScanned: Array.isArray(paymentsRaw) ? paymentsRaw.length : 0,
+      paidPayments: paidPayments.length,
+      fallbackPaidDossiers: 0,
+      ignoredPaidPayments: [],
+      revenueRecords: [],
+    };
 
-    const revenueRecords = paidPayments.map((payment) => {
+    const revenueRecords = [];
+    paidPayments.forEach((payment) => {
+      const amount = safeNumber(payment.amount);
+      if (amount <= 0 || !payment.paidDateKey) {
+        debug.ignoredPaidPayments.push({
+          paymentId: payment.paymentId,
+          dossierId: payment.dossierId,
+          status: payment.status,
+          amount,
+          paidDateKey: payment.paidDateKey,
+          reason: amount <= 0 ? "NO_AMOUNT" : "NO_PAID_DATE",
+        });
+        return;
+      }
       if (payment.dossierId) dossiersWithPaidPayment.add(payment.dossierId);
-      return {
+      revenueRecords.push({
         paymentId: payment.paymentId,
         dossierId: payment.dossierId,
         serviceId: payment.serviceId,
         serviceName: payment.serviceName,
         serviceGroupKey: payment.serviceGroupKey,
-        amount: payment.amount,
+        amount,
         paidDate: payment.paidDate,
         paidDateKey: payment.paidDateKey,
         createdAt: payment.createdAt,
-        paidAt: payment.paidAt || payment.paymentCompletedAt || payment.completedAt || payment.updatedAt || payment.createdAt,
+        paidAt: getPaymentPaidAt(payment),
+        source: "Payments",
         status: payment.status,
-      };
+      });
     });
 
     normalizedPayments.forEach((payment) => {
@@ -385,14 +434,9 @@ async function getAdminStatistics(query = {}) {
       const amount = safeNumber(application.fee || application.paymentAmount);
       if (amount <= 0) return;
 
-      const paidDate = parseDate(
-        application.paidAt ||
-          application.paymentCompletedAt ||
-          application.completedAt ||
-          application.updatedAt ||
-          application.createdAt
-      );
+      const paidDate = getApplicationPaymentDate(application);
       const serviceGroup = getServiceGroup(application, serviceMap);
+      debug.fallbackPaidDossiers += 1;
       revenueRecords.push({
         paymentId: application.paymentId || "",
         dossierId: code,
@@ -404,11 +448,23 @@ async function getAdminStatistics(query = {}) {
         paidDateKey: paidDate ? formatDateKey(paidDate) : "",
         createdAt: application.createdAt,
         paidAt: paidDate?.toISOString?.() || application.updatedAt || application.createdAt,
+        source: "Dossiers",
         status: paymentStatus,
       });
     });
 
     const filteredRevenueRecords = revenueRecords.filter((record) => inRange(record.paidDateKey, fromKey, toKey));
+    debug.revenueRecords = revenueRecords.map((record) => ({
+      source: record.source,
+      paymentId: record.paymentId,
+      dossierId: record.dossierId,
+      serviceId: record.serviceId,
+      serviceName: record.serviceName,
+      amount: record.amount,
+      paidDateKey: record.paidDateKey,
+      inSelectedRange: inRange(record.paidDateKey, fromKey, toKey),
+      isToday: inRange(record.paidDateKey, todayKey, todayKey),
+    }));
     const totalRevenue = filteredRevenueRecords.reduce((sum, record) => sum + record.amount, 0);
     const todayRevenue = revenueRecords
       .filter((record) => inRange(record.paidDateKey, todayKey, todayKey))
@@ -480,7 +536,7 @@ async function getAdminStatistics(query = {}) {
       unpaidCount,
     };
 
-    return {
+    const response = {
       totals,
       overview: {
         totalApplications: totals.totalApplications,
@@ -504,6 +560,8 @@ async function getAdminStatistics(query = {}) {
         byDate: revenueByDate,
       },
     };
+    if (query.debug) response.debug = debug;
+    return response;
   } catch (error) {
     console.error("[statisticsStore.getAdminStatistics] error:", error?.name, error?.message, error);
     return {
