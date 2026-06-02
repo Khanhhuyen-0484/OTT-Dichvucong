@@ -263,5 +263,203 @@
       }
     ],
     "active": true
+  },
+  {
+    "serviceId": "cu-tru-thuong-tru",
+    "id": "cu-tru-thuong-tru",
+    "name": "Đăng ký thường trú",
+    "description": "Tiếp nhận hồ sơ đăng ký thường trú cho công dân tại nơi ở hợp pháp.",
+    "categoryId": "cu-tru",
+    "categoryName": "Cư trú",
+    "processingTime": "07 ngày làm việc",
+    "fee": 15000,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND người nộp", "required": true },
+      { "key": "residenceProof", "label": "Giấy tờ chứng minh chỗ ở hợp pháp", "required": true },
+      { "key": "residenceForm", "label": "Tờ khai thay đổi thông tin cư trú", "required": true }
+    ],
+    "faq": [
+      { "q": "Có cần giấy tờ nhà đất không?", "a": "Có, cần giấy tờ chứng minh chỗ ở hợp pháp theo quy định." },
+      { "q": "Có thể theo dõi trạng thái hồ sơ không?", "a": "Có, người dân tra cứu bằng mã hồ sơ sau khi nộp." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "cu-tru-xac-nhan-thong-tin",
+    "id": "cu-tru-xac-nhan-thong-tin",
+    "name": "Xác nhận thông tin cư trú",
+    "description": "Cấp giấy xác nhận thông tin cư trú cho cá nhân có nhu cầu sử dụng.",
+    "categoryId": "cu-tru",
+    "categoryName": "Cư trú",
+    "processingTime": "03 ngày làm việc",
+    "fee": 10000,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND", "required": true },
+      { "key": "requestForm", "label": "Đơn đề nghị xác nhận thông tin cư trú", "required": true }
+    ],
+    "faq": [
+      { "q": "Giấy xác nhận dùng trong bao lâu?", "a": "Thời hạn sử dụng phụ thuộc mục đích và yêu cầu của cơ quan tiếp nhận." },
+      { "q": "Có cần đến trực tiếp không?", "a": "Có thể nộp trực tuyến và nhận kết quả theo hướng dẫn của cơ quan xử lý." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "ho-tich-ket-hon",
+    "id": "ho-tich-ket-hon",
+    "name": "Đăng ký kết hôn",
+    "description": "Tiếp nhận và xử lý hồ sơ đăng ký kết hôn cho công dân đủ điều kiện.",
+    "categoryId": "ho-tich",
+    "categoryName": "Hộ tịch",
+    "processingTime": "03 ngày làm việc",
+    "fee": 0,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND của hai bên", "required": true },
+      { "key": "marriageStatus", "label": "Giấy xác nhận tình trạng hôn nhân", "required": true },
+      { "key": "requestForm", "label": "Tờ khai đăng ký kết hôn", "required": true }
+    ],
+    "faq": [
+      { "q": "Có cần cả hai bên cùng xác nhận không?", "a": "Có, hồ sơ cần thông tin và giấy tờ của hai bên đăng ký." },
+      { "q": "Lệ phí bao nhiêu?", "a": "Dịch vụ này đang được cấu hình miễn phí." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "ho-tich-trich-luc",
+    "id": "ho-tich-trich-luc",
+    "name": "Cấp bản sao trích lục hộ tịch",
+    "description": "Cấp bản sao trích lục khai sinh, kết hôn, khai tử hoặc các sự kiện hộ tịch khác.",
+    "categoryId": "ho-tich",
+    "categoryName": "Hộ tịch",
+    "processingTime": "02 ngày làm việc",
+    "fee": 8000,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND", "required": true },
+      { "key": "requestForm", "label": "Đơn yêu cầu cấp bản sao trích lục", "required": true }
+    ],
+    "faq": [
+      { "q": "Có thể yêu cầu nhiều bản sao không?", "a": "Có, người dân ghi rõ số lượng trong nội dung yêu cầu." },
+      { "q": "Có cần thông tin sự kiện hộ tịch không?", "a": "Nên cung cấp thông tin càng đầy đủ càng tốt để tra cứu nhanh hơn." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "dat-dai-cap-gcn-lan-dau",
+    "id": "dat-dai-cap-gcn-lan-dau",
+    "name": "Cấp giấy chứng nhận quyền sử dụng đất lần đầu",
+    "description": "Tiếp nhận hồ sơ cấp giấy chứng nhận quyền sử dụng đất lần đầu cho hộ gia đình, cá nhân.",
+    "categoryId": "dat-dai",
+    "categoryName": "Đất đai",
+    "processingTime": "15 ngày làm việc",
+    "fee": 50000,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND", "required": true },
+      { "key": "landPaper", "label": "Giấy tờ về nguồn gốc sử dụng đất", "required": true },
+      { "key": "requestForm", "label": "Đơn đăng ký cấp giấy chứng nhận", "required": true }
+    ],
+    "faq": [
+      { "q": "Có cần đo đạc hiện trạng không?", "a": "Tùy hồ sơ cụ thể, cơ quan xử lý có thể yêu cầu bổ sung bản đo đạc." },
+      { "q": "Có thể bổ sung giấy tờ sau không?", "a": "Có, cán bộ xử lý có thể yêu cầu bổ sung trong quá trình thẩm định." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "dat-dai-tach-thua-hop-thua",
+    "id": "dat-dai-tach-thua-hop-thua",
+    "name": "Tách thửa hoặc hợp thửa đất",
+    "description": "Tiếp nhận hồ sơ đề nghị tách thửa, hợp thửa đất theo quy định hiện hành.",
+    "categoryId": "dat-dai",
+    "categoryName": "Đất đai",
+    "processingTime": "10 ngày làm việc",
+    "fee": 30000,
+    "documents": [
+      { "key": "landCert", "label": "Giấy chứng nhận quyền sử dụng đất", "required": true },
+      { "key": "requestForm", "label": "Đơn đề nghị tách thửa hoặc hợp thửa", "required": true },
+      { "key": "idCard", "label": "CCCD/CMND", "required": true }
+    ],
+    "faq": [
+      { "q": "Có cần bản vẽ thửa đất không?", "a": "Có thể cần bản trích đo hoặc bản vẽ theo yêu cầu xử lý." },
+      { "q": "Hồ sơ không đủ điều kiện thì sao?", "a": "Cơ quan xử lý sẽ thông báo lý do hoặc yêu cầu bổ sung." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "kinh-doanh-ho-ca-the",
+    "id": "kinh-doanh-ho-ca-the",
+    "name": "Đăng ký hộ kinh doanh cá thể",
+    "description": "Nộp hồ sơ đăng ký hộ kinh doanh cá thể và nhận kết quả trực tuyến.",
+    "categoryId": "kinh-doanh",
+    "categoryName": "Kinh doanh",
+    "processingTime": "03 ngày làm việc",
+    "fee": 100000,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND chủ hộ kinh doanh", "required": true },
+      { "key": "businessForm", "label": "Giấy đề nghị đăng ký hộ kinh doanh", "required": true },
+      { "key": "addressProof", "label": "Giấy tờ địa điểm kinh doanh", "required": false }
+    ],
+    "faq": [
+      { "q": "Có thể đăng ký ngành nghề gì?", "a": "Người dân chọn ngành nghề phù hợp quy định và nội dung kinh doanh thực tế." },
+      { "q": "Có cần nộp lệ phí không?", "a": "Có, lệ phí được hiển thị tại bước thanh toán." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "kinh-doanh-tam-ngung",
+    "id": "kinh-doanh-tam-ngung",
+    "name": "Thông báo tạm ngừng kinh doanh",
+    "description": "Tiếp nhận thông báo tạm ngừng hoạt động kinh doanh của hộ kinh doanh hoặc doanh nghiệp.",
+    "categoryId": "kinh-doanh",
+    "categoryName": "Kinh doanh",
+    "processingTime": "03 ngày làm việc",
+    "fee": 0,
+    "documents": [
+      { "key": "businessLicense", "label": "Giấy chứng nhận đăng ký kinh doanh", "required": true },
+      { "key": "requestForm", "label": "Thông báo tạm ngừng kinh doanh", "required": true },
+      { "key": "idCard", "label": "CCCD/CMND người đại diện", "required": true }
+    ],
+    "faq": [
+      { "q": "Có cần nêu thời gian tạm ngừng không?", "a": "Có, hồ sơ cần ghi rõ thời gian bắt đầu và kết thúc tạm ngừng." },
+      { "q": "Dịch vụ có mất phí không?", "a": "Dịch vụ này đang được cấu hình miễn phí." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "bao-hiem-y-te-ho-gia-dinh",
+    "id": "bao-hiem-y-te-ho-gia-dinh",
+    "name": "Đăng ký bảo hiểm y tế hộ gia đình",
+    "description": "Tiếp nhận hồ sơ đăng ký tham gia bảo hiểm y tế theo hộ gia đình.",
+    "categoryId": "bao-hiem",
+    "categoryName": "Y tế & Bảo hiểm",
+    "processingTime": "05 ngày làm việc",
+    "fee": 0,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND người đăng ký", "required": true },
+      { "key": "householdBook", "label": "Thông tin hộ gia đình", "required": true },
+      { "key": "requestForm", "label": "Tờ khai tham gia bảo hiểm y tế", "required": true }
+    ],
+    "faq": [
+      { "q": "Có cần thông tin các thành viên không?", "a": "Có, hồ sơ cần thông tin thành viên hộ gia đình tham gia." },
+      { "q": "Thanh toán phí bảo hiểm ở đâu?", "a": "Hệ thống có thể hướng dẫn thanh toán tùy cấu hình dịch vụ." }
+    ],
+    "active": true
+  },
+  {
+    "serviceId": "y-te-cap-giay-kham-suc-khoe",
+    "id": "y-te-cap-giay-kham-suc-khoe",
+    "name": "Cấp giấy khám sức khỏe",
+    "description": "Tiếp nhận yêu cầu cấp giấy khám sức khỏe phục vụ học tập, lao động hoặc đổi giấy phép lái xe.",
+    "categoryId": "y-te",
+    "categoryName": "Y tế & Bảo hiểm",
+    "processingTime": "02 ngày làm việc",
+    "fee": 50000,
+    "documents": [
+      { "key": "idCard", "label": "CCCD/CMND", "required": true },
+      { "key": "photo", "label": "Ảnh chân dung", "required": false },
+      { "key": "requestForm", "label": "Phiếu đăng ký khám sức khỏe", "required": true }
+    ],
+    "faq": [
+      { "q": "Có cần đặt lịch trước không?", "a": "Nên đặt lịch hoặc theo dõi hướng dẫn sau khi hồ sơ được tiếp nhận." },
+      { "q": "Kết quả có tải online được không?", "a": "Có thể tải kết quả nếu cán bộ trả kết quả bằng file PDF." }
+    ],
+    "active": true
   }
 ]
