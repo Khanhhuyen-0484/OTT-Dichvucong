@@ -162,6 +162,10 @@ function isClosed(item) {
   return status === "COMPLETED" || status === "APPROVED" || status === "RESULT_DELIVERED" || status === "REJECTED";
 }
 
+function hasDeliveredResult(item) {
+  return Boolean(item?.resultFileKey || item?.resultFileUrl || normalizeStatus(item?.status) === "RESULT_DELIVERED");
+}
+
 function isOverdue(item) {
   const due = getDueDate(item);
   return Boolean(due && !isClosed(item) && due.getTime() < Date.now());
@@ -365,6 +369,10 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
 
   function requestStatusUpdate(items, nextStatus, fallbackNote = "") {
     const targets = Array.isArray(items) ? items : [items];
+    if (nextStatus === "COMPLETED" && targets.some((item) => !hasDeliveredResult(item))) {
+      setMessage?.("Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành.");
+      return;
+    }
     if (["NEED_MORE", "REJECTED"].includes(nextStatus)) {
       setNoteModal({ items: targets, status: nextStatus, note: fallbackNote });
       return;
@@ -972,6 +980,7 @@ function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, onOpenDeliver,
   ].filter((group) => group.items.length);
   const timeline = Array.isArray(dossier.timeline) ? dossier.timeline : Array.isArray(dossier.history) ? dossier.history : [];
   const sla = slaText(dossier);
+  const canComplete = hasDeliveredResult(dossier);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35">
@@ -993,7 +1002,7 @@ function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, onOpenDeliver,
           <div className="mt-4 flex flex-wrap gap-2">
             <button type="button" disabled={busy} onClick={() => onUpdate("PROCESSING")} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Chuyển xử lý</button>
             <button type="button" disabled={busy} onClick={() => onUpdate("NEED_MORE")} className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Yêu cầu bổ sung</button>
-            <button type="button" disabled={busy} onClick={() => onUpdate("COMPLETED")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Hoàn thành</button>
+            <button type="button" disabled={busy || !canComplete} title={!canComplete ? "Phải trả kết quả trước khi hoàn thành" : ""} onClick={() => onUpdate("COMPLETED")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Hoàn thành</button>
             <button type="button" disabled={busy} onClick={onOpenDeliver} className="inline-flex items-center gap-1 rounded-lg bg-emerald-800 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               <Upload className="h-3.5 w-3.5" />
               Trả kết quả

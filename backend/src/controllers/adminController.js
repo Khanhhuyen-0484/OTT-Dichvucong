@@ -71,7 +71,7 @@ exports.dossierDecision = async (req, res) => {
     if (!dossier) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
     return res.json({ message: "Đã cập nhật quyết định", dossier });
   } catch (err) {
-    return res.status(500).json({ message: err.message || "Lỗi xử lý quyết định hồ sơ" });
+    return res.status(err.status || err.statusCode || 500).json({ message: err.message || "Lỗi xử lý quyết định hồ sơ" });
   }
 };
 

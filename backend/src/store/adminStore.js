@@ -4,7 +4,7 @@ const { sendMessage, getChatHistory } = require("./supportConversationsStore");
 const { findById } = require("./userStore");
 const { readAll: readApplications, findByCode: findApplicationByCode, updateByCode: updateApplicationByCode } = require("./serviceApplicationStore");
 
-const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "REJECTED"]);
+const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "RESULT_DELIVERED", "REJECTED"]);
 
 function isPaidApplication(app) {
   if (!app) return false;
@@ -27,6 +27,7 @@ let localDb = null;
 function ensureLocalDb() { if (!localDb) localDb = { conversations: [], ai: { id: "default", rulesText: DEFAULT_AI_RULES, history: [] } }; return localDb; }
 function nowIso() { return new Date().toISOString(); }
 function normalizeDossierStatus(status) { const s = String(status || "").trim().toUpperCase(); return DOSSIER_STATUS_FLOW.has(s) ? s : "PENDING"; }
+function hasDeliveredResult(app) { return Boolean(app?.resultFileKey || app?.resultFileUrl || String(app?.status || "").trim().toUpperCase() === "RESULT_DELIVERED"); }
 function getVisibleDossierStatus(app) {
   const status = String(app?.status || "").trim().toUpperCase();
   const paymentStatus = String(app?.paymentStatus || "").trim().toUpperCase();
@@ -91,6 +92,11 @@ async function decideDossier({ dossierId, action, note, adminEmail }) {
   const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", reject: "REJECTED", complete: "COMPLETED", approve: "PROCESSING" };
   const nextStatus = actionMap[action];
   if (!nextStatus) return null;
+  if (nextStatus === "COMPLETED" && !hasDeliveredResult(current)) {
+    const error = new Error("Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành.");
+    error.status = 400;
+    throw error;
+  }
   const timelineItem = buildTimelineItem({ status: nextStatus, action, note, actor: adminEmail || "admin" });
   return appendDossierTimeline(current, timelineItem);
 }

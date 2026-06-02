@@ -37,6 +37,10 @@ function getAttachmentUrl(fileUrl) {
   return encodeURI(`${base}${fileUrl.startsWith("/") ? "" : "/"}${fileUrl}`);
 }
 
+function hasDeliveredResult(dossier) {
+  return Boolean(dossier?.resultFileKey || dossier?.resultFileUrl || String(dossier?.status || "").toUpperCase() === "RESULT_DELIVERED");
+}
+
 function Field({ label, value }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -61,6 +65,7 @@ export default function AdminDossierDetail() {
   const timeline = Array.isArray(dossier?.timeline) ? dossier.timeline : Array.isArray(dossier?.history) ? dossier.history : [];
   const attachments = Array.isArray(dossier?.attachments) ? dossier.attachments : [];
   const formData = dossier?.formData || {};
+  const canComplete = hasDeliveredResult(dossier);
 
   const headerStats = useMemo(() => [
     { label: "MÃ£ há»“ sÆ¡", value: dossier?.applicationCode || dossier?.dossierCode || dossier?.dossierId || dossier?.id },
@@ -87,6 +92,10 @@ export default function AdminDossierDetail() {
   }, [dossierId]);
 
   async function submitWorkflow(nextStatus, note = "") {
+    if (nextStatus === "COMPLETED" && !canComplete) {
+      setMessage("Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -223,9 +232,9 @@ export default function AdminDossierDetail() {
                     {WORKFLOW_BUTTONS.map((btn) => {
                       const Icon = btn.icon;
                       const isCurrent = status === btn.key;
-                      const disabled = busy || isCurrent || (btn.key === "COMPLETED" && status === "REJECTED");
+                      const disabled = busy || isCurrent || (btn.key === "COMPLETED" && (status === "REJECTED" || !canComplete));
                       return (
-                        <button key={btn.key} type="button" disabled={disabled} onClick={() => (btn.key === "NEED_MORE" || btn.key === "REJECTED") ? setWorkflowModal({ status: btn.key, note: "" }) : submitWorkflow(btn.key, btn.key === "COMPLETED" ? "Há»“ sÆ¡ Ä‘Ã£ hoÃ n thÃ nh" : btn.label)} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${btn.className}`}>
+                        <button key={btn.key} type="button" disabled={disabled} title={btn.key === "COMPLETED" && !canComplete ? "Phải trả kết quả trước khi hoàn thành" : ""} onClick={() => (btn.key === "NEED_MORE" || btn.key === "REJECTED") ? setWorkflowModal({ status: btn.key, note: "" }) : submitWorkflow(btn.key, btn.key === "COMPLETED" ? "Hồ sơ đã hoàn thành" : btn.label)} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${btn.className}`}>
                           <Icon className="h-4 w-4" />
                           {btn.label}
                         </button>

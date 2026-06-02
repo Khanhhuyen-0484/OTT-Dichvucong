@@ -186,6 +186,11 @@ function pushTimeline(application, entry) {
   return [...(application.timeline || application.history || []), timelineItem];
 }
 
+function hasDeliveredResult(application) {
+  const status = String(application?.status || "").trim().toUpperCase();
+  return Boolean(application?.resultFileKey || application?.resultFileUrl || status === "RESULT_DELIVERED");
+}
+
 function withRequestedServiceId(service, requestedId) {
   if (!service || !requestedId || requestedId === service.serviceId) return service;
   return { ...service, serviceId: requestedId, id: requestedId };
@@ -729,6 +734,9 @@ exports.updateApplicationStatus = async (req, res) => {
     const note = String(req.body?.note || "").trim();
     const action = String(req.body?.action || req.method?.toLowerCase() || status.toLowerCase()).trim();
     if (!ALLOWED_STATUSES.has(status)) return res.status(400).json({ message: "Tráº¡ng thÃ¡i khÃ´ng há»£p lá»‡" });
+    if (status === "COMPLETED" && !hasDeliveredResult(application)) {
+      return res.status(400).json({ message: "Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành." });
+    }
     if ((status === "NEED_MORE" || status === "REJECTED") && !note) {
       return res.status(400).json({ message: "Vui lÃ²ng nháº­p lÃ½ do" });
     }
