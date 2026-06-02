@@ -106,6 +106,11 @@ function resultEmailHtml({ fullName, dossierId, serviceName, downloadUrl, note }
   `;
 }
 
+function validEmail(value) {
+  const email = String(value || "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+
 exports.deliverDossierResult = async (req, res) => {
   try {
     const dossierId = String(req.params.dossierId || req.params.id || "").trim();
@@ -159,8 +164,20 @@ exports.deliverDossierResult = async (req, res) => {
 
     let emailFailed = false;
     try {
-      const fullName = updated.citizenName || updated.formData?.fullName || "Quý công dân";
-      const to = updated.email || updated.formData?.email;
+      const citizenUser = updated.userId ? await findById(updated.userId).catch(() => null) : null;
+      const fullName = updated.formData?.fullName || updated.citizenName || citizenUser?.fullName || "Quý công dân";
+      const adminEmail = validEmail(req.user?.email);
+      const citizenEmails = [
+        updated.formData?.email,
+        citizenUser?.email,
+        updated.citizenEmail,
+        updated.applicantEmail,
+        updated.email,
+      ]
+        .map(validEmail)
+        .filter(Boolean)
+        .filter((email) => !adminEmail || email.toLowerCase() !== adminEmail.toLowerCase());
+      const to = citizenEmails[0] || "";
       if (to) {
         await sendMail({
           to,
@@ -175,6 +192,9 @@ exports.deliverDossierResult = async (req, res) => {
             note ? `Ghi chú: ${note}` : ""
           ].filter(Boolean).join("\n")
         });
+      } else {
+        emailFailed = true;
+        console.warn("[deliverDossierResult] missing citizen email:", updated.dossierId || dossierId);
       }
     } catch (err) {
       emailFailed = true;
