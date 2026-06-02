@@ -656,21 +656,6 @@ export default function AdminStatistics() {
 
                 <Panel title="Doanh thu theo dịch vụ">
                   <ServiceBarChart items={revenueByService} mode="revenue" />
-                  <div className="mt-5 space-y-4">
-                    {revenueByService.length ? (
-                      revenueByService.map((item) => (
-                        <RevenueBar
-                          key={item.serviceId}
-                          label={item.serviceName || "Không rõ dịch vụ"}
-                          value={item.revenue}
-                          total={maxServiceRevenue}
-                          meta={`${item.paidCount || 0} giao dịch`}
-                        />
-                      ))
-                    ) : (
-                      <EmptyText>Chưa có doanh thu theo dịch vụ.</EmptyText>
-                    )}
-                  </div>
                 </Panel>
               </section>
             ) : null}
