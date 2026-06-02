@@ -37,6 +37,15 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function dateKeyFromValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const localDateTime = raw.match(/^(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}/);
+  if (localDateTime) return localDateTime[1];
+  const parsed = parseDate(raw);
+  return parsed ? formatDateKey(parsed) : "";
+}
+
 function repairTextEncoding(value) {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -136,8 +145,8 @@ function getApplicationDate(application) {
   return parseDate(application?.submittedAt || application?.createdAt || application?.updatedAt);
 }
 
-function getApplicationPaymentDate(application) {
-  return parseDate(
+function getApplicationPaymentDateValue(application) {
+  return (
     application?.paidAt ||
       application?.transactionDate ||
       application?.paymentDate ||
@@ -148,8 +157,16 @@ function getApplicationPaymentDate(application) {
   );
 }
 
-function getPaymentDate(payment, application) {
-  return parseDate(
+function getApplicationPaymentDate(application) {
+  return parseDate(getApplicationPaymentDateValue(application));
+}
+
+function getApplicationPaymentDateKey(application) {
+  return dateKeyFromValue(getApplicationPaymentDateValue(application));
+}
+
+function getPaymentDateValue(payment) {
+  return (
     payment?.paidAt ||
       payment?.transactionDate ||
       payment?.paymentDate ||
@@ -157,20 +174,19 @@ function getPaymentDate(payment, application) {
       payment?.completedAt ||
       payment?.updatedAt ||
       payment?.createdAt
-  ) || getApplicationPaymentDate(application);
+  );
+}
+
+function getPaymentDate(payment, application) {
+  return parseDate(getPaymentDateValue(payment)) || getApplicationPaymentDate(application);
+}
+
+function getPaymentDateKey(payment, application) {
+  return dateKeyFromValue(getPaymentDateValue(payment)) || getApplicationPaymentDateKey(application);
 }
 
 function getPaymentPaidAt(payment) {
-  return (
-    payment?.paidAt ||
-    payment?.transactionDate ||
-    payment?.paymentDate ||
-    payment?.paymentCompletedAt ||
-    payment?.completedAt ||
-    payment?.updatedAt ||
-    payment?.createdAt ||
-    ""
-  );
+  return getPaymentDateValue(payment) || "";
 }
 
 function getPaymentStatus(payment) {
@@ -310,7 +326,7 @@ function normalizePayment(payment, applicationsByCode, serviceMap) {
     status,
     amount: safeNumber(payment.amount || payment.paymentAmount || application?.fee),
     paidDate,
-    paidDateKey: paidDate ? formatDateKey(paidDate) : "",
+    paidDateKey: getPaymentDateKey(payment, application),
   };
 }
 
@@ -469,6 +485,7 @@ async function getAdminStatistics(query = {}) {
       if (amount <= 0) return;
 
       const paidDate = getApplicationPaymentDate(application);
+      const paidDateKey = getApplicationPaymentDateKey(application);
       const serviceGroup = getServiceGroup(application, serviceMap);
       debug.fallbackPaidDossiers += 1;
       revenueRecords.push({
@@ -479,7 +496,7 @@ async function getAdminStatistics(query = {}) {
         serviceGroupKey: serviceGroup.serviceGroupKey,
         amount,
         paidDate,
-        paidDateKey: paidDate ? formatDateKey(paidDate) : "",
+        paidDateKey,
         createdAt: application.createdAt,
         paidAt: paidDate?.toISOString?.() || application.updatedAt || application.createdAt,
         source: "Dossiers",
