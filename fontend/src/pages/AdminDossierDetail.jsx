@@ -5,23 +5,23 @@ import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import { deliverAdminDossierResult, downloadApplicationResult, getAdminDossier, getApiErrorMessage, resolvedApiBaseUrl, updateAdminDossierStatus } from "../lib/api";
 
 const STATUS_META = {
-  PENDING: { text: "Chá» tiáº¿p nháº­n", color: "bg-slate-100 text-slate-700", icon: Clock3 },
-  PROCESSING: { text: "Äang xá»­ lÃ½", color: "bg-sky-100 text-sky-700", icon: Play },
-  NEED_MORE: { text: "YÃªu cáº§u bá»• sung", color: "bg-amber-100 text-amber-700", icon: BadgeAlert },
-  SUPPLEMENTED: { text: "ÄÃ£ bá»• sung", color: "bg-indigo-100 text-indigo-700", icon: FileText },
+  PENDING: { text: "Chờ tiếp nhận", color: "bg-slate-100 text-slate-700", icon: Clock3 },
+  PROCESSING: { text: "Đang xử lý", color: "bg-sky-100 text-sky-700", icon: Play },
+  NEED_MORE: { text: "Yêu cầu bổ sung", color: "bg-amber-100 text-amber-700", icon: BadgeAlert },
+  SUPPLEMENTED: { text: "Đã bổ sung", color: "bg-indigo-100 text-indigo-700", icon: FileText },
   APPROVED: { text: "Đã duyệt", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
-  REJECTED: { text: "Tá»« chá»‘i", color: "bg-red-100 text-red-700", icon: Ban },
-  COMPLETED: { text: "HoÃ n thÃ nh", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
+  REJECTED: { text: "Từ chối", color: "bg-red-100 text-red-700", icon: Ban },
+  COMPLETED: { text: "Hoàn thành", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
   RESULT_DELIVERED: { text: "Đã trả kết quả", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
 };
 
 const WORKFLOW_BUTTONS = [
-  { key: "PENDING", label: "Tiáº¿p nháº­n", icon: Clock3, className: "bg-slate-700 hover:bg-slate-800 text-white" },
-  { key: "PROCESSING", label: "Äang xá»­ lÃ½", icon: Play, className: "bg-sky-600 hover:bg-sky-700 text-white" },
-  { key: "NEED_MORE", label: "YÃªu cáº§u bá»• sung", icon: BadgeAlert, className: "bg-amber-500 hover:bg-amber-600 text-white" },
+  { key: "PENDING", label: "Tiếp nhận", icon: Clock3, className: "bg-slate-700 hover:bg-slate-800 text-white" },
+  { key: "PROCESSING", label: "Đang xử lý", icon: Play, className: "bg-sky-600 hover:bg-sky-700 text-white" },
+  { key: "NEED_MORE", label: "Yêu cầu bổ sung", icon: BadgeAlert, className: "bg-amber-500 hover:bg-amber-600 text-white" },
   { key: "APPROVED", label: "Đã duyệt", icon: FileCheck2, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
-  { key: "REJECTED", label: "Tá»« chá»‘i", icon: Ban, className: "bg-red-600 hover:bg-red-700 text-white" },
-  { key: "COMPLETED", label: "HoÃ n thÃ nh", icon: FileCheck2, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
+  { key: "REJECTED", label: "Từ chối", icon: Ban, className: "bg-red-600 hover:bg-red-700 text-white" },
+  { key: "COMPLETED", label: "Hoàn thành", icon: FileCheck2, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
 ];
 
 function formatDate(value) {
@@ -29,7 +29,7 @@ function formatDate(value) {
 }
 
 function statusLabel(status) {
-  return STATUS_META[String(status || "").toUpperCase()] || { text: status || "ChÆ°a rÃµ", color: "bg-slate-100 text-slate-700" };
+  return STATUS_META[String(status || "").toUpperCase()] || { text: status || "Chưa rõ", color: "bg-slate-100 text-slate-700" };
 }
 
 function getAttachmentUrl(fileUrl) {
@@ -71,10 +71,10 @@ export default function AdminDossierDetail() {
   const canDeliver = status === "APPROVED";
 
   const headerStats = useMemo(() => [
-    { label: "MÃ£ há»“ sÆ¡", value: dossier?.applicationCode || dossier?.dossierCode || dossier?.dossierId || dossier?.id },
-    { label: "Dá»‹ch vá»¥", value: dossier?.serviceName || dossier?.serviceId },
-    { label: "NgÃ y táº¡o", value: formatDate(dossier?.createdAt) },
-    { label: "Thanh toÃ¡n", value: dossier?.paymentStatus || "UNPAID" },
+    { label: "Mã hồ sơ", value: dossier?.applicationCode || dossier?.dossierCode || dossier?.dossierId || dossier?.id },
+    { label: "Dịch vụ", value: dossier?.serviceName || dossier?.serviceId },
+    { label: "Ngày tạo", value: formatDate(dossier?.createdAt) },
+    { label: "Thanh toán", value: dossier?.paymentStatus || "UNPAID" },
   ], [dossier]);
 
   async function load() {
@@ -108,7 +108,7 @@ export default function AdminDossierDetail() {
     try {
       await updateAdminDossierStatus(dossierId, { status: nextStatus, note, action: String(nextStatus).toLowerCase() });
       setWorkflowModal(null);
-      setMessage("ÄÃ£ cáº­p nháº­t tráº¡ng thÃ¡i há»“ sÆ¡");
+      setMessage("Đã cập nhật trạng thái hồ sơ");
       await load();
     } catch (err) {
       setMessage(getApiErrorMessage(err));
@@ -170,7 +170,7 @@ export default function AdminDossierDetail() {
         <BackToDashboardButton variant="soft" className="mb-5" />
 
         {loading ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm font-semibold text-slate-600">Äang táº£i há»“ sÆ¡...</div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm font-semibold text-slate-600">Đang tải hồ sơ...</div>
         ) : error ? (
           <div className="rounded-3xl border border-red-200 bg-red-50 p-8 text-sm font-semibold text-red-700">{error}</div>
         ) : dossier ? (
@@ -180,10 +180,10 @@ export default function AdminDossierDetail() {
                 <div>
                   <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                     <FileText className="h-4 w-4" />
-                    Chi tiáº¿t há»“ sÆ¡
+                    Chi tiết hồ sơ
                   </div>
-                  <h1 className="mt-3 text-3xl font-black text-slate-900">{dossier.serviceName || "Há»“ sÆ¡ dá»‹ch vá»¥ cÃ´ng"}</h1>
-                  <p className="mt-2 text-sm text-slate-600">Theo dÃµi thÃ´ng tin kÃª khai, tÃ i liá»‡u vÃ  xá»­ lÃ½ workflow cá»§a há»“ sÆ¡.</p>
+                  <h1 className="mt-3 text-3xl font-black text-slate-900">{dossier.serviceName || "Hồ sơ dịch vụ công"}</h1>
+                  <p className="mt-2 text-sm text-slate-600">Theo dõi thông tin kê khai, tài liệu và xử lý workflow của hồ sơ.</p>
                 </div>
                 <div className={`inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${statusMeta.color}`}>{statusMeta.text}</div>
               </div>
@@ -197,35 +197,35 @@ export default function AdminDossierDetail() {
             <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
               <section className="space-y-6">
                 <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="text-lg font-black text-slate-900">ThÃ´ng tin ngÆ°á»i ná»™p</h2>
+                  <h2 className="text-lg font-black text-slate-900">Thông tin người nộp</h2>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <Field label="Há» tÃªn" value={dossier.citizenName || formData.fullName} />
+                    <Field label="Họ tên" value={dossier.citizenName || formData.fullName} />
                     <Field label="Email" value={dossier.email || formData.email} />
-                    <Field label="Sá»‘ Ä‘iá»‡n thoáº¡i" value={dossier.phone || formData.phone} />
+                    <Field label="Số điện thoại" value={dossier.phone || formData.phone} />
                     <Field label="CCCD/CMND" value={formData.citizenId || dossier.citizenId} />
-                    <Field label="Äá»‹a chá»‰" value={formData.address || dossier.address} />
-                    <Field label="Ná»™i dung yÃªu cáº§u" value={formData.requestContent || formData.note || formData.supplementNote} />
+                    <Field label="Địa chỉ" value={formData.address || dossier.address} />
+                    <Field label="Nội dung yêu cầu" value={formData.requestContent || formData.note || formData.supplementNote} />
                   </div>
                 </div>
 
                 <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="text-lg font-black text-slate-900">TÃ i liá»‡u Ä‘Ã­nh kÃ¨m</h2>
+                  <h2 className="text-lg font-black text-slate-900">Tài liệu đính kèm</h2>
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     {attachments.length ? attachments.map((file, idx) => {
                       const url = getAttachmentUrl(file.fileUrl || file.url || file.path || "");
-                      const fileName = file.fileName || file.name || file.label || `TÃ i liá»‡u ${idx + 1}`;
+                      const fileName = file.fileName || file.name || file.label || `Tài liệu ${idx + 1}`;
                       return (
                         <div key={`${fileName}-${idx}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                           <div className="font-bold text-slate-900">{file.label || fileName}</div>
                           <div className="mt-2 text-sm text-slate-600">
-                            <div><strong>Tá»‡p:</strong> {fileName}</div>
-                            <div><strong>Loáº¡i:</strong> {file.mimeType || file.type || "-"}</div>
-                            <div><strong>KÃ­ch thÆ°á»›c:</strong> {file.size ? `${Math.round(file.size / 1024)} KB` : "-"}</div>
+                            <div><strong>Tệp:</strong> {fileName}</div>
+                            <div><strong>Loại:</strong> {file.mimeType || file.type || "-"}</div>
+                            <div><strong>Kích thước:</strong> {file.size ? `${Math.round(file.size / 1024)} KB` : "-"}</div>
                           </div>
-                          {url ? <a href={url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl bg-[#003366] px-3 py-2 text-sm font-semibold text-white">Má»Ÿ tÃ i liá»‡u</a> : null}
+                          {url ? <a href={url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl bg-[#003366] px-3 py-2 text-sm font-semibold text-white">Mở tài liệu</a> : null}
                         </div>
                       );
-                    }) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500 md:col-span-2">KhÃ´ng cÃ³ tÃ i liá»‡u Ä‘Ã­nh kÃ¨m.</div>}
+                    }) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500 md:col-span-2">Không có tài liệu đính kèm.</div>}
                   </div>
                 </div>
               </section>
@@ -234,8 +234,8 @@ export default function AdminDossierDetail() {
                 <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-lg font-black text-slate-900">Xá»­ lÃ½ há»“ sÆ¡</h2>
-                      <p className="mt-1 text-sm text-slate-600">Cáº­p nháº­t tráº¡ng thÃ¡i workflow.</p>
+                      <h2 className="text-lg font-black text-slate-900">Xử lý hồ sơ</h2>
+                      <p className="mt-1 text-sm text-slate-600">Cập nhật trạng thái workflow.</p>
                     </div>
                     <button type="button" onClick={load} className="rounded-xl bg-slate-100 p-2 text-slate-600 hover:bg-slate-200"><RefreshCw className="h-4 w-4" /></button>
                   </div>
@@ -283,7 +283,7 @@ export default function AdminDossierDetail() {
                 <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-black text-slate-900">Timeline</h2>
-                    <span className="text-xs font-semibold text-slate-500">{timeline.length} má»‘c</span>
+                    <span className="text-xs font-semibold text-slate-500">{timeline.length} mốc</span>
                   </div>
                   <div className="mt-4 space-y-3">
                     {timeline.length ? timeline.map((item, idx) => {
@@ -292,13 +292,13 @@ export default function AdminDossierDetail() {
                         <div key={`${item.createdAt || idx}-${idx}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                           <div className="flex flex-wrap items-center gap-2 text-sm">
                             <span className={`rounded-full px-2 py-1 text-[11px] font-bold ${meta.color}`}>{meta.text}</span>
-                            <span className="font-semibold text-slate-900">{item.action || "Cáº­p nháº­t tráº¡ng thÃ¡i"}</span>
+                            <span className="font-semibold text-slate-900">{item.action || "Cập nhật trạng thái"}</span>
                           </div>
                           <div className="mt-2 text-sm text-slate-700">{item.note || "-"}</div>
-                          <div className="mt-1 text-xs text-slate-500">{formatDate(item.createdAt)} Â· {item.actor || "-"}</div>
+                          <div className="mt-1 text-xs text-slate-500">{formatDate(item.createdAt)} · {item.actor || "-"}</div>
                         </div>
                       );
-                    }) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">ChÆ°a cÃ³ timeline.</div>}
+                    }) : <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">Chưa có timeline.</div>}
                   </div>
                 </div>
               </aside>
@@ -347,13 +347,13 @@ export default function AdminDossierDetail() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-xl font-black text-slate-900">{workflowModal.status === "NEED_MORE" ? "Nháº­p lÃ½ do yÃªu cáº§u bá»• sung" : "Nháº­p lÃ½ do tá»« chá»‘i"}</h3>
+              <h3 className="text-xl font-black text-slate-900">{workflowModal.status === "NEED_MORE" ? "Nhập lý do yêu cầu bổ sung" : "Nhập lý do từ chối"}</h3>
               <button onClick={() => setWorkflowModal(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
             </div>
-            <textarea value={workflowModal.note} onChange={(event) => setWorkflowModal({ ...workflowModal, note: event.target.value })} rows={5} className="mt-4 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-[#003366]" placeholder="Nháº­p lÃ½ do..." />
+            <textarea value={workflowModal.note} onChange={(event) => setWorkflowModal({ ...workflowModal, note: event.target.value })} rows={5} className="mt-4 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-[#003366]" placeholder="Nhập lý do..." />
             <div className="mt-4 flex gap-2">
-              <button onClick={() => setWorkflowModal(null)} className="flex-1 rounded-xl bg-slate-100 px-4 py-3 font-bold text-slate-700 hover:bg-slate-200">Há»§y</button>
-              <button onClick={() => submitWorkflow(workflowModal.status, workflowModal.note)} disabled={busy || !String(workflowModal.note || "").trim()} className="flex-1 rounded-xl bg-[#003366] px-4 py-3 font-bold text-white disabled:opacity-50">XÃ¡c nháº­n</button>
+              <button onClick={() => setWorkflowModal(null)} className="flex-1 rounded-xl bg-slate-100 px-4 py-3 font-bold text-slate-700 hover:bg-slate-200">Hủy</button>
+              <button onClick={() => submitWorkflow(workflowModal.status, workflowModal.note)} disabled={busy || !String(workflowModal.note || "").trim()} className="flex-1 rounded-xl bg-[#003366] px-4 py-3 font-bold text-white disabled:opacity-50">Xác nhận</button>
             </div>
           </div>
         </div>

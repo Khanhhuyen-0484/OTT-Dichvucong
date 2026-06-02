@@ -32,7 +32,7 @@ function encodeWindows1252(text) {
 
 function decodeText(value) {
   const text = String(value || "");
-  if (!/[ÃÂÄÆÅƒ]|áº|á»/.test(text)) return text;
+  if (!/[\u00c3\u00c2\u00c4\u00c6\u00c5\u0192]|\u00e1\u00ba|\u00e1\u00bb/.test(text)) return text;
   try {
     return encodeWindows1252(text).toString("utf8");
   } catch {
