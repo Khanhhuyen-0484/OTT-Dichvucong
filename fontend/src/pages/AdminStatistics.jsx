@@ -90,8 +90,21 @@ function formatDate(value) {
   return date.toLocaleString("vi-VN");
 }
 
+function repairTextEncoding(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (!/[ÃÂÄÅÆ]|[\u0080-\u009F]/.test(text) || typeof TextDecoder === "undefined") return text;
+  try {
+    const bytes = Uint8Array.from(text, (char) => char.charCodeAt(0) & 255);
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim();
+    return decoded || text;
+  } catch {
+    return text;
+  }
+}
+
 function normalizeServiceName(value) {
-  return String(value || "")
+  return repairTextEncoding(value)
     .normalize("NFC")
     .trim()
     .toLowerCase()
@@ -102,7 +115,7 @@ function mergeApplicationsByService(items = []) {
   const map = new Map();
 
   items.forEach((item) => {
-    const serviceName = item.serviceName || "Không rõ dịch vụ";
+    const serviceName = repairTextEncoding(item.serviceName) || "Không rõ dịch vụ";
     const key = normalizeServiceName(serviceName) || String(item.serviceId || "unknown");
     const current = map.get(key) || {
       ...item,
@@ -133,7 +146,7 @@ function mergeRevenueByService(items = []) {
   const map = new Map();
 
   items.forEach((item) => {
-    const serviceName = item.serviceName || "Không rõ dịch vụ";
+    const serviceName = repairTextEncoding(item.serviceName) || "Không rõ dịch vụ";
     const key = normalizeServiceName(serviceName) || String(item.serviceId || "unknown");
     const current = map.get(key) || {
       ...item,

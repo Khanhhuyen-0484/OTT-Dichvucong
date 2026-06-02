@@ -37,6 +37,18 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function repairTextEncoding(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (!/[ÃÂÄÅÆ]|[\u0080-\u009F]/.test(text)) return text;
+  try {
+    const decoded = Buffer.from(text, "latin1").toString("utf8").trim();
+    return decoded && !decoded.includes("�") ? decoded : text;
+  } catch {
+    return text;
+  }
+}
+
 function startOfDay(date) {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
@@ -186,10 +198,11 @@ function getServiceKey(application, serviceMap) {
   const directServiceId = String(application?.serviceId || application?.service?.serviceId || "").trim();
   if (directServiceId) return directServiceId;
 
-  const serviceName = String(application?.serviceName || application?.service?.name || "").trim();
+  const serviceName = repairTextEncoding(application?.serviceName || application?.service?.name);
   if (serviceName) {
+    const serviceNameKey = normalizeServiceGroupName(serviceName);
     const matchedService = Array.from(serviceMap.values()).find(
-      (service) => String(service.name || "").trim() === serviceName
+      (service) => normalizeServiceGroupName(service.name) === serviceNameKey
     );
     return String(matchedService?.serviceId || matchedService?.id || serviceName).trim();
   }
@@ -199,11 +212,11 @@ function getServiceKey(application, serviceMap) {
 
 function getServiceName(serviceMap, application, serviceId) {
   const service = serviceMap.get(String(serviceId || "").trim()) || {};
-  return application?.serviceName || service.name || application?.service?.name || "Không rõ dịch vụ";
+  return repairTextEncoding(service.name || application?.serviceName || application?.service?.name || "Không rõ dịch vụ");
 }
 
 function normalizeServiceGroupName(value) {
-  return String(value || "")
+  return repairTextEncoding(value)
     .normalize("NFC")
     .trim()
     .toLowerCase()
@@ -434,7 +447,7 @@ async function getAdminStatistics(query = {}) {
         return {
           dossierId: getDossierKey(application),
           dossierCode: application.dossierCode || application.applicationCode || getDossierKey(application),
-          serviceName: application.serviceName || serviceGroup.serviceName,
+          serviceName: serviceGroup.serviceName,
           status: application.status,
           statusLabel: STATUS_LABELS[application.status] || application.status,
           createdAt: application.createdAt,
