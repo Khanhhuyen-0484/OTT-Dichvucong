@@ -4,7 +4,7 @@ const { sendMessage, getChatHistory } = require("./supportConversationsStore");
 const { findById } = require("./userStore");
 const { readAll: readApplications, findByCode: findApplicationByCode, updateByCode: updateApplicationByCode } = require("./serviceApplicationStore");
 
-const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "RESULT_DELIVERED", "REJECTED"]);
+const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "APPROVED", "COMPLETED", "RESULT_DELIVERED", "REJECTED"]);
 
 function isPaidApplication(app) {
   if (!app) return false;
@@ -49,13 +49,14 @@ async function getDashboardStats() {
       totalPending: dossiers.filter((x) => getVisibleDossierStatus(x) === "PENDING").length,
       totalProcessing: dossiers.filter((x) => getVisibleDossierStatus(x) === "PROCESSING").length,
       totalNeedMore: dossiers.filter((x) => getVisibleDossierStatus(x) === "NEED_MORE").length,
+      totalApproved: dossiers.filter((x) => getVisibleDossierStatus(x) === "APPROVED").length,
       totalCompleted: dossiers.filter((x) => getVisibleDossierStatus(x) === "COMPLETED").length,
       totalRejected: dossiers.filter((x) => getVisibleDossierStatus(x) === "REJECTED").length,
       waitingMessages: conversations.filter((x) => x.status === "active" || x.status === "waiting").length
     };
   } catch (error) {
     console.error("[adminStore.getDashboardStats] error:", error?.name, error?.message, error);
-    return { totalPending: 0, totalProcessing: 0, totalNeedMore: 0, totalCompleted: 0, totalRejected: 0, waitingMessages: 0 };
+    return { totalPending: 0, totalProcessing: 0, totalNeedMore: 0, totalApproved: 0, totalCompleted: 0, totalRejected: 0, waitingMessages: 0 };
   }
 }
 
@@ -89,7 +90,7 @@ async function appendDossierTimeline(current, item) {
 async function decideDossier({ dossierId, action, note, adminEmail }) {
   const current = await getDossierById(dossierId);
   if (!current) return null;
-  const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", reject: "REJECTED", complete: "COMPLETED", approve: "PROCESSING" };
+  const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", reject: "REJECTED", complete: "COMPLETED", approve: "APPROVED" };
   const nextStatus = actionMap[action];
   if (!nextStatus) return null;
   if (nextStatus === "COMPLETED" && !hasDeliveredResult(current)) {

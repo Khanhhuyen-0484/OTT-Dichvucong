@@ -54,7 +54,7 @@ exports.dossierDecision = async (req, res) => {
   try {
     const action = String(req.body?.action || "");
     const note = String(req.body?.note || "").trim();
-    const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", reject: "REJECTED", complete: "COMPLETED" };
+    const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", approve: "APPROVED", reject: "REJECTED", complete: "COMPLETED" };
     if (!Object.prototype.hasOwnProperty.call(actionMap, action)) {
       return res.status(400).json({ message: "Hành động không hợp lệ" });
     }
@@ -120,6 +120,9 @@ exports.deliverDossierResult = async (req, res) => {
 
     const dossier = await findByCode(dossierId);
     if (!dossier) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+    if (String(dossier.status || "").trim().toUpperCase() !== "APPROVED") {
+      return res.status(400).json({ message: "Phải duyệt hồ sơ trước khi trả kết quả." });
+    }
 
     const now = new Date().toISOString();
     const key = `results/${dossierId}/result-${Date.now()}.pdf`;

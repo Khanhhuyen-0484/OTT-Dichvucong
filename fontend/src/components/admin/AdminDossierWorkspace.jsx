@@ -52,12 +52,13 @@ const STAT_THEMES = {
   pending: "from-slate-700 via-slate-600 to-slate-500 text-white ring-slate-200",
   processing: "from-sky-500 via-blue-500 to-indigo-500 text-white ring-sky-200",
   needMore: "from-orange-500 via-amber-500 to-yellow-400 text-white ring-orange-200",
+  approved: "from-emerald-500 via-green-500 to-teal-400 text-white ring-emerald-200",
   completed: "from-emerald-500 via-teal-500 to-cyan-500 text-white ring-emerald-200",
   delivered: "from-green-700 via-emerald-600 to-teal-500 text-white ring-emerald-200",
   overdue: "from-rose-600 via-red-500 to-orange-500 text-white ring-rose-200",
 };
 
-const WORKFLOW_STATUSES = ["PENDING", "PROCESSING", "NEED_MORE", "COMPLETED", "RESULT_DELIVERED", "REJECTED"];
+const WORKFLOW_STATUSES = ["PENDING", "PROCESSING", "NEED_MORE", "APPROVED", "RESULT_DELIVERED", "COMPLETED", "REJECTED"];
 STATUS_META.RESULT_DELIVERED = { label: "Đã trả kết quả", tone: "bg-emerald-100 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500", icon: FileCheck2 };
 
 const DRAWER_TABS = [
@@ -159,7 +160,7 @@ function getDueDate(item) {
 
 function isClosed(item) {
   const status = normalizeStatus(item?.status);
-  return status === "COMPLETED" || status === "APPROVED" || status === "RESULT_DELIVERED" || status === "REJECTED";
+  return status === "COMPLETED" || status === "RESULT_DELIVERED" || status === "REJECTED";
 }
 
 function hasDeliveredResult(item) {
@@ -309,8 +310,9 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
       pending: byStatus("PENDING"),
       processing: byStatus("PROCESSING"),
       needMore: byStatus("NEED_MORE"),
-      completed: enriched.filter((item) => ["COMPLETED", "APPROVED"].includes(normalizeStatus(item.status))).length,
+      approved: byStatus("APPROVED"),
       delivered: byStatus("RESULT_DELIVERED"),
+      completed: byStatus("COMPLETED"),
       overdue: enriched.filter((item) => item._overdue).length,
     };
   }, [enriched]);
@@ -373,6 +375,10 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
       setMessage?.("Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành.");
       return;
     }
+    if (nextStatus === "RESULT_DELIVERED") {
+      setMessage?.("Dùng nút Trả kết quả để upload file PDF trước khi chuyển trạng thái này.");
+      return;
+    }
     if (["NEED_MORE", "REJECTED"].includes(nextStatus)) {
       setNoteModal({ items: targets, status: nextStatus, note: fallbackNote });
       return;
@@ -415,6 +421,10 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
   async function submitResultDelivery() {
     const dossier = resultModal.dossier;
     if (!dossier?._code) return;
+    if (normalizeStatus(dossier.status) !== "APPROVED") {
+      setMessage?.("Phải duyệt hồ sơ trước khi trả kết quả.");
+      return;
+    }
     if (!resultModal.file) {
       setMessage?.("Vui lòng chọn file PDF kết quả");
       return;
@@ -534,13 +544,14 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
       <div className="pointer-events-none absolute -left-10 -top-8 h-52 w-52 rounded-full bg-cyan-300/25 blur-3xl" />
       <div className="pointer-events-none absolute right-0 top-20 h-64 w-64 rounded-full bg-fuchsia-300/20 blur-3xl" />
 
-      <section className="relative grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <section className="relative grid gap-3 md:grid-cols-3 xl:grid-cols-7">
         <StatTile label="Tổng hồ sơ" value={stats.total} icon={ClipboardList} theme={STAT_THEMES.total} active={filters.status === "ALL"} onClick={() => setFilter("status", "ALL")} />
         <StatTile label="Chờ tiếp nhận" value={stats.pending} icon={Clock3} theme={STAT_THEMES.pending} active={filters.status === "PENDING"} onClick={() => setFilter("status", "PENDING")} />
         <StatTile label="Đang xử lý" value={stats.processing} icon={Play} theme={STAT_THEMES.processing} active={filters.status === "PROCESSING"} onClick={() => setFilter("status", "PROCESSING")} />
         <StatTile label="Cần bổ sung" value={stats.needMore} icon={AlertTriangle} theme={STAT_THEMES.needMore} active={filters.status === "NEED_MORE"} onClick={() => setFilter("status", "NEED_MORE")} />
-        <StatTile label="Đã hoàn thành" value={stats.completed} icon={FileCheck2} theme={STAT_THEMES.completed} active={filters.status === "COMPLETED"} onClick={() => setFilter("status", "COMPLETED")} />
+        <StatTile label="Đã duyệt" value={stats.approved} icon={CheckCircle2} theme={STAT_THEMES.approved} active={filters.status === "APPROVED"} onClick={() => setFilter("status", "APPROVED")} />
         <StatTile label="Đã trả kết quả" value={stats.delivered} icon={Download} theme={STAT_THEMES.delivered} active={filters.status === "RESULT_DELIVERED"} onClick={() => setFilter("status", "RESULT_DELIVERED")} />
+        <StatTile label="Đã hoàn thành" value={stats.completed} icon={FileCheck2} theme={STAT_THEMES.completed} active={filters.status === "COMPLETED"} onClick={() => setFilter("status", "COMPLETED")} />
         <StatTile label="Quá hạn" value={stats.overdue} icon={CalendarClock} theme={STAT_THEMES.overdue} active={filters.status === "OVERDUE"} onClick={() => setFilter("status", "OVERDUE")} />
       </section>
 
@@ -597,7 +608,7 @@ export default function AdminDossierWorkspace({ dossiers = [], conversations = [
           <div className="relative mx-5 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-linear-to-r from-blue-50 via-cyan-50 to-indigo-50 px-4 py-3 shadow-sm">
             <div className="text-sm font-black text-blue-950">Đã chọn {selectedIds.length} hồ sơ</div>
             <div className="flex flex-wrap gap-2">
-              <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "COMPLETED", "Duyệt hàng loạt")} label="Duyệt" />
+              <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "APPROVED", "Duyệt hồ sơ")} label="Duyệt" />
               <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "PROCESSING", "Chuyển xử lý hàng loạt")} label="Chuyển xử lý" />
               <BatchButton disabled={busy} onClick={() => requestStatusUpdate(selectedDossiers, "NEED_MORE", "Yêu cầu bổ sung hồ sơ")} label="Yêu cầu bổ sung" />
               <BatchButton disabled={busy} onClick={() => exportCsv(selectedDossiers)} label="Xuất Excel" icon={Download} />
@@ -914,13 +925,10 @@ function DossierTable({ items, selectedIds, allVisibleSelected, onToggleAll, onT
 
 function KanbanBoard({ items, onOpen, onDropStatus }) {
   const [dragCode, setDragCode] = useState("");
-  const byStatus = (status) => items.filter((item) => {
-    if (status === "COMPLETED") return ["COMPLETED", "APPROVED"].includes(normalizeStatus(item.status));
-    return normalizeStatus(item.status) === status;
-  });
+  const byStatus = (status) => items.filter((item) => normalizeStatus(item.status) === status);
 
   return (
-    <section className="grid gap-4 overflow-x-auto pb-2 xl:grid-cols-5">
+    <section className="grid gap-4 overflow-x-auto pb-2 xl:grid-cols-7">
       {WORKFLOW_STATUSES.map((status) => {
         const meta = statusMeta(status);
         const columnItems = byStatus(status);
@@ -981,6 +989,7 @@ function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, onOpenDeliver,
   const timeline = Array.isArray(dossier.timeline) ? dossier.timeline : Array.isArray(dossier.history) ? dossier.history : [];
   const sla = slaText(dossier);
   const canComplete = hasDeliveredResult(dossier);
+  const canDeliver = normalizeStatus(dossier.status) === "APPROVED";
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35">
@@ -1002,8 +1011,9 @@ function DossierDrawer({ dossier, tab, setTab, onClose, onUpdate, onOpenDeliver,
           <div className="mt-4 flex flex-wrap gap-2">
             <button type="button" disabled={busy} onClick={() => onUpdate("PROCESSING")} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Chuyển xử lý</button>
             <button type="button" disabled={busy} onClick={() => onUpdate("NEED_MORE")} className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Yêu cầu bổ sung</button>
+            <button type="button" disabled={busy} onClick={() => onUpdate("APPROVED")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Duyệt</button>
             <button type="button" disabled={busy || !canComplete} title={!canComplete ? "Phải trả kết quả trước khi hoàn thành" : ""} onClick={() => onUpdate("COMPLETED")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Hoàn thành</button>
-            <button type="button" disabled={busy} onClick={onOpenDeliver} className="inline-flex items-center gap-1 rounded-lg bg-emerald-800 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={busy || !canDeliver} title={!canDeliver ? "Phải duyệt hồ sơ trước khi trả kết quả" : ""} onClick={onOpenDeliver} className="inline-flex items-center gap-1 rounded-lg bg-emerald-800 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
               <Upload className="h-3.5 w-3.5" />
               Trả kết quả
             </button>

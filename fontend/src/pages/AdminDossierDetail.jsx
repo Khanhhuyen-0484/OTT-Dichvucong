@@ -9,6 +9,7 @@ const STATUS_META = {
   PROCESSING: { text: "Äang xá»­ lÃ½", color: "bg-sky-100 text-sky-700", icon: Play },
   NEED_MORE: { text: "YÃªu cáº§u bá»• sung", color: "bg-amber-100 text-amber-700", icon: BadgeAlert },
   SUPPLEMENTED: { text: "ÄÃ£ bá»• sung", color: "bg-indigo-100 text-indigo-700", icon: FileText },
+  APPROVED: { text: "Đã duyệt", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
   REJECTED: { text: "Tá»« chá»‘i", color: "bg-red-100 text-red-700", icon: Ban },
   COMPLETED: { text: "HoÃ n thÃ nh", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
   RESULT_DELIVERED: { text: "Đã trả kết quả", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
@@ -18,6 +19,7 @@ const WORKFLOW_BUTTONS = [
   { key: "PENDING", label: "Tiáº¿p nháº­n", icon: Clock3, className: "bg-slate-700 hover:bg-slate-800 text-white" },
   { key: "PROCESSING", label: "Äang xá»­ lÃ½", icon: Play, className: "bg-sky-600 hover:bg-sky-700 text-white" },
   { key: "NEED_MORE", label: "YÃªu cáº§u bá»• sung", icon: BadgeAlert, className: "bg-amber-500 hover:bg-amber-600 text-white" },
+  { key: "APPROVED", label: "Đã duyệt", icon: FileCheck2, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
   { key: "REJECTED", label: "Tá»« chá»‘i", icon: Ban, className: "bg-red-600 hover:bg-red-700 text-white" },
   { key: "COMPLETED", label: "HoÃ n thÃ nh", icon: FileCheck2, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
 ];
@@ -66,6 +68,7 @@ export default function AdminDossierDetail() {
   const attachments = Array.isArray(dossier?.attachments) ? dossier.attachments : [];
   const formData = dossier?.formData || {};
   const canComplete = hasDeliveredResult(dossier);
+  const canDeliver = status === "APPROVED";
 
   const headerStats = useMemo(() => [
     { label: "MÃ£ há»“ sÆ¡", value: dossier?.applicationCode || dossier?.dossierCode || dossier?.dossierId || dossier?.id },
@@ -96,6 +99,10 @@ export default function AdminDossierDetail() {
       setMessage("Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành.");
       return;
     }
+    if (nextStatus === "RESULT_DELIVERED") {
+      setMessage("Dùng nút Trả kết quả để upload file PDF.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -111,6 +118,10 @@ export default function AdminDossierDetail() {
   }
 
   async function submitResultDelivery() {
+    if (!canDeliver) {
+      setMessage("Phải duyệt hồ sơ trước khi trả kết quả.");
+      return;
+    }
     if (!resultModal.file) {
       setMessage("Vui lòng chọn file PDF kết quả");
       return;
@@ -242,7 +253,8 @@ export default function AdminDossierDetail() {
                     })}
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || !canDeliver}
+                      title={!canDeliver ? "Phải duyệt hồ sơ trước khi trả kết quả" : ""}
                       onClick={() => setResultModal({ open: true, file: null, note: "" })}
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >

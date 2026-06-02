@@ -54,6 +54,7 @@ const STATUS_META = {
   PROCESSING: { text: "Đang xử lý", color: "bg-sky-100 text-sky-700", icon: Play },
   NEED_MORE: { text: "Yêu cầu bổ sung", color: "bg-amber-100 text-amber-700", icon: BadgeAlert },
   SUPPLEMENTED: { text: "Đã bổ sung", color: "bg-indigo-100 text-indigo-700", icon: FileText },
+  APPROVED: { text: "Đã duyệt", color: "bg-emerald-100 text-emerald-700", icon: CheckCircle2 },
   REJECTED: { text: "Từ chối", color: "bg-red-100 text-red-700", icon: Ban },
   COMPLETED: { text: "Hoàn thành", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
 };
@@ -139,7 +140,7 @@ export default function AdminPanel() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [dashboard, setDashboard] = useState({ pending: 0, processing: 0, needMore: 0, completed: 0, rejected: 0, waitingMessages: 0 });
+  const [dashboard, setDashboard] = useState({ pending: 0, processing: 0, needMore: 0, approved: 0, completed: 0, rejected: 0, waitingMessages: 0 });
   const [dossiers, setDossiers] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
@@ -215,6 +216,7 @@ export default function AdminPanel() {
       pending: stats.pending ?? stats.totalPending ?? 0,
       processing: stats.processing ?? stats.totalProcessing ?? 0,
       needMore: stats.needMore ?? stats.totalNeedMore ?? 0,
+      approved: stats.approved ?? stats.totalApproved ?? 0,
       completed: stats.completed ?? stats.totalCompleted ?? 0,
       rejected: stats.rejected ?? stats.totalRejected ?? 0,
       waitingMessages: stats.waitingMessages ?? 0,
@@ -395,10 +397,11 @@ export default function AdminPanel() {
             <div>
               <h1 className="text-2xl font-black text-slate-900">Dashboard điều hành</h1>
               <p className="mt-1 text-sm text-slate-600">Tổng quan số liệu hồ sơ theo workflow mới.</p>
-              <div className="mt-4 grid gap-4 md:grid-cols-5">
+              <div className="mt-4 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
                 <DashboardStatCard title="Chờ tiếp nhận" value={String(dashboard.pending || 0)} icon={CheckCircle2} tone={{ iconBg: "bg-blue-50", iconText: "text-blue-600", glow: "bg-blue-200/60" }} />
                 <DashboardStatCard title="Đang xử lý" value={String(dashboard.processing || 0)} icon={Play} tone={{ iconBg: "bg-violet-50", iconText: "text-violet-600", glow: "bg-violet-200/60" }} />
                 <DashboardStatCard title="Cần bổ sung" value={String(dashboard.needMore || 0)} icon={BadgeAlert} tone={{ iconBg: "bg-orange-50", iconText: "text-orange-600", glow: "bg-orange-200/60" }} />
+                <DashboardStatCard title="Đã duyệt" value={String(dashboard.approved || 0)} icon={CheckCircle2} tone={{ iconBg: "bg-emerald-50", iconText: "text-emerald-600", glow: "bg-emerald-200/60" }} />
                 <DashboardStatCard title="Hoàn thành" value={String(dashboard.completed || 0)} icon={FileCheck2} tone={{ iconBg: "bg-emerald-50", iconText: "text-emerald-600", glow: "bg-emerald-200/60" }} />
                 <DashboardStatCard title="Từ chối" value={String(dashboard.rejected || 0)} icon={Ban} tone={{ iconBg: "bg-rose-50", iconText: "text-rose-600", glow: "bg-rose-200/60" }} />
               </div>
@@ -452,6 +455,7 @@ export default function AdminPanel() {
                       <option value="PROCESSING">Đang xử lý</option>
                       <option value="NEED_MORE">Yêu cầu bổ sung</option>
                       <option value="SUPPLEMENTED">Đã bổ sung</option>
+                      <option value="APPROVED">Đã duyệt</option>
                       <option value="REJECTED">Từ chối</option>
                       <option value="COMPLETED">Hoàn thành</option>
                       <option value="RESULT_DELIVERED">Đã trả kết quả</option>

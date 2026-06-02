@@ -11,6 +11,7 @@ const ALLOWED_STATUSES = new Set([
   "PROCESSING",
   "NEED_MORE",
   "SUPPLEMENTED",
+  "APPROVED",
   "COMPLETED",
   "RESULT_DELIVERED",
   "REJECTED"
@@ -734,6 +735,9 @@ exports.updateApplicationStatus = async (req, res) => {
     const note = String(req.body?.note || "").trim();
     const action = String(req.body?.action || req.method?.toLowerCase() || status.toLowerCase()).trim();
     if (!ALLOWED_STATUSES.has(status)) return res.status(400).json({ message: "Tráº¡ng thÃ¡i khÃ´ng há»£p lá»‡" });
+    if (status === "RESULT_DELIVERED") {
+      return res.status(400).json({ message: "Vui lòng dùng chức năng trả kết quả để upload file PDF." });
+    }
     if (status === "COMPLETED" && !hasDeliveredResult(application)) {
       return res.status(400).json({ message: "Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành." });
     }
