@@ -17,20 +17,20 @@ export default function GovHeader({ sticky = true, minimal = false }) {
 
   return (
     <header className={`z-40 shrink-0 border-b border-white/10 bg-[#003366]/95 text-white shadow-sm backdrop-blur ${sticky ? "sticky top-0" : "relative"}`}>
-      <div className="mx-auto max-w-7xl px-4">
-        <div className="flex items-center justify-between gap-3 py-3">
-          <Link to="/" className="flex min-w-0 items-center gap-3 rounded-2xl transition hover:opacity-95">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-[#003366] shadow-sm ring-1 ring-white/20">
+      <div className="mx-auto max-w-7xl px-3 sm:px-4">
+        <div className="flex items-center justify-between gap-2 py-3 sm:gap-3">
+          <Link to="/" className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl transition hover:opacity-95 sm:gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-[#003366] shadow-sm ring-1 ring-white/20 sm:h-11 sm:w-11">
               <Landmark className="h-6 w-6" />
             </div>
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-base font-black tracking-wide">Cổng Dịch vụ công</div>
-              <div className="truncate text-xs font-medium text-white/75">Nhanh chóng - Minh bạch - Tin cậy</div>
+              <div className="truncate text-sm font-black tracking-wide sm:text-base">Cổng Dịch vụ công</div>
+              <div className="hidden truncate text-xs font-medium text-white/75 min-[360px]:block">Nhanh chóng - Minh bạch - Tin cậy</div>
             </div>
           </Link>
 
           {!minimal ? (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <nav className="hidden items-center gap-1 lg:flex" aria-label="Chính">
               <NavLink className={navItem} to="/">Trang chủ</NavLink>
               <NavLink className={navItem} to="/services">
@@ -54,7 +54,7 @@ export default function GovHeader({ sticky = true, minimal = false }) {
             ) : user ? (
               <Link
                 to="/profile"
-                className="flex items-center gap-2 rounded-2xl bg-white px-2 py-1.5 pr-3 text-[#003366] shadow-sm transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                className="flex items-center gap-2 rounded-2xl bg-white px-1.5 py-1.5 text-[#003366] shadow-sm transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:px-2 sm:pr-3"
                 aria-label="Tài khoản cá nhân"
               >
                 <UserAvatar user={user} src={displayAvatarSrc} size={34} />
@@ -63,7 +63,7 @@ export default function GovHeader({ sticky = true, minimal = false }) {
                 </span>
               </Link>
             ) : (
-              <NavLink className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-black text-[#003366] shadow-sm transition hover:bg-sky-50" to="/auth">
+              <NavLink className="inline-flex items-center gap-1.5 rounded-2xl bg-white px-3 py-2.5 text-sm font-black text-[#003366] shadow-sm transition hover:bg-sky-50 sm:gap-2 sm:px-4" to="/auth">
                 <LogIn className="h-4 w-4" />
                 Đăng nhập
               </NavLink>
@@ -73,7 +73,7 @@ export default function GovHeader({ sticky = true, minimal = false }) {
         </div>
 
         {!minimal ? (
-        <nav className="flex gap-2 overflow-x-auto pb-3 lg:hidden" aria-label="Chính trên di động">
+        <nav className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-3 lg:hidden" aria-label="Chính trên di động">
           <NavLink className={navItem} to="/">Trang chủ</NavLink>
           <NavLink className={navItem} to="/services">
             <FileSearch className="h-4 w-4" />

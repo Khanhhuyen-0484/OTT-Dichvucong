@@ -76,6 +76,7 @@ app.use("/api/ai", require("./routes/ai"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/upload", require("./routes/upload"));
+app.use("/api/dossiers", require("./routes/dossiers"));
 app.use("/api/services", require("./routes/service"));
 app.use("/api/payments", require("./routes/payments"));
 app.use("/api", require("./routes/public"));

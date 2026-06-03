@@ -19,7 +19,6 @@ import AddFriendModal from "../components/AddFriendModal.jsx";
 import FriendHubModal from "../components/FriendHubModal.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import VideoCall from "../components/VideoCall.jsx";
-import IncomingCallModal from "../components/IncomingCallModal.jsx";
 import Bubble from "../components/Bubble.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
@@ -134,11 +133,6 @@ function createAiWelcomeMessage() {
   };
 }
 
-function getChatRoomIdFromCallRoomId(callRoomId) {
-  const match = String(callRoomId || "").match(/^call_(.+)_\d+$/);
-  return match?.[1] || "";
-}
-
 function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -244,7 +238,6 @@ export default function ChatPage() {
   const [aiQuickQuestions, setAiQuickQuestions] = useState(AI_DEFAULT_QUESTIONS);
 
   const [videoCallState, setVideoCallState] = useState(null);
-  const [incomingCall, setIncomingCall] = useState(null);
   const [isCalling, setIsCalling] = useState(false);
 
   // ─── Refs: cho phép socket handler đọc giá trị mới nhất
@@ -466,40 +459,10 @@ export default function ChatPage() {
       }
     };
 
-    const handleIncomingCall = (data) => {
-      console.log("[ChatPage] 📞 incoming-call:", data);
-      // Không tự động reject: luôn hiển thị modal để người dùng quyết định.
-      if (data.isGroupCall) {
-        const chatRoomId = getChatRoomIdFromCallRoomId(data.roomId);
-        setIncomingCall((prev) => ({
-          isGroupCall:  true,
-          groupName:    data.groupName || prev?.groupName || "Cuộc gọi nhóm",
-          roomId:       data.roomId,
-          chatRoomId:   chatRoomId || prev?.chatRoomId || "",
-          callerOffers: { ...(prev?.callerOffers || {}), [data.fromUserId]: data.offer },
-          callerNames:  (prev?.callerNames || []).includes(data.callerName)
-            ? (prev?.callerNames || [])
-            : [...(prev?.callerNames || []), data.callerName],
-          callerUserId: prev?.callerUserId || data.fromUserId,
-        }));
-      } else {
-        setIncomingCall({
-          isGroupCall:  false,
-          callerName:   data.callerName,
-          callerUserId: data.fromUserId,
-          roomId:       data.roomId,
-          chatRoomId:   getChatRoomIdFromCallRoomId(data.roomId),
-          offer:        data.offer,
-        });
-      }
-    };
-
-    socket.on("new-message",   handleNewMessage);
-    socket.on("incoming-call", handleIncomingCall);
+    socket.on("new-message", handleNewMessage);
 
     return () => {
-      socket.off("new-message",   handleNewMessage);
-      socket.off("incoming-call", handleIncomingCall);
+      socket.off("new-message", handleNewMessage);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, user]); // ← chỉ [ready, user], mọi thứ khác đọc qua ref
@@ -733,55 +696,28 @@ export default function ChatPage() {
     if (isCalling || videoCallState) return;
     const currentRoom = rooms.find((r) => r.id === activeRoomId);
     if (!currentRoom) return;
+    // Only the caller creates the WebRTC signaling room id. Callees must reuse this exact value.
     const callRoomId = `call_${activeRoomId}_${Date.now()}`;
+    console.log("[ROOM_DEBUG]", {
+      event: "createGroupCall",
+      userId: user.id,
+      roomId: callRoomId,
+      activeRoomId: callRoomId,
+      chatRoomId: activeRoomId,
+    });
 
     if (currentRoom.type === "group") {
       const otherMembers = (currentRoom.members || []).filter((m) => m.id !== user.id);
       if (!otherMembers.length) return;
       setIsCalling(true);
-      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserIds: otherMembers.map((m) => m.id), isCallee: false, isGroupCall: true });
+      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserIds: otherMembers.map((m) => m.id), isCallee: false, isGroupCall: true, isCallCreator: true });
     } else {
       const other = currentRoom.members?.find((m) => m.id !== user.id);
       if (!other) return;
       setIsCalling(true);
-      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserId: other.id, isCallee: false, isGroupCall: false });
+      setVideoCallState({ roomId: callRoomId, chatRoomId: activeRoomId, targetUserId: other.id, isCallee: false, isGroupCall: false, isCallCreator: true });
     }
   }, [activeRoomId, rooms, user, isCalling, videoCallState]);
-
-  const acceptCall = useCallback((call) => {
-    setIsCalling(true);
-    if (call.isGroupCall) {
-      setVideoCallState({
-        roomId:        call.roomId,
-        chatRoomId:    call.chatRoomId || getChatRoomIdFromCallRoomId(call.roomId),
-        targetUserIds: Object.keys(call.callerOffers || { [call.callerUserId]: call.offer }),
-        isCallee:      true,
-        callerOffers:  call.callerOffers || { [call.callerUserId]: call.offer },
-        isGroupCall:   true,
-      });
-    } else {
-      setVideoCallState({ roomId: call.roomId, chatRoomId: call.chatRoomId || getChatRoomIdFromCallRoomId(call.roomId), targetUserId: call.callerUserId, isCallee: true, callerOffer: call.offer, isGroupCall: false });
-    }
-    setIncomingCall(null);
-  }, []);
-
-  const rejectCall = useCallback((callArg) => {
-    const activeCall = callArg || incomingCall;
-    if (activeCall) {
-      const callerIds = activeCall.isGroupCall
-        ? Object.keys(activeCall.callerOffers || {}).filter(Boolean)
-        : [activeCall.callerUserId].filter(Boolean);
-      callerIds.forEach((callerId) => {
-        connectSocket().emit("call-rejected", {
-          toUserId: callerId,
-          roomId: activeCall.roomId,
-          callerId,
-          callerName: activeCall.callerName || activeCall.callerNames?.[0] || ""
-        });
-      });
-    }
-    setIncomingCall(null);
-  }, [incomingCall]);
 
   // ─── Send message ─────────────────────────────────────────────────────────────
 
@@ -1666,10 +1602,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {incomingCall && (
-        <IncomingCallModal call={incomingCall} onAccept={() => acceptCall(incomingCall)} onReject={rejectCall} />
-      )}
-
       {videoCallState && (
         <VideoCall
           roomId={videoCallState.roomId}
@@ -1678,6 +1610,8 @@ export default function ChatPage() {
           isCallee={videoCallState.isCallee}
           callerOffer={videoCallState.callerOffer}
           callerOffers={videoCallState.callerOffers}
+          isCallCreator={Boolean(videoCallState.isCallCreator)}
+          currentUserId={user.id}
           currentUserName={user.fullName}
           activeRoom={videoActiveRoom}
           onClose={() => {

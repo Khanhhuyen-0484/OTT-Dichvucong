@@ -1,8 +1,9 @@
-const { listServices, getService, upsertService, seedServicesToDynamo } = require("../store/serviceCatalogStore");
+﻿const { listServices, getService, upsertService, seedServicesToDynamo } = require("../store/serviceCatalogStore");
 const { listCategories, seedDefaultCategories } = require("../store/serviceCategoryStore");
 const { createNotification, getNotificationsByUser } = require("../store/notificationStore");
 const { savePayment, getPaymentsByDossierId } = require("../store/paymentStore");
-const { create, findByCode, readAll, updateByCode } = require("../store/serviceApplicationStore");
+const { create, findByCode, readAll, updateByCode, deleteByCode, findDuplicateByCitizenAndService } = require("../store/serviceApplicationStore");
+const { createPresignedGet } = require("../config/s3");
 const { getIo } = require("../socket");
 
 const ALLOWED_STATUSES = new Set([
@@ -10,17 +11,24 @@ const ALLOWED_STATUSES = new Set([
   "PROCESSING",
   "NEED_MORE",
   "SUPPLEMENTED",
+  "APPROVED",
   "COMPLETED",
+  "RESULT_DELIVERED",
   "REJECTED"
 ]);
 
 const STATUS_LABELS = {
   DRAFT: "Bản nháp",
+  PENDING_PAYMENT: "Chờ thanh toán",
+  PAID: "Đã thanh toán",
   PENDING: "Hồ sơ đã nộp",
   PROCESSING: "Đang xử lý",
   NEED_MORE: "Yêu cầu bổ sung",
+  APPROVED: "Đã duyệt",
   SUPPLEMENTED: "Đã bổ sung",
   COMPLETED: "Đã hoàn thành",
+  RESULT_DELIVERED: "Đã trả kết quả",
+  CANCELLED: "Đã hủy",
   REJECTED: "Đã từ chối"
 };
 
@@ -179,17 +187,61 @@ function pushTimeline(application, entry) {
   return [...(application.timeline || application.history || []), timelineItem];
 }
 
+function hasDeliveredResult(application) {
+  const status = String(application?.status || "").trim().toUpperCase();
+  return Boolean(application?.resultFileKey || application?.resultFileUrl || status === "RESULT_DELIVERED");
+}
+
 function withRequestedServiceId(service, requestedId) {
   if (!service || !requestedId || requestedId === service.serviceId) return service;
   return { ...service, serviceId: requestedId, id: requestedId };
+}
+
+const WINDOWS_1252_REVERSE = new Map([
+  [0x20ac, 0x80], [0x201a, 0x82], [0x0192, 0x83], [0x201e, 0x84],
+  [0x2026, 0x85], [0x2020, 0x86], [0x2021, 0x87], [0x02c6, 0x88],
+  [0x2030, 0x89], [0x0160, 0x8a], [0x2039, 0x8b], [0x0152, 0x8c],
+  [0x017d, 0x8e], [0x2018, 0x91], [0x2019, 0x92], [0x201c, 0x93],
+  [0x201d, 0x94], [0x2022, 0x95], [0x2013, 0x96], [0x2014, 0x97],
+  [0x02dc, 0x98], [0x2122, 0x99], [0x0161, 0x9a], [0x203a, 0x9b],
+  [0x0153, 0x9c], [0x017e, 0x9e], [0x0178, 0x9f],
+]);
+
+function encodeWindows1252(text) {
+  return Buffer.from([...text].map((char) => {
+    const code = char.charCodeAt(0);
+    return WINDOWS_1252_REVERSE.get(code) || (code <= 0xff ? code : 0x3f);
+  }));
+}
+
+function decodeText(value) {
+  const text = String(value || "");
+  if (!/[\u00c3\u00c2\u00c4\u00c6\u00c5\u0192]|\u00e1\u00ba|\u00e1\u00bb/.test(text)) return text;
+  try {
+    return encodeWindows1252(text).toString("utf8");
+  } catch {
+    return text;
+  }
+}
+
+function normalizeTextFields(item) {
+  if (!item || typeof item !== "object") return item;
+  return Object.fromEntries(
+    Object.entries(item).map(([key, value]) => {
+      if (typeof value === "string") return [key, decodeText(value)];
+      if (Array.isArray(value)) return [key, value.map((entry) => normalizeTextFields(entry))];
+      if (value && typeof value === "object") return [key, normalizeTextFields(value)];
+      return [key, value];
+    })
+  );
 }
 
 function resolveService(serviceId) {
   const requestedId = String(serviceId || "").trim();
   const canonicalId = SERVICE_ALIASES[requestedId] || requestedId;
   const local = fallbackServices[canonicalId];
-  if (local) return Promise.resolve(withRequestedServiceId(local, requestedId));
-  return getService(canonicalId).then((svc) => withRequestedServiceId(svc || null, requestedId));
+  if (local) return Promise.resolve(normalizeTextFields(withRequestedServiceId(local, requestedId)));
+  return getService(canonicalId).then((svc) => normalizeTextFields(withRequestedServiceId(svc || null, requestedId)));
 }
 
 function slugify(text) {
@@ -281,6 +333,21 @@ exports.getServiceById = async (req, res) => {
   res.json(service);
 };
 
+exports.checkDuplicateDossier = async (req, res) => {
+  try {
+    const citizenId = String(req.body?.citizenId || req.body?.cccd || "").trim();
+    const serviceId = String(req.body?.serviceId || "").trim();
+    if (!/^[0-9]{9,12}$/.test(citizenId)) return res.status(400).json({ message: "CCCD/CMND không hợp lệ" });
+    if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+    const result = await checkDuplicateApplication(citizenId, serviceId);
+    return res.json(result);
+  } catch (error) {
+    console.error("[checkDuplicateDossier] error:", error);
+    return res.status(500).json({ message: error.message || "Không kiểm tra được hồ sơ trùng" });
+  }
+};
+
 exports.submitApplication = async (req, res) => {
   const { serviceId, formData = {}, attachments = [], paymentMethod = "BANK_TRANSFER" } = req.body;
   if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
@@ -291,6 +358,14 @@ exports.submitApplication = async (req, res) => {
   const errors = validateForm(formData);
   if (Object.keys(errors).length) {
     return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors });
+  }
+
+  const duplicate = await checkDuplicateApplication(formData.citizenId, serviceId);
+  if (duplicate.duplicate) {
+    return res.status(409).json({
+      ...duplicate,
+      message: "Đã tồn tại hồ sơ cho dịch vụ này.",
+    });
   }
 
   const dossierCode = generateDossierCode();
@@ -348,6 +423,11 @@ exports.getApplicationByCode = async (req, res) => {
   const dossierId = String(req.params.dossierId || req.params.applicationCode || "").trim();
   const application = await findByCode(dossierId);
   if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
+  const role = String(req.user?.role || "").toLowerCase();
+  const isAdmin = role === "admin" || role === "staff";
+  if (!isAdmin && application.userId && userId(req) && String(application.userId) !== String(userId(req))) {
+    return res.status(403).json({ message: "Không có quyền xem hồ sơ này" });
+  }
 
   const payments = await getPaymentsByDossierId(application.dossierId || dossierId);
   const notifications = application.userId ? await getNotificationsByUser(application.userId) : [];
@@ -355,14 +435,19 @@ exports.getApplicationByCode = async (req, res) => {
   const visibleApplication =
     Number(application.fee || 0) <= 0 || paymentStatus === "COMPLETED" || paymentStatus === "PAID"
       ? application
-      : { ...application, status: "PENDING", timeline: [], history: [] };
+      : { ...application, status: "DRAFT", timeline: [], history: [] };
+  const publicApplication = {
+    ...visibleApplication,
+    resultFileUrl: undefined,
+    resultFileKey: undefined
+  };
 
   res.json({
-    application: visibleApplication,
+    application: publicApplication,
     payments,
     notifications,
-    timeline: visibleApplication.timeline || visibleApplication.history || [],
-    statusDescription: STATUS_LABELS[visibleApplication.status] || visibleApplication.status
+    timeline: publicApplication.timeline || publicApplication.history || [],
+    statusDescription: STATUS_LABELS[publicApplication.status] || publicApplication.status
   });
 };
 
@@ -386,6 +471,123 @@ exports.getMyApplications = async (req, res) => {
   });
 };
 
+function findWizardDraft(items, uid, serviceId) {
+  return items
+    .filter(
+      (item) =>
+        item.userId === uid &&
+        String(item.serviceId || "") === String(serviceId || "") &&
+        String(item.status || "").toUpperCase() === "DRAFT" &&
+        String(item.draftType || "").toUpperCase() === "WIZARD"
+    )
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))[0] || null;
+}
+
+function duplicatePayload(application) {
+  if (!application) return null;
+  const status = application.duplicateStatus || application.status || "";
+  return {
+    dossierId: application.dossierId || application.applicationCode || application.id || "",
+    dossierCode: application.dossierCode || application.applicationCode || application.dossierId || "",
+    status,
+    statusLabel: STATUS_LABELS[status] || status,
+    submittedAt: application.submittedAt || application.createdAt || application.updatedAt || "",
+    serviceId: application.serviceId || "",
+    serviceName: application.serviceName || "",
+    reason: application.decisionNote || application.rejectReason || application.resultNote || "",
+  };
+}
+
+async function checkDuplicateApplication(citizenId, serviceId) {
+  const result = await findDuplicateByCitizenAndService(citizenId, serviceId);
+  if (result.duplicate) {
+    return {
+      duplicate: true,
+      ...duplicatePayload(result.application),
+      message: "Bạn đã có hồ sơ cho dịch vụ này.",
+    };
+  }
+  const lastApplication = duplicatePayload(result.application);
+  return lastApplication ? { duplicate: false, lastApplication } : { duplicate: false };
+}
+
+exports.getServiceDraft = async (req, res) => {
+  const uid = userId(req);
+  const serviceId = String(req.params.serviceId || "").trim();
+  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
+  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+  const items = await readAll();
+  const draft = findWizardDraft(items, uid, serviceId);
+  return res.json({ draft });
+};
+
+exports.saveServiceDraft = async (req, res) => {
+  const uid = userId(req);
+  const serviceId = String(req.params.serviceId || req.body?.serviceId || "").trim();
+  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
+  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+  const service = await resolveService(serviceId);
+  if (!service) return res.status(404).json({ message: "Dịch vụ không tồn tại" });
+
+  const items = await readAll();
+  const existing = findWizardDraft(items, uid, serviceId);
+  const now = nowIso();
+  const step = Math.min(4, Math.max(1, Number(req.body?.step || existing?.step || 1)));
+  const dossierId = existing?.dossierId || generateDossierCode();
+  const files = req.body?.files && typeof req.body.files === "object" ? req.body.files : {};
+  const attachments = Object.entries(files).map(([key, item]) => ({
+    key,
+    name: item?.name || "",
+    fileName: item?.name || "",
+    mimeType: item?.type || "",
+    fileType: item?.type || "",
+    size: Number(item?.size || 0),
+  }));
+
+  const draft = {
+    ...(existing || {}),
+    dossierCode: dossierId,
+    dossierId,
+    id: dossierId,
+    userId: uid,
+    serviceId,
+    serviceName: service.name,
+    formData: req.body?.formData || {},
+    citizenName: req.body?.formData?.fullName || "",
+    phone: req.body?.formData?.phone || "",
+    email: req.body?.formData?.email || "",
+    attachments,
+    draftType: "WIZARD",
+    step,
+    stepTitle: String(req.body?.stepTitle || "").trim(),
+    status: "DRAFT",
+    paymentStatus: "UNPAID",
+    progress: 0,
+    fee: Number(service.fee || req.body?.fee || 0),
+    timeline: [],
+    history: [],
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+
+  const saved = existing ? await updateByCode(existing.dossierId, draft) : await create(draft);
+  return res.json({ message: "Đã lưu nháp hồ sơ", draft: saved });
+};
+
+exports.deleteServiceDraft = async (req, res) => {
+  const uid = userId(req);
+  const serviceId = String(req.params.serviceId || "").trim();
+  if (!uid) return res.status(401).json({ message: "Vui lòng đăng nhập" });
+  if (!serviceId) return res.status(400).json({ message: "Thiếu serviceId" });
+
+  const items = await readAll();
+  const draft = findWizardDraft(items, uid, serviceId);
+  if (draft?.dossierId) await deleteByCode(draft.dossierId);
+  return res.json({ message: "Đã xoá bản nháp" });
+};
+
 exports.trackApplication = async (req, res) => {
   const dossierId = String(req.params.dossierId || req.params.applicationCode || "").trim();
   const application = await findByCode(dossierId);
@@ -397,14 +599,19 @@ exports.trackApplication = async (req, res) => {
   const visibleApplication =
     Number(application.fee || 0) <= 0 || paymentStatus === "COMPLETED" || paymentStatus === "PAID"
       ? application
-      : { ...application, status: "PENDING", timeline: [], history: [] };
+      : { ...application, status: "DRAFT", timeline: [], history: [] };
+  const publicApplication = {
+    ...visibleApplication,
+    resultFileUrl: undefined,
+    resultFileKey: undefined
+  };
 
   res.json({
-    application: visibleApplication,
+    application: publicApplication,
     payments,
     notifications,
-    timeline: visibleApplication.timeline || visibleApplication.history || [],
-    statusDescription: STATUS_LABELS[visibleApplication.status] || visibleApplication.status
+    timeline: publicApplication.timeline || publicApplication.history || [],
+    statusDescription: STATUS_LABELS[publicApplication.status] || publicApplication.status
   });
 };
 
@@ -528,6 +735,12 @@ exports.updateApplicationStatus = async (req, res) => {
     const note = String(req.body?.note || "").trim();
     const action = String(req.body?.action || req.method?.toLowerCase() || status.toLowerCase()).trim();
     if (!ALLOWED_STATUSES.has(status)) return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+    if (status === "RESULT_DELIVERED") {
+      return res.status(400).json({ message: "Vui lòng dùng chức năng trả kết quả để upload file PDF." });
+    }
+    if (status === "COMPLETED" && !hasDeliveredResult(application)) {
+      return res.status(400).json({ message: "Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành." });
+    }
     if ((status === "NEED_MORE" || status === "REJECTED") && !note) {
       return res.status(400).json({ message: "Vui lòng nhập lý do" });
     }
@@ -656,9 +869,42 @@ exports.addApplicationSupplement = async (req, res) => {
 exports.downloadApplicationResult = async (req, res) => {
   const dossierId = String(req.params.dossierId || req.params.applicationCode || "").trim();
   const application = await findByCode(dossierId);
-  if (!application) return res.status(404).json({ message: "Không tìm thấy hồ sơ" });
-  if (String(application.status || "").toUpperCase() !== "COMPLETED") {
-    return res.status(400).json({ message: "Hồ sơ chưa hoàn thành" });
+  if (!application) return res.status(404).json({ message: "Không tìm th?y h? so" });
+
+  const role = String(req.user?.role || "").toLowerCase();
+  const isAdmin = role === "admin" || role === "staff";
+  if (!isAdmin && application.userId && userId(req) && String(application.userId) !== String(userId(req))) {
+    return res.status(403).json({ message: "Không có quy?n t?i k?t qu? h? so này" });
+  }
+
+  const status = String(application.status || "").toUpperCase();
+  const hasResultFile = Boolean(application.resultFileKey || application.resultFileUrl);
+  if (!hasResultFile && status !== "COMPLETED" && status !== "RESULT_DELIVERED") {
+    return res.status(400).json({ message: "H? so chua có k?t qu?" });
+  }
+
+  if (hasResultFile) {
+    let downloadUrl = application.resultFileUrl || "";
+    if (application.resultFileKey) {
+      try {
+        downloadUrl = await createPresignedGet(application.resultFileKey, 300);
+      } catch (err) {
+        console.warn("[downloadApplicationResult] presign failed:", err?.message || err);
+      }
+    }
+    return res.json({
+      message: "T?i k?t qu? thành công",
+      result: {
+        dossierId: application.dossierId,
+        dossierCode: application.dossierCode,
+        serviceName: application.serviceName,
+        status: application.status,
+        resultFileUrl: downloadUrl,
+        resultFileKey: application.resultFileKey,
+        resultDeliveredAt: application.resultDeliveredAt,
+        resultNote: application.resultNote || ""
+      }
+    });
   }
 
   const payload = {
@@ -669,7 +915,7 @@ exports.downloadApplicationResult = async (req, res) => {
     completedAt: nowIso(),
     decisionNote: application.decisionNote || ""
   };
-  res.json({ message: "Tải kết quả thành công", result: payload });
+  return res.json({ message: "T?i k?t qu? thành công", result: payload });
 };
 
 exports.adminDeleteService = async (req, res) => {

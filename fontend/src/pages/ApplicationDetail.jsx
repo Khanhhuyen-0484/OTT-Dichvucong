@@ -17,12 +17,13 @@ import {
 import GovHeader from "../components/GovHeader.jsx";
 import {
   downloadApplicationResult,
+  createBankTransferPayment,
   getApiErrorMessage,
   getApplicationDetail,
-  mockPaymentComplete,
+  getBankTransferPaymentStatus,
   supplementApplication,
-  verifyPaymentStatus,
 } from "../lib/api";
+import { applicationStatusLabel, isPaidStatus, paymentStatusLabel } from "../lib/statusLabels.js";
 
 // Placeholder QR images (use data URLs) — replace with real assets if available
 const PLACEHOLDER_QR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Crect width='100%25' height='100%25' fill='%23f8fafc'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23666' font-size='20'%3EQR%3C/text%3E%3C/svg%3E";
@@ -34,21 +35,25 @@ const zalopay2 = PLACEHOLDER_QR;
 const zalopay3 = PLACEHOLDER_QR;
 
 const STATUS_LABELS = {
+  DRAFT: "Bản nháp",
   PENDING: "Chờ tiếp nhận",
   PROCESSING: "Đang xử lý",
   NEED_MORE: "Yêu cầu bổ sung",
   SUPPLEMENTED: "Đã bổ sung",
   COMPLETED: "Đã hoàn thành",
   REJECTED: "Đã từ chối",
+  RESULT_DELIVERED: "Đã trả kết quả",
 };
 
 const STATUS_STYLES = {
+  DRAFT: "border-slate-200 bg-slate-50 text-slate-700",
   PENDING: "border-amber-200 bg-amber-50 text-amber-700",
   PROCESSING: "border-blue-200 bg-blue-50 text-blue-700",
   NEED_MORE: "border-orange-200 bg-orange-50 text-orange-700",
   SUPPLEMENTED: "border-indigo-200 bg-indigo-50 text-indigo-700",
   COMPLETED: "border-emerald-200 bg-emerald-50 text-emerald-700",
   REJECTED: "border-red-200 bg-red-50 text-red-700",
+  RESULT_DELIVERED: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 const PAYMENT_LABELS = {
@@ -84,6 +89,7 @@ export default function ApplicationDetail() {
   const [notifications, setNotifications] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [qrCode, setQrCode] = useState(null);
+  const [paymentInfo, setPaymentInfo] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState("pending");
   const [paymentExpireAt, setPaymentExpireAt] = useState(null);
   const [generatingQr, setGeneratingQr] = useState(false);
@@ -136,12 +142,14 @@ export default function ApplicationDetail() {
   const adminNote = item?.decisionNote || item?.timeline?.slice(-1)?.[0]?.note || adminNeedMoreNotifications[0]?.message || "";
 
   function startPaymentPolling() {
+    stopPaymentPolling();
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const statusRes = await verifyPaymentStatus(applicationCode);
+        const statusRes = await getBankTransferPaymentStatus(applicationCode);
         const { paymentStatus: status } = statusRes.data;
+        setPaymentInfo(statusRes.data?.payment || null);
         setPaymentStatus(status);
-        if (status === "completed" || status === "PAID") {
+        if (isPaidStatus(status)) {
           stopPaymentPolling();
           await loadDetail();
           setShowPaymentModal(false);
@@ -159,20 +167,37 @@ export default function ApplicationDetail() {
     setShowPaymentModal(true);
     setGeneratingQr(true);
     try {
-      setQrCode(getQRImage());
+      const { data } = await createBankTransferPayment({
+        dossierId: applicationCodeOf(item) || applicationCode,
+        amount: item?.fee || 0,
+      });
+      setPaymentInfo(data || null);
+      setQrCode(data?.qrUrl || data?.qrImageUrl || data?.qrCode || getQRImage());
       setPaymentStatus("pending");
       setPaymentExpireAt(item?.paymentExpireAt || new Date(Date.now() + 60 * 60 * 1000).toISOString());
       startPaymentPolling();
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+      setShowPaymentModal(false);
     } finally {
       setGeneratingQr(false);
     }
   }
 
-  async function handleMockPaymentComplete() {
-    await mockPaymentComplete(applicationCode);
-    stopPaymentPolling();
-    await loadDetail();
-    setShowPaymentModal(false);
+  async function handleCheckPaymentStatus() {
+    try {
+      const { data } = await getBankTransferPaymentStatus(applicationCode);
+      const nextStatus = data?.paymentStatus || "UNPAID";
+      setPaymentInfo(data?.payment || null);
+      setPaymentStatus(nextStatus);
+      if (isPaidStatus(nextStatus)) {
+        stopPaymentPolling();
+        await loadDetail();
+        setShowPaymentModal(false);
+      }
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+    }
   }
 
   async function handleSupplementSubmit() {
@@ -197,17 +222,23 @@ export default function ApplicationDetail() {
   async function handleDownloadResult() {
     try {
       const { data } = await downloadApplicationResult(applicationCode);
-      setResult(data.result);
+      const url = data?.result?.resultFileUrl;
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } else {
+        setResult(data.result);
+      }
     } catch (e) {
       alert(getApiErrorMessage(e));
     }
   }
 
   const statusKey = String(item?.status || "").toUpperCase();
-  const statusLabel = STATUS_LABELS[statusKey] || item?.status || "-";
+  const statusLabel = STATUS_LABELS[statusKey] || applicationStatusLabel(item?.status, "-");
   const paymentMethodKey = String(item?.paymentMethod || "").toUpperCase();
   const paymentStatusKey = String(item?.paymentStatus || "").toUpperCase();
   const feeText = `${currency.format(item?.fee || 0)} VNĐ`;
+  const hasUnpaidFee = Number(item?.fee || 0) > 0 && !isPaidStatus(paymentStatusKey);
   const formData = item?.formData || {};
   const timeline = item?.timeline || item?.history || [];
   const applicantInfo = [
@@ -222,7 +253,7 @@ export default function ApplicationDetail() {
   return (
     <div className="min-h-screen">
       <GovHeader />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
         <Link
           to="/my-applications"
           className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-(--gov-navy) shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50"
@@ -232,7 +263,7 @@ export default function ApplicationDetail() {
         </Link>
 
         {loading && (
-          <div className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="h-6 w-48 animate-pulse rounded-full bg-slate-100" />
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
@@ -246,19 +277,19 @@ export default function ApplicationDetail() {
         {!loading && !err && item && (
           <div className="mt-6 space-y-6">
             <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-xl shadow-blue-950/8">
-              <div className="bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-6 text-white">
+              <div className="bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-4 text-white sm:p-6">
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/85 ring-1 ring-white/20">
                       <FileText className="h-3.5 w-3.5" />
                       Chi tiết hồ sơ
                     </div>
-                    <h1 className="mt-4 text-2xl font-black leading-tight md:text-3xl">{item.serviceName || "Dịch vụ công"}</h1>
+                    <h1 className="mt-4 text-xl font-black leading-tight md:text-3xl">{item.serviceName || "Dịch vụ công"}</h1>
                     <p className="mt-2 break-all text-sm font-semibold text-blue-50">Mã hồ sơ: {applicationCodeOf(item)}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                     <StatusBadge status={statusKey} label={statusLabel} />
-                    {item.status === "COMPLETED" ? (
+                    {(statusKey === "COMPLETED" || statusKey === "RESULT_DELIVERED" || item.resultFileUrl) ? (
                       <button
                         type="button"
                         onClick={handleDownloadResult}
@@ -272,14 +303,14 @@ export default function ApplicationDetail() {
                 </div>
               </div>
 
-              <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-5 lg:grid-cols-4">
                 <Info icon={<ShieldCheck />} label="Trạng thái" value={statusLabel} accent="blue" />
                 <Info icon={<CalendarDays />} label="Ngày nộp" value={formatDate(item.createdAt)} accent="slate" />
                 <Info icon={<ReceiptText />} label="Lệ phí" value={feeText} accent="emerald" />
-                <Info icon={<CreditCard />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatusKey] || PAYMENT_LABELS[paymentMethodKey] || item.paymentMethod || "-"} accent="amber" />
+                <Info icon={<CreditCard />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatusKey] || PAYMENT_LABELS[paymentMethodKey] || paymentStatusLabel(paymentStatusKey || paymentMethodKey, "-")} accent="amber" />
               </div>
 
-              {item.status === "PENDING" && (
+              {hasUnpaidFee && (["DRAFT", "PENDING"].includes(statusKey) || ["UNPAID", "PENDING"].includes(paymentStatusKey)) && (
                 <div className="mx-5 mb-5 rounded-3xl border border-amber-200 bg-linear-to-r from-amber-50 to-orange-50 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
@@ -287,14 +318,14 @@ export default function ApplicationDetail() {
                         <WalletCards className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-black text-amber-900">Hồ sơ chưa thanh toán</p>
-                        <p className="mt-1 text-sm font-semibold text-amber-800">Vui lòng hoàn tất thanh toán để hồ sơ được tiếp nhận xử lý.</p>
+                        <p className="font-black text-amber-900">Hồ sơ đang lưu nháp</p>
+                        <p className="mt-1 text-sm font-semibold text-amber-800">Hoàn tất thanh toán để gửi hồ sơ sang bộ phận tiếp nhận xử lý.</p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={handlePaymentClick}
-                      className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 transition hover:-translate-y-0.5 hover:bg-red-700"
+                      className="inline-flex w-full items-center justify-center rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 transition sm:w-auto hover:-translate-y-0.5 hover:bg-red-700"
                     >
                       Thanh toán ngay
                     </button>
@@ -303,8 +334,33 @@ export default function ApplicationDetail() {
               )}
             </section>
 
+            {(statusKey === "RESULT_DELIVERED" || item.resultFileUrl) && (
+              <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+                      <Download className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-emerald-950">Kết quả hồ sơ</h2>
+                      <p className="mt-1 text-sm font-semibold text-emerald-800">Hồ sơ của bạn đã có kết quả.</p>
+                      {item.resultNote ? <p className="mt-2 text-sm font-semibold text-emerald-900">Ghi chú: {item.resultNote}</p> : null}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadResult}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/15 transition hover:-translate-y-0.5 hover:bg-emerald-800"
+                  >
+                    <Download className="h-4 w-4" />
+                    Tải file PDF
+                  </button>
+                </div>
+              </section>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-              <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
                 <SectionTitle icon={<Landmark />} title="Thông tin hồ sơ" subtitle="Các thông tin chính người dân đã nộp" />
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <Info label="Mã hồ sơ" value={applicationCodeOf(item)} />
@@ -321,7 +377,7 @@ export default function ApplicationDetail() {
                 </div>
               </section>
 
-              <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
                 <SectionTitle icon={<Clock3 />} title="Timeline xử lý" subtitle="Theo dõi các mốc xử lý hồ sơ" />
                 <div className="mt-5 space-y-4">
                   {timeline.map((t, idx) => (
@@ -366,18 +422,27 @@ export default function ApplicationDetail() {
 
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl sm:p-6">
             <h2 className="mb-4 text-xl font-black text-slate-900">Thanh toán hồ sơ</h2>
             {generatingQr ? <div className="py-8 text-center text-slate-600">Đang tạo mã QR...</div> : qrCode ? (
               <div>
-                <div className="mb-4 rounded-lg bg-slate-50 p-4">
-                  <img src={qrCode} alt="Payment QR Code" className="w-full" />
+                <div className="mb-4 rounded-lg bg-slate-50 p-3 sm:p-4">
+                  <img src={qrCode} alt="Payment QR Code" className="mx-auto w-full max-w-72" />
                   {paymentExpireAt && <p className="mt-3 text-center text-xs text-red-600">Hết hạn: {new Date(paymentExpireAt).toLocaleString("vi-VN")}</p>}
                 </div>
-                <div className="mb-4 text-center text-sm text-slate-600">{paymentStatus === "pending" ? "Đang chờ thanh toán..." : "Thanh toán thành công!"}</div>
-                <div className="flex gap-2">
+                {paymentInfo ? (
+                  <div className="mb-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <PaymentLine label="Ngân hàng" value={paymentInfo.bankCode || paymentInfo.bankName} />
+                    <PaymentLine label="Số tài khoản" value={paymentInfo.bankAccount || paymentInfo.accountNo} />
+                    <PaymentLine label="Chủ tài khoản" value={paymentInfo.bankAccountName || paymentInfo.accountName} />
+                    <PaymentLine label="Số tiền" value={paymentInfo.amount ? `${currency.format(paymentInfo.amount)} VNĐ` : feeText} />
+                    <PaymentLine label="Nội dung" value={paymentInfo.transferContent} strong />
+                  </div>
+                ) : null}
+                <div className="mb-4 text-center text-sm text-slate-600">{isPaidStatus(paymentStatus) ? "Thanh toán thành công!" : paymentStatusLabel(paymentStatus, "Đang chờ thanh toán...")}</div>
+                <div className="grid gap-2 sm:flex">
                   <button onClick={() => setShowPaymentModal(false)} className="flex-1 rounded-lg bg-slate-200 px-4 py-2 font-semibold">Đóng</button>
-                  <button onClick={handleMockPaymentComplete} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Thanh toán</button>
+                  <button onClick={handleCheckPaymentStatus} className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Kiểm tra thanh toán</button>
                 </div>
               </div>
             ) : <div className="py-4 text-center text-red-600">Không thể tạo mã QR</div>}
@@ -422,6 +487,15 @@ function StatusBadge({ status, label }) {
   );
 }
 
+function PaymentLine({ label, value, strong = false }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 font-semibold text-slate-500">{label}</span>
+      <span className={`text-right text-slate-900 ${strong ? "font-black" : "font-bold"}`}>{value || "-"}</span>
+    </div>
+  );
+}
+
 function Info({ label, value, icon, accent = "slate", wide = false }) {
   const accentClass = {
     blue: "bg-blue-50 text-(--gov-navy) ring-blue-100",
@@ -449,7 +523,7 @@ function Info({ label, value, icon, accent = "slate", wide = false }) {
 
 function TimelineItem({ item, isLast }) {
   const status = String(item.status || "").toUpperCase();
-  const label = STATUS_LABELS[status] || item.status || "Cập nhật";
+  const label = STATUS_LABELS[status] || applicationStatusLabel(item.status, "Cập nhật");
   const className = STATUS_STYLES[status] || "border-slate-200 bg-slate-50 text-slate-700";
 
   return (

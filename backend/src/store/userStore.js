@@ -51,6 +51,26 @@ async function findByEmail(email) {
   }
 }
 
+async function findByPhone(phone) {
+  try {
+    const digits = normalizePhoneQuery(phone);
+    if (!digits) return null;
+
+    const client = getClient();
+    if (!client) return null;
+
+    const result = await client.send(new ScanCommand({ TableName: USERS_TABLE }));
+    const item = (result.Items || []).find((user) => {
+      const phoneValue = normalizePhoneQuery(user?.phone || user?.Phone);
+      return phoneValue === digits;
+    });
+    return item || null;
+  } catch (error) {
+    console.error("[userStore.findByPhone] DynamoDB error:", error?.name, error?.message, error);
+    return null;
+  }
+}
+
 async function findById(id) {
   try {
     if (!id) return null;
@@ -447,7 +467,7 @@ async function updateUserRole(id, role) {
     if (!id) return null;
     const client = getClient();
     if (!client) return null;
-    const validRoles = ["citizen", "admin"];
+    const validRoles = ["citizen", "admin", "staff"];
     if (!validRoles.includes(role)) {
       const err = new Error("Invalid role");
       err.code = "INVALID_ROLE";
@@ -504,6 +524,7 @@ async function updatePasswordHashById(id, passwordHash) {
 
 module.exports = {
   findByEmail,
+  findByPhone,
   findById,
   listUsers,
   listFriends,

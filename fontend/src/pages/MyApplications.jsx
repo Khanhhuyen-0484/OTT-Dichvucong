@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
@@ -16,7 +16,9 @@ import {
 import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
 import GovHeader from "../components/GovHeader.jsx";
 import { getAllMyApplications, getApiErrorMessage, getServiceNotifications } from "../lib/api";
+import { useAuth } from "../context/AuthContext.jsx";
 import { connectSocket } from "../lib/socket.js";
+import { applicationStatusLabel, paymentStatusLabel } from "../lib/statusLabels.js";
 
 const STATUS_LABELS = {
   DRAFT: "Lưu nháp",
@@ -26,6 +28,7 @@ const STATUS_LABELS = {
   SUPPLEMENTED: "Đã bổ sung",
   COMPLETED: "Đã hoàn thành",
   REJECTED: "Đã từ chối",
+  RESULT_DELIVERED: "Đã trả kết quả",
 };
 
 function formatDate(dateStr) {
@@ -45,6 +48,7 @@ function statusClass(status) {
     case "SUPPLEMENTED":
       return "bg-indigo-50 text-indigo-700 ring-indigo-200";
     case "COMPLETED":
+    case "RESULT_DELIVERED":
       return "bg-green-50 text-green-700 ring-green-200";
     case "REJECTED":
       return "bg-slate-100 text-slate-700 ring-slate-300";
@@ -70,17 +74,47 @@ function applicationCodeOf(item) {
 }
 
 function applicationUrlOf(item) {
+  if ((item?.localDraft || String(item?.draftType || "").toUpperCase() === "WIZARD") && item?.serviceId) return `/services/${item.serviceId}`;
   return `/my-applications/${item?.dossierId || item?.applicationId || item?.applicationCode || item?.dossierCode || item?.id || ""}`;
 }
 
+function readLocalDrafts(user) {
+  const userKey = user?.id || user?.email || user?.phone || "guest";
+  const drafts = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith("dvc-draft-")) continue;
+    try {
+      const draft = JSON.parse(localStorage.getItem(key) || "{}");
+      if (!draft?.serviceId) continue;
+      if (draft.userKey && draft.userKey !== userKey) continue;
+      drafts.push({
+        ...draft,
+        localDraft: true,
+        id: key,
+        applicationCode: `DRAFT-${draft.serviceId}`,
+        serviceName: draft.serviceName || "Hồ sơ lưu nháp",
+        fee: draft.fee || 0,
+        status: "DRAFT",
+        paymentStatus: "UNPAID",
+        createdAt: draft.updatedAt || draft.createdAt,
+      });
+    } catch {}
+  }
+  return drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+}
+
 export default function MyApplications() {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialView = ["submitted", "draft", "all"].includes(searchParams.get("view")) ? searchParams.get("view") : "submitted";
   const [items, setItems] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [submitted, setSubmitted] = useState([]);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [view, setView] = useState("submitted");
+  const [view, setView] = useState(initialView);
   const [notifications, setNotifications] = useState([]);
 
   async function loadData() {
@@ -90,7 +124,9 @@ export default function MyApplications() {
         getServiceNotifications().catch(() => ({ data: { notifications: [] } })),
       ]);
       setItems(data.applications || []);
-      setDrafts(data.drafts || []);
+      const serverDraftServiceIds = new Set((data.drafts || []).map((item) => String(item.serviceId || "")));
+      const localDrafts = readLocalDrafts(user).filter((item) => !serverDraftServiceIds.has(String(item.serviceId || "")));
+      setDrafts([...(data.drafts || []), ...localDrafts]);
       setSubmitted(data.submitted || []);
       setNote(data.note || "");
       setNotifications(notificationRes.data.notifications || []);
@@ -132,8 +168,12 @@ export default function MyApplications() {
     });
   }, [notifications, items, submitted, drafts]);
 
+  const resultDeliveredNotifications = useMemo(() => {
+    return notifications.filter((item) => String(item.status || item.type || "").toUpperCase() === "RESULT_DELIVERED");
+  }, [notifications]);
+
   const stats = useMemo(() => {
-    const completed = items.filter((item) => String(item.status || "").toUpperCase() === "COMPLETED").length;
+    const completed = items.filter((item) => ["COMPLETED", "RESULT_DELIVERED"].includes(String(item.status || "").toUpperCase())).length;
     const processing = items.filter((item) => ["PENDING", "PROCESSING", "SUPPLEMENTED"].includes(String(item.status || "").toUpperCase())).length;
     return [
       { label: "Đã nộp", value: submitted.length, icon: <ClipboardList />, tone: "blue" },
@@ -152,25 +192,25 @@ export default function MyApplications() {
   return (
     <div className="min-h-screen bg-slate-50">
       <GovHeader />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
         <BackToDashboardButton to="/" replace variant="soft" className="mb-5 self-start" />
 
         <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-xl shadow-blue-950/8">
-          <div className="bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-6 text-white">
+          <div className="bg-linear-to-r from-[#003366] via-[#075b99] to-[#0f766e] p-4 text-white sm:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/85 ring-1 ring-white/20">
                   <FileText className="h-3.5 w-3.5" />
                   Quản lý hồ sơ
                 </div>
-                <h1 className="mt-4 text-3xl font-black leading-tight md:text-4xl">Hồ sơ của tôi</h1>
+                <h1 className="mt-4 text-2xl font-black leading-tight md:text-4xl">Hồ sơ của tôi</h1>
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-blue-50">
                   Theo dõi hồ sơ đã nộp, hồ sơ lưu nháp và các yêu cầu bổ sung trong một màn hình gọn gàng.
                 </p>
               </div>
               <Link
                 to="/services"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-(--gov-navy) shadow-lg shadow-blue-950/20 transition hover:-translate-y-0.5 hover:bg-blue-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-(--gov-navy) shadow-lg shadow-blue-950/20 transition hover:-translate-y-0.5 hover:bg-blue-50 sm:w-auto"
               >
                 <Plus className="h-4 w-4" />
                 Nộp hồ sơ mới
@@ -178,7 +218,7 @@ export default function MyApplications() {
             </div>
           </div>
 
-          <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-5 lg:grid-cols-4">
             {stats.map((stat) => (
               <StatCard key={stat.label} {...stat} />
             ))}
@@ -218,6 +258,35 @@ export default function MyApplications() {
                     <div className="text-xs font-bold text-orange-600">{formatDate(notification.createdAt)}</div>
                     <Link to={notification.actionUrl || applicationUrlOf(notification)} className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2 text-sm font-black text-white transition hover:bg-orange-700">
                       Bổ sung hồ sơ
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loading && !err && resultDeliveredNotifications.length > 0 && (
+          <section className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-lg font-black text-emerald-950">Hồ sơ đã có kết quả</div>
+                <p className="mt-1 text-sm font-semibold text-emerald-800">Bạn có thể tải kết quả hồ sơ từ trang chi tiết.</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {resultDeliveredNotifications.slice(0, 5).map((notification) => (
+                <div key={notification.notificationId || notification.id} className="rounded-2xl bg-white p-4 text-sm ring-1 ring-emerald-100">
+                  <div className="font-black text-emerald-950">{notification.title || "Hồ sơ đã có kết quả"}</div>
+                  <div className="mt-1 font-semibold text-emerald-800">{notification.message || "Bạn có thể tải kết quả hồ sơ."}</div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs font-bold text-emerald-600">{formatDate(notification.createdAt)}</div>
+                    <Link to={notification.actionUrl || applicationUrlOf(notification)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-800">
+                      Xem kết quả
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </div>
@@ -305,6 +374,7 @@ function ApplicationCard({ item }) {
   const paymentStatus = String(item.paymentStatus || "").toUpperCase();
   const paymentMethod = String(item.paymentMethod || "").toUpperCase();
   const code = applicationCodeOf(item);
+  const detailUrl = applicationUrlOf(item);
   const actionLabel = status === "NEED_MORE" ? "Bổ sung hồ sơ" : status === "DRAFT" || paymentStatus === "UNPAID" ? "Tiếp tục hồ sơ" : "Xem chi tiết";
   const actionClass = status === "NEED_MORE"
     ? "bg-orange-600 text-white ring-orange-600 hover:bg-orange-700"
@@ -319,25 +389,25 @@ function ApplicationCard({ item }) {
               <FileText className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-black text-slate-950">{item.serviceName || "Dịch vụ công"}</h2>
-              <p className="mt-1 wrap-break-word text-xs font-bold text-slate-500">Mã hồ sơ: {code || "-"}</p>
+              <h2 className="line-clamp-2 text-lg font-black text-slate-950">{item.serviceName || "Dịch vụ công"}</h2>
+              <p className="mt-1 wrap-break-word text-xs font-bold text-slate-500">{item.localDraft || String(item.draftType || "").toUpperCase() === "WIZARD" ? `Đang dừng ở bước ${item.step || 1}/4${item.stepTitle ? ` - ${item.stepTitle}` : ""}` : `Mã hồ sơ: ${code || "-"}`}</p>
             </div>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <InfoChip icon={<CalendarDays />} label="Ngày nộp" value={formatDate(item.createdAt) || "-"} />
             <InfoChip icon={<ReceiptText />} label="Lệ phí" value={`${currency.format(item.fee || 0)} VNĐ`} />
-            <InfoChip icon={<WalletCards />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatus] || PAYMENT_LABELS[paymentMethod] || item.paymentMethod || "-"} />
+            <InfoChip icon={<WalletCards />} label="Thanh toán" value={PAYMENT_LABELS[paymentStatus] || PAYMENT_LABELS[paymentMethod] || paymentStatusLabel(paymentStatus || paymentMethod, "-")} />
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
+        <div className="flex w-full shrink-0 flex-col items-start gap-3 sm:w-auto lg:items-end">
           <span className={`inline-flex rounded-full px-3 py-1 text-sm font-black ring-1 ${statusClass(status)}`}>
-            {STATUS_LABELS[status] || item.status || "Chưa rõ"}
+            {STATUS_LABELS[status] || applicationStatusLabel(status || item.status)}
           </span>
           <Link
-            to={`/my-applications/${code}`}
-            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black ring-1 transition ${actionClass}`}
+            to={detailUrl}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black ring-1 transition sm:w-auto ${actionClass}`}
           >
             {actionLabel}
             <ArrowRight className="h-4 w-4" />

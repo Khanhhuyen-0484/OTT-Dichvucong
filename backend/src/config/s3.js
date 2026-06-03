@@ -59,6 +59,38 @@ async function createPresignedPut(opts) {
   return { uploadUrl, publicUrl, key: opts.key };
 }
 
+async function createPresignedGet(key, expiresSec = 300) {
+  const cfg = getConfig();
+  if (!cfg) {
+    const err = new Error("S3_NOT_CONFIGURED");
+    err.code = "S3_NOT_CONFIGURED";
+    throw err;
+  }
+  const safeKey = String(key || "").trim();
+  if (!safeKey || safeKey.includes("..") || safeKey.startsWith("/")) {
+    const err = new Error("INVALID_S3_KEY");
+    err.code = "INVALID_S3_KEY";
+    throw err;
+  }
+
+  const client = new S3Client({
+    region: cfg.region,
+    credentials:
+      process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+          }
+        : undefined
+  });
+
+  const command = new GetObjectCommand({
+    Bucket: cfg.bucket,
+    Key: safeKey
+  });
+  return getSignedUrl(client, command, { expiresIn: expiresSec });
+}
+
 function buildPublicObjectUrl(key) {
   const cfg = getConfig();
   if (!cfg || !key) return "";
@@ -108,6 +140,7 @@ module.exports = {
   getConfig,
   isS3Configured,
   createPresignedPut,
+  createPresignedGet,
   buildPublicObjectUrl,
   uploadBuffer
 };

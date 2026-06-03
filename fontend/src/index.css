@@ -1,6 +1,8 @@
 /* frontend/src/index.css */
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Inter:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700&display=swap&subset=vietnamese");
+@import "tailwindcss";
+
+@import "tailwindcss";
 
 :root {
   --gov-navy: #003366;
@@ -10,6 +12,7 @@
 html,
 body {
   height: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -21,6 +24,19 @@ body {
 *:focus-visible {
   outline: 3px solid rgba(30, 58, 138, 0.35);
   outline-offset: 2px;
+}
+
+.admin-date-filter,
+.admin-date-filter:focus,
+.admin-date-filter:focus-visible,
+.admin-date-filter::-webkit-datetime-edit,
+.admin-date-filter::-webkit-datetime-edit-fields-wrapper,
+.admin-date-filter::-webkit-datetime-edit-text,
+.admin-date-filter::-webkit-datetime-edit-day-field,
+.admin-date-filter::-webkit-datetime-edit-month-field,
+.admin-date-filter::-webkit-datetime-edit-year-field {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Scrollbar */

@@ -1,6 +1,19 @@
 import { io } from "socket.io-client";
 
 let socket = null;
+let socketToken = "";
+
+function resolveSocketUrl() {
+  const explicit = String(import.meta.env.VITE_SOCKET_URL || "").trim();
+  if (explicit) return explicit;
+
+  const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").trim();
+  if (/^https?:\/\//i.test(apiBase)) {
+    return apiBase.replace(/\/api\/?$/i, "");
+  }
+
+  return "/";
+}
 
 /**
  * Trả về socket singleton để tạo mới chỉ khi chưa có instance nào.
@@ -8,14 +21,24 @@ let socket = null;
  * khi socket đang trong trạng thái "connecting".
  */
 export const connectSocket = () => {
-  if (socket) return socket; // Trả về instance cũ, kể cả khi đang connecting.
+  const token = localStorage.getItem("token") || "";
+  if (socket && socketToken === token) {
+    if (!socket.connected) socket.connect();
+    return socket; // Trả về instance cũ nếu vẫn cùng token.
+  }
 
-  const token = localStorage.getItem("token");
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+    socketToken = "";
+    console.log("[SOCKET] Token thay đổi, khởi tạo lại kết nối.");
+  }
+
   if (!token) {
     console.warn("[SOCKET] Không tìm thấy token.");
   }
 
-  const socketURL = import.meta.env.VITE_SOCKET_URL || "/";
+  const socketURL = resolveSocketUrl();
   console.log(`[SOCKET] Đang khởi tạo kết nối tới: ${socketURL}`);
 
   socket = io(socketURL, {
@@ -26,9 +49,14 @@ export const connectSocket = () => {
     reconnectionDelay: 2000,
     withCredentials: true,
   });
+  socketToken = token;
 
   socket.on("connect", () => {
     console.log(`[SOCKET] Đã kết nối: ${socket.id}`);
+  });
+
+  socket.on("socket-ready", (payload) => {
+    console.log("[SOCKET] Đã join user room:", payload);
   });
 
   socket.on("connect_error", (err) => {
@@ -52,6 +80,7 @@ export const disconnectSocket = () => {
   if (socket) {
     socket.disconnect();
     socket = null;
+    socketToken = "";
     console.log("[SOCKET] Đã xoá instance socket.");
   }
 };

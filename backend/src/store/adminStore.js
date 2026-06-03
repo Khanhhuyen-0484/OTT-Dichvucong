@@ -4,7 +4,7 @@ const { sendMessage, getChatHistory } = require("./supportConversationsStore");
 const { findById } = require("./userStore");
 const { readAll: readApplications, findByCode: findApplicationByCode, updateByCode: updateApplicationByCode } = require("./serviceApplicationStore");
 
-const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "REJECTED"]);
+const DOSSIER_STATUS_FLOW = new Set(["PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "APPROVED", "COMPLETED", "RESULT_DELIVERED", "REJECTED"]);
 
 function isPaidApplication(app) {
   if (!app) return false;
@@ -27,6 +27,13 @@ let localDb = null;
 function ensureLocalDb() { if (!localDb) localDb = { conversations: [], ai: { id: "default", rulesText: DEFAULT_AI_RULES, history: [] } }; return localDb; }
 function nowIso() { return new Date().toISOString(); }
 function normalizeDossierStatus(status) { const s = String(status || "").trim().toUpperCase(); return DOSSIER_STATUS_FLOW.has(s) ? s : "PENDING"; }
+function hasDeliveredResult(app) { return Boolean(app?.resultFileKey || app?.resultFileUrl || String(app?.status || "").trim().toUpperCase() === "RESULT_DELIVERED"); }
+function getVisibleDossierStatus(app) {
+  const status = String(app?.status || "").trim().toUpperCase();
+  const paymentStatus = String(app?.paymentStatus || "").trim().toUpperCase();
+  if (status === "DRAFT" && (paymentStatus === "PAID" || paymentStatus === "COMPLETED")) return "PENDING";
+  return normalizeDossierStatus(status);
+}
 function normalizeTimelineItem(item) { return { status: normalizeDossierStatus(item?.status), action: String(item?.action || "").trim(), note: String(item?.note || "").trim(), actor: String(item?.actor || item?.by || "").trim(), createdAt: item?.createdAt || item?.at || nowIso() }; }
 async function getClient() { try { return getDynamoClient(); } catch { return null; } }
 async function safeScan(tableName) { const client = await getClient(); if (!client) return []; const rs = await client.send(new ScanCommand({ TableName: tableName })); return rs.Items || []; }
@@ -39,23 +46,27 @@ async function getDashboardStats() {
     const dossiers = (await readApplications()).filter(isPaidApplication);
     const conversations = await safeScan(SUPPORT_CONVERSATIONS_TABLE);
     return {
-      totalPending: dossiers.filter((x) => String(x.status || "").toUpperCase() === "PENDING").length,
-      totalProcessing: dossiers.filter((x) => String(x.status || "").toUpperCase() === "PROCESSING").length,
-      totalNeedMore: dossiers.filter((x) => String(x.status || "").toUpperCase() === "NEED_MORE").length,
-      totalCompleted: dossiers.filter((x) => String(x.status || "").toUpperCase() === "COMPLETED").length,
-      totalRejected: dossiers.filter((x) => String(x.status || "").toUpperCase() === "REJECTED").length,
+      totalPending: dossiers.filter((x) => getVisibleDossierStatus(x) === "PENDING").length,
+      totalProcessing: dossiers.filter((x) => getVisibleDossierStatus(x) === "PROCESSING").length,
+      totalNeedMore: dossiers.filter((x) => getVisibleDossierStatus(x) === "NEED_MORE").length,
+      totalApproved: dossiers.filter((x) => getVisibleDossierStatus(x) === "APPROVED").length,
+      totalCompleted: dossiers.filter((x) => getVisibleDossierStatus(x) === "COMPLETED").length,
+      totalRejected: dossiers.filter((x) => getVisibleDossierStatus(x) === "REJECTED").length,
       waitingMessages: conversations.filter((x) => x.status === "active" || x.status === "waiting").length
     };
   } catch (error) {
     console.error("[adminStore.getDashboardStats] error:", error?.name, error?.message, error);
-    return { totalPending: 0, totalProcessing: 0, totalNeedMore: 0, totalCompleted: 0, totalRejected: 0, waitingMessages: 0 };
+    return { totalPending: 0, totalProcessing: 0, totalNeedMore: 0, totalApproved: 0, totalCompleted: 0, totalRejected: 0, waitingMessages: 0 };
   }
 }
 
 async function listDossiers(query = "") {
   try {
     const dossiers = await readApplications();
-    const visibleDossiers = dossiers.filter(isPaidApplication);
+    const visibleDossiers = dossiers
+      .filter(isPaidApplication)
+      .map((dossier) => ({ ...dossier, status: getVisibleDossierStatus(dossier) }))
+      .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
     const q = String(query || "").trim().toLowerCase();
     if (!q) return visibleDossiers;
     return visibleDossiers.filter((d) => String(d.dossierId || d.dossierCode || d.id || "").toLowerCase().includes(q) || String(d.phone || d.formData?.phone || "").toLowerCase().includes(q) || String(d.citizenName || d.formData?.fullName || "").toLowerCase().includes(q));
@@ -79,9 +90,14 @@ async function appendDossierTimeline(current, item) {
 async function decideDossier({ dossierId, action, note, adminEmail }) {
   const current = await getDossierById(dossierId);
   if (!current) return null;
-  const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", reject: "REJECTED", complete: "COMPLETED", approve: "PROCESSING" };
+  const actionMap = { receive: "PENDING", processing: "PROCESSING", request_more: "NEED_MORE", reject: "REJECTED", complete: "COMPLETED", approve: "APPROVED" };
   const nextStatus = actionMap[action];
   if (!nextStatus) return null;
+  if (nextStatus === "COMPLETED" && !hasDeliveredResult(current)) {
+    const error = new Error("Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành.");
+    error.status = 400;
+    throw error;
+  }
   const timelineItem = buildTimelineItem({ status: nextStatus, action, note, actor: adminEmail || "admin" });
   return appendDossierTimeline(current, timelineItem);
 }

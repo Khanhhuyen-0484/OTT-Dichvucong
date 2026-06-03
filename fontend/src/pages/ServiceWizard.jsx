@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   Banknote,
   Building2,
@@ -25,15 +26,20 @@ import {
 } from "lucide-react";
 import {
   createBankTransferPayment,
+  checkDuplicateDossier,
+  deleteServiceDraft,
   getApiErrorMessage,
   getBankTransferPaymentStatus,
+  getServiceDraft,
   getServiceById,
   mockPaymentComplete,
   presignAttachmentUpload,
+  saveServiceDraft,
   submitServiceApplication,
 } from "../lib/api";
 import { uploadToS3 } from "../lib/uploadToS3.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { applicationStatusLabel, isPaidStatus, paymentStatusLabel } from "../lib/statusLabels.js";
 
 const defaultFaq = [
   {
@@ -110,6 +116,30 @@ const wizardSteps = [
 
 const currency = new Intl.NumberFormat("vi-VN");
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const DOCUMENT_LABEL_BY_KEY = {
+  cccd: "CCCD/CMND",
+  idCard: "CCCD/CMND người nộp",
+  citizenId: "CCCD/CMND người nộp",
+  residenceProof: "Giấy tờ chứng minh chỗ ở hợp pháp",
+  residenceForm: "Tờ khai cư trú",
+  birthCert: "Giấy chứng sinh",
+  marriageCert: "Giấy đăng ký kết hôn",
+  landPaper: "Giấy tờ đất",
+  landCert: "Giấy chứng nhận quyền sử dụng đất",
+  requestForm: "Đơn đăng ký",
+  oldLicense: "Giấy phép lái xe cũ",
+  health: "Giấy khám sức khỏe",
+};
+
+function clampStep(value) {
+  const next = Number(value || 1);
+  return Number.isFinite(next) ? Math.min(4, Math.max(1, next)) : 1;
+}
+
+function documentLabel(doc) {
+  const key = String(doc?.key || doc?.id || "").trim();
+  return DOCUMENT_LABEL_BY_KEY[key] || doc?.label || "Giấy tờ";
+}
 
 export default function ServiceWizard() {
   const { serviceId } = useParams();
@@ -139,8 +169,12 @@ export default function ServiceWizard() {
   const [formErrors, setFormErrors] = useState({});
   const [fileItems, setFileItems] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [duplicateCheck, setDuplicateCheck] = useState({ loading: false, result: null, error: "" });
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [dragKey, setDragKey] = useState("");
+  const userDraftKey = user?.id || user?.email || user?.phone || "guest";
+  const draftStorageKey = `dvc-draft-${userDraftKey}-${serviceId}`;
+  const legacyDraftStorageKey = `dvc-draft-${serviceId}`;
 
   useEffect(() => {
     let ignore = false;
@@ -164,15 +198,96 @@ export default function ServiceWizard() {
     };
   }, [serviceId]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    function restoreDraft(draft) {
+      if (ignore || !draft || String(draft.serviceId) !== String(serviceId)) return;
+      setFormData((prev) => ({ ...prev, ...(draft.formData || {}) }));
+      setStep(clampStep(draft.step));
+      if (draft.submitResult) setSubmitResult(draft.submitResult);
+      if (draft.paymentInfo) setPaymentInfo(draft.paymentInfo);
+      if (draft.paymentExpireAt) setPaymentExpireAt(draft.paymentExpireAt);
+      if (draft.savedPaymentStatus) setPaymentStatus(draft.savedPaymentStatus);
+      const files = draft.files || Object.fromEntries((draft.attachments || []).map((item) => [item.key, item]));
+      if (files && typeof files === "object") {
+        setFileItems(
+          Object.fromEntries(
+            Object.entries(files).map(([key, item]) => [
+              key,
+              {
+                name: item?.name || item?.fileName || "File đã lưu nháp",
+                type: item?.type || item?.fileType || item?.mimeType || "",
+                size: item?.size || 0,
+                uploadStatus: "saved",
+                progress: 100,
+              },
+            ])
+          )
+        );
+      }
+    }
+
+    async function loadDraft() {
+      if (user) {
+        try {
+          const { data } = await getServiceDraft(serviceId);
+          if (data?.draft) {
+            restoreDraft(data.draft);
+            return;
+          }
+        } catch {}
+      }
+
+      const rawDraft = localStorage.getItem(draftStorageKey) || localStorage.getItem(legacyDraftStorageKey);
+      if (!rawDraft) return;
+      try {
+        restoreDraft(JSON.parse(rawDraft));
+      } catch {}
+    }
+
+    loadDraft();
+    return () => {
+      ignore = true;
+    };
+  }, [draftStorageKey, legacyDraftStorageKey, serviceId, user]);
+
   const docs = useMemo(() => service?.documents || [], [service]);
   const requiredDocs = useMemo(() => docs.filter((doc) => doc.required), [docs]);
   const missingDocs = useMemo(() => requiredDocs.filter((doc) => !fileItems[doc.key]), [requiredDocs, fileItems]);
   const feeAmount = Number(service?.fee || submitResult?.application?.fee || submitResult?.fee || 0);
   const isFree = feeAmount <= 0;
   const currentDossierId = getSubmitDossierId(submitResult) || paymentInfo?.dossierId;
-  const isPaid = String(paymentStatus).toUpperCase() === "PAID";
+  const isPaid = isPaidStatus(paymentStatus);
   const faq = service?.faq?.length ? service.faq : defaultFaq;
   const currentStep = wizardSteps.find((item) => item.id === step) || wizardSteps[0];
+  const duplicateResult = duplicateCheck.result;
+  const hasBlockingDuplicate = Boolean(duplicateResult?.duplicate);
+
+  useEffect(() => {
+    const citizenId = String(formData.citizenId || "").trim();
+    const targetServiceId = String(service?.serviceId || service?.id || serviceId || "").trim();
+    if (!user || !targetServiceId || !/^\d{9,12}$/.test(citizenId)) {
+      setDuplicateCheck({ loading: false, result: null, error: "" });
+      return;
+    }
+
+    let ignore = false;
+    setDuplicateCheck((prev) => ({ ...prev, loading: true, error: "" }));
+    const timer = window.setTimeout(async () => {
+      try {
+        const { data } = await checkDuplicateDossier({ citizenId, serviceId: targetServiceId });
+        if (!ignore) setDuplicateCheck({ loading: false, result: data || null, error: "" });
+      } catch (error) {
+        if (!ignore) setDuplicateCheck({ loading: false, result: null, error: getApiErrorMessage(error) });
+      }
+    }, 500);
+
+    return () => {
+      ignore = true;
+      window.clearTimeout(timer);
+    };
+  }, [formData.citizenId, service?.serviceId, service?.id, serviceId, user]);
 
   function getSubmitDossierId(result = {}) {
     return String(
@@ -214,6 +329,7 @@ export default function ServiceWizard() {
     const next = {};
     if (missingDocs.length) next.files = `Bạn còn thiếu ${missingDocs.length} giấy tờ bắt buộc`;
     Object.entries(fileItems).forEach(([key, item]) => {
+      if (!item.file) next[key] = "Vui lòng chọn lại file trước khi nộp hồ sơ";
       if (item.file?.size > MAX_FILE_SIZE) next[key] = "File vượt quá 10MB";
     });
     setFormErrors((prev) => ({ ...prev, ...next }));
@@ -223,6 +339,7 @@ export default function ServiceWizard() {
   function handleNext() {
     if (!user) return navigate("/auth");
     if (step === 1 && !validatePersonal()) return;
+    if (step === 1 && (duplicateCheck.loading || hasBlockingDuplicate)) return;
     if (step === 2 && !validateFiles()) return;
     setStep((current) => Math.min(4, current + 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -270,17 +387,48 @@ export default function ServiceWizard() {
   async function saveDraft() {
     const draft = {
       serviceId,
+      serviceName: service?.name || "",
+      categoryName: service?.categoryName || service?.category || "",
+      fee: feeAmount,
+      step,
+      stepTitle: currentStep.title,
+      status: "DRAFT",
+      paymentStatus: "UNPAID",
+      userKey: userDraftKey,
       formData,
       files: Object.fromEntries(Object.entries(fileItems).map(([key, item]) => [key, { name: item.name, size: item.size, type: item.type }])),
+      submitResult,
+      paymentInfo,
+      paymentExpireAt,
+      savedPaymentStatus: paymentStatus,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    localStorage.setItem(`dvc-draft-${serviceId}`, JSON.stringify(draft));
-    alert("Đã lưu nháp trên trình duyệt hiện tại.");
+    const finishDraftSave = () => {
+      alert(`Lưu nháp thành công tại bước ${step}/4 - ${currentStep.title}.`);
+      navigate("/my-applications?view=draft", { replace: true });
+    };
+
+    try {
+      if (!user) throw new Error("AUTH_REQUIRED");
+      await saveServiceDraft(serviceId, draft);
+      localStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(legacyDraftStorageKey);
+      return finishDraftSave();
+    } catch {
+      localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      localStorage.removeItem(legacyDraftStorageKey);
+      return finishDraftSave();
+    }
   }
 
   async function submitApplication() {
     if (!user) return navigate("/auth");
     if (!validatePersonal() || !validateFiles()) {
+      setStep(1);
+      return;
+    }
+    if (duplicateCheck.loading || hasBlockingDuplicate) {
       setStep(1);
       return;
     }
@@ -318,6 +466,9 @@ export default function ServiceWizard() {
       if (!dossierId) throw new Error("Thiếu mã hồ sơ từ phản hồi nộp hồ sơ");
 
       setSubmitResult(data);
+      await deleteServiceDraft(serviceId).catch(() => {});
+      localStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(legacyDraftStorageKey);
       setPaymentExpireAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
       setPaymentStatus("PENDING");
 
@@ -334,6 +485,11 @@ export default function ServiceWizard() {
       setStep(4);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
+      if (e?.response?.status === 409 && e.response?.data?.duplicate) {
+        setDuplicateCheck({ loading: false, result: e.response.data, error: "" });
+        setStep(1);
+        return;
+      }
       alert(getApiErrorMessage(e));
     } finally {
       setSubmitting(false);
@@ -369,8 +525,8 @@ export default function ServiceWizard() {
   if (error || !service) return <PageState text={error || "Không tìm thấy dịch vụ"} />;
 
   return (
-    <div className="min-h-screen bg-[#f4f8fd] pb-[120px] text-slate-800">
-      <main className="mx-auto max-w-[1200px] px-4 py-5 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#f4f8fd] pb-[136px] text-slate-800 sm:pb-[120px]">
+      <main className="mx-auto max-w-[1200px] px-3 py-4 sm:px-6 sm:py-5 lg:px-8">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
           <Link to="/" className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
             <ArrowLeft className="h-4 w-4" /> Trang chủ
@@ -381,13 +537,13 @@ export default function ServiceWizard() {
           <span className="truncate">{service.name}</span>
         </div>
 
-        <section className="mb-4 rounded-[24px] border border-blue-100 bg-gradient-to-br from-[#073763] via-[#0b5c9a] to-[#1687c7] p-4 text-white shadow-xl shadow-blue-950/10 sm:p-5">
+        <section className="mb-4 rounded-[22px] border border-blue-100 bg-gradient-to-br from-[#073763] via-[#0b5c9a] to-[#1687c7] p-4 text-white shadow-xl shadow-blue-950/10 sm:rounded-[24px] sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <span className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-black ring-1 ring-white/20">
                 <FileText className="h-4 w-4" /> Nộp hồ sơ trực tuyến
               </span>
-              <h1 className="text-2xl font-black leading-tight sm:text-3xl">{service.name}</h1>
+              <h1 className="text-xl font-black leading-tight sm:text-3xl">{service.name}</h1>
               <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold">
                 <MetaPill icon={Clock3} text={service.processingTime || "Theo quy định"} />
                 <MetaPill icon={Banknote} text={isFree ? "Miễn phí" : `${currency.format(feeAmount)}đ`} />
@@ -397,7 +553,7 @@ export default function ServiceWizard() {
             <button
               type="button"
               onClick={() => setShowInfoModal(true)}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-blue-800 shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5"
+              className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-blue-800 shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 sm:w-auto"
             >
               <Info className="h-4 w-4" /> Xem thông tin dịch vụ
             </button>
@@ -413,7 +569,12 @@ export default function ServiceWizard() {
             <Card>
               <StepHeader step={step} currentStep={currentStep} />
               {step === 1 && (
-                <PersonalStep formData={formData} formErrors={formErrors} onChange={onChange} />
+                <PersonalStep
+                  formData={formData}
+                  formErrors={formErrors}
+                  duplicateCheck={duplicateCheck}
+                  onChange={onChange}
+                />
               )}
               {step === 2 && (
                 <FilesStep
@@ -442,6 +603,7 @@ export default function ServiceWizard() {
                   onCopy={copyTransferContent}
                   onCheck={checkPaymentStatus}
                   onDemoPaid={markDemoPaid}
+                  onFinish={() => navigate("/services", { replace: true })}
                 />
               )}
             </Card>
@@ -454,15 +616,18 @@ export default function ServiceWizard() {
         </div>
       </main>
 
-      <ActionBar
-        step={step}
-        currentStep={currentStep}
-        submitting={submitting}
-        checkingPayment={checkingPayment}
-        onBack={() => setStep((current) => Math.max(1, current - 1))}
-        onSave={saveDraft}
-        onNext={handlePrimaryAction}
-      />
+      {!(step === 4 && isPaid) && (
+        <ActionBar
+          step={step}
+          currentStep={currentStep}
+          submitting={submitting}
+          checkingPayment={checkingPayment}
+          blocked={step === 1 && (duplicateCheck.loading || hasBlockingDuplicate)}
+          onBack={() => setStep((current) => Math.max(1, current - 1))}
+          onSave={saveDraft}
+          onNext={handlePrimaryAction}
+        />
+      )}
 
       {showInfoModal && (
         <InfoModal service={service} feeAmount={feeAmount} docs={docs} onClose={() => setShowInfoModal(false)} />
@@ -485,7 +650,7 @@ function MetaPill({ icon: Icon, text }) {
 
 function ProgressSteps({ step }) {
   return (
-    <div className="rounded-[20px] border border-slate-200 bg-white p-2 shadow-sm">
+    <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white p-2 shadow-sm">
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {wizardSteps.map((item) => {
           const Icon = item.icon;
@@ -494,7 +659,7 @@ function ProgressSteps({ step }) {
           return (
             <div
               key={item.id}
-              className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-black transition ${
+              className={`min-w-0 flex items-center gap-2 rounded-2xl px-2 py-2 text-xs font-black transition sm:px-3 sm:text-sm ${
                 active ? "bg-blue-700 text-white shadow-lg shadow-blue-700/20" : done ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-500"
               }`}
             >
@@ -529,7 +694,7 @@ function StepHeader({ step, currentStep }) {
   );
 }
 
-function PersonalStep({ formData, formErrors, onChange }) {
+function PersonalStep({ formData, formErrors, duplicateCheck, onChange }) {
   return (
     <div className="space-y-5">
       <div>
@@ -540,6 +705,7 @@ function PersonalStep({ formData, formErrors, onChange }) {
           <Field label="Số điện thoại" name="phone" value={formData.phone} onChange={onChange} error={formErrors.phone} />
           <Field label="Email" name="email" value={formData.email} onChange={onChange} error={formErrors.email} />
         </div>
+        <DuplicateDossierNotice check={duplicateCheck} />
       </div>
       <div>
         <h3 className="mb-3 text-base font-black text-[#0f2f57]">Thông tin cư trú</h3>
@@ -560,6 +726,66 @@ function PersonalStep({ formData, formErrors, onChange }) {
           placeholder="Nhập nội dung cần cán bộ lưu ý, nếu có"
           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
         />
+      </div>
+    </div>
+  );
+}
+
+function DuplicateDossierNotice({ check }) {
+  if (check?.loading) {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700">
+        <Loader2 className="h-4 w-4 animate-spin" /> Đang kiểm tra hồ sơ...
+      </div>
+    );
+  }
+  if (check?.error) {
+    return <InlineAlert text={check.error} />;
+  }
+
+  const item = check?.result?.duplicate ? check.result : check?.result?.lastApplication;
+  if (!item) return null;
+
+  const status = String(item.status || "").toUpperCase();
+  const isDuplicate = Boolean(check?.result?.duplicate);
+  const isDone = status === "COMPLETED" || status === "RESULT_DELIVERED";
+  const isRejected = status === "REJECTED";
+  if (!isDuplicate && !isRejected) return null;
+
+  return (
+    <div className={`mt-3 rounded-2xl border p-4 ${isRejected ? "border-slate-200 bg-slate-50 text-slate-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+      <div className="flex items-start gap-3">
+        {isDone ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />}
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-black">
+            {isDone ? "Bạn đã hoàn thành dịch vụ này." : isRejected ? "Hồ sơ trước đã bị từ chối." : "Hồ sơ đã tồn tại"}
+          </p>
+          <div className="mt-3 grid gap-2 text-sm font-semibold sm:grid-cols-3">
+            <InfoRow label="Mã hồ sơ" value={item.dossierId || item.dossierCode || "-"} />
+            <InfoRow label="Trạng thái" value={item.statusLabel || applicationStatusLabel(status, "-")} />
+            <InfoRow label="Ngày nộp" value={formatDateTime(item.submittedAt)} />
+          </div>
+          {isRejected && item.reason && (
+            <p className="mt-3 text-sm font-semibold"><span className="font-black">Lý do:</span> {item.reason}</p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {isDuplicate && item.dossierId && (
+              <Link to={`/my-applications/${item.dossierId}`} className="inline-flex h-10 items-center rounded-xl bg-amber-600 px-4 text-sm font-black text-white hover:bg-amber-700">
+                Xem hồ sơ
+              </Link>
+            )}
+            {isDuplicate && (
+              <Link to="/my-applications" className="inline-flex h-10 items-center rounded-xl border border-amber-200 bg-white px-4 text-sm font-black text-amber-800 hover:bg-amber-100">
+                Về Hồ sơ của tôi
+              </Link>
+            )}
+            {isRejected && (
+              <span className="inline-flex h-10 items-center rounded-xl bg-emerald-50 px-4 text-sm font-black text-emerald-700">
+                Nộp hồ sơ mới
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -617,7 +843,8 @@ function ReviewStep({ service, formData, docs, fileItems, feeAmount, isFree }) {
   );
 }
 
-function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpireAt, currentDossierId, feeAmount, checkingPayment, onCopy, onCheck, onDemoPaid }) {
+function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpireAt, currentDossierId, feeAmount, checkingPayment, onCopy, onCheck, onDemoPaid, onFinish }) {
+  const qrImage = paymentInfo?.qrImageUrl || paymentInfo?.qrUrl || paymentInfo?.qrCode || paymentInfo?.payment?.qrUrl || "";
   if (!currentDossierId) {
     return <InlineAlert text="Bạn cần xác nhận hồ sơ trước khi thanh toán." />;
   }
@@ -629,33 +856,43 @@ function PaymentStep({ isFree, isPaid, paymentInfo, paymentStatus, paymentExpire
         <p className="mt-1 break-all text-xl font-black text-[#0f2f57]">{currentDossierId}</p>
         <div className="mt-4 rounded-2xl bg-white p-3">
           <InfoRow label="Số tiền" value={isFree ? "Miễn phí" : `${currency.format(feeAmount)}đ`} />
-          <InfoRow label="Trạng thái" value={isPaid ? "Đã thanh toán" : paymentStatus || "Đang chờ"} />
+          <InfoRow label="Trạng thái" value={isPaid ? "Đã thanh toán" : paymentStatusLabel(paymentStatus, "Đang chờ")} />
           {paymentExpireAt && <InfoRow label="Hạn thanh toán" value={new Date(paymentExpireAt).toLocaleString("vi-VN")} />}
         </div>
       </div>
 
       <div className="rounded-[20px] border border-slate-200 bg-white p-4">
         {isFree || isPaid ? (
-          <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-emerald-800">
+          <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-800">
+            <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 h-5 w-5" />
             <div>
               <p className="font-black">{isFree ? "Dịch vụ miễn phí" : "Thanh toán đã xác nhận"}</p>
               <p className="text-sm font-semibold">Hồ sơ đã được ghi nhận trên hệ thống.</p>
             </div>
+            </div>
+            <p className="mt-3 text-sm font-semibold">Nộp hồ sơ thành công. Bạn có thể kết thúc để quay về danh sách dịch vụ.</p>
+            <button
+              type="button"
+              onClick={onFinish}
+              className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-700 px-5 text-sm font-black text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-800"
+            >
+              Kết thúc
+            </button>
           </div>
         ) : (
           <>
             <p className="text-lg font-black text-[#0f2f57]">Thanh toán trực tuyến</p>
             <p className="mt-1 text-sm font-semibold text-slate-500">Quét mã VietQR hoặc chuyển khoản đúng nội dung để hệ thống tự đối soát.</p>
-            {paymentInfo?.qrImageUrl && (
-              <img src={paymentInfo.qrImageUrl} alt="Mã QR thanh toán" className="mt-4 h-56 w-56 rounded-2xl border border-slate-200 object-contain p-2" />
+            {qrImage && (
+              <img src={qrImage} alt="Mã QR thanh toán" className="mx-auto mt-4 h-56 w-56 max-w-full rounded-2xl border border-slate-200 object-contain p-2 sm:mx-0" />
             )}
             <div className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-3 text-sm font-semibold">
               <InfoRow label="Ngân hàng" value={paymentInfo?.bankCode || paymentInfo?.bankName || "Theo cấu hình hệ thống"} />
               <InfoRow label="Số tài khoản" value={paymentInfo?.bankAccount || paymentInfo?.accountNo || "Đang cập nhật"} />
               <InfoRow label="Nội dung" value={paymentInfo?.transferContent || currentDossierId} />
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
               <button type="button" onClick={onCopy} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-700 hover:bg-slate-50">
                 <Copy className="h-4 w-4" /> Sao chép nội dung
               </button>
@@ -691,6 +928,7 @@ function Field({ label, name, value, onChange, error, className = "" }) {
 }
 
 function UploadCard({ doc, item, error, active, onFile, onRemove, onDragState }) {
+  const label = documentLabel(doc);
   return (
     <div className={`rounded-2xl border p-3 transition ${active ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-200 hover:shadow-sm"}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -712,7 +950,7 @@ function UploadCard({ doc, item, error, active, onFile, onRemove, onDragState })
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-black text-[#0f2f57]">
-              {doc.label} {doc.required && <b className="text-rose-500">*</b>}
+              {label} {doc.required && <b className="text-rose-500">*</b>}
             </span>
             <span className="block truncate text-xs font-semibold text-slate-500">{item ? item.name : "Kéo thả hoặc bấm để chọn file"}</span>
           </span>
@@ -720,7 +958,7 @@ function UploadCard({ doc, item, error, active, onFile, onRemove, onDragState })
         </label>
 
         {item && (
-          <div className="flex items-center gap-3 sm:w-[240px]">
+          <div className="flex w-full items-center gap-3 sm:w-[240px]">
             {item.previewUrl ? (
               <img src={item.previewUrl} alt={item.name} className="h-14 w-14 rounded-xl object-cover" />
             ) : (
@@ -835,7 +1073,8 @@ function LoginGate({ navigate }) {
   );
 }
 
-function ActionBar({ step, currentStep, submitting, checkingPayment, onBack, onSave, onNext }) {
+function ActionBar({ step, currentStep, submitting, checkingPayment, blocked, onBack, onSave, onNext }) {
+  const busy = submitting || checkingPayment;
   return (
     <div className="fixed bottom-3 left-1/2 z-50 w-[calc(100%-24px)] -translate-x-1/2 rounded-[22px] border border-slate-200 bg-white/95 p-2 shadow-2xl shadow-slate-900/15 backdrop-blur md:bottom-6 md:w-[calc(100%-64px)] md:max-w-[1200px]">
       <div className="flex min-h-[56px] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -844,14 +1083,14 @@ function ActionBar({ step, currentStep, submitting, checkingPayment, onBack, onS
           <p className="text-sm font-black text-[#0f2f57]">Bước {step}/4 - {currentStep.title}</p>
         </div>
         <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
-          <button type="button" onClick={onBack} disabled={step === 1 || submitting} className="h-11 rounded-2xl border border-slate-200 px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={onBack} disabled={step === 1 || submitting} className="h-11 rounded-2xl border border-slate-200 px-2 text-xs font-black text-slate-700 transition sm:px-3 sm:text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
             Quay lại
           </button>
-          <button type="button" onClick={onSave} disabled={submitting} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:opacity-50">
+          <button type="button" onClick={onSave} disabled={submitting} className="inline-flex h-11 items-center justify-center gap-1 rounded-2xl border border-blue-100 bg-blue-50 px-2 text-xs font-black text-blue-700 transition sm:gap-2 sm:px-3 sm:text-sm hover:bg-blue-100 disabled:opacity-50">
             <Save className="h-4 w-4" /> Lưu nháp
           </button>
-          <button type="button" onClick={onNext} disabled={submitting || checkingPayment} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#073763] to-[#1167ad] px-4 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
-            {submitting || checkingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          <button type="button" onClick={onNext} disabled={busy || blocked} className="inline-flex h-11 items-center justify-center gap-1 rounded-2xl bg-gradient-to-r from-[#073763] to-[#1167ad] px-2 text-xs font-black text-white shadow-lg shadow-blue-900/20 transition sm:gap-2 sm:px-4 sm:text-sm hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Tiếp tục
           </button>
         </div>
@@ -893,6 +1132,13 @@ function InlineAlert({ text }) {
       <AlertCircle className="h-4 w-4" /> {text}
     </div>
   );
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("vi-VN");
 }
 
 function formatSize(size = 0) {

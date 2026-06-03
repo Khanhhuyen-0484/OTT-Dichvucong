@@ -390,17 +390,24 @@ function ChatMultiPurpose({
             );
           }
 
-          const isMine = m.senderId === user?.id;
+          const callLogOwnerId = m.messageType === "call_log" && m.callLog?.callerId
+            ? String(m.callLog.callerId)
+            : "";
+          const displaySenderId = callLogOwnerId || m.senderId;
+          const isMine = displaySenderId === user?.id;
           const reactions = reactionMap[m.id] || [];
-          const senderMember = activeRoom?.members?.find((x) => x.id === m.senderId);
-          const senderName = senderMember?.fullName || m.senderName || "Người dùng";
+          const senderMember = activeRoom?.members?.find((x) => x.id === displaySenderId);
+          const senderName = senderMember?.fullName || (callLogOwnerId ? m.callLog?.callerName : "") || m.senderName || "Người dùng";
           const senderAvatar = isMine
             ? getAvatarUrl(user)
             : (m.senderAvatar || getAvatarUrl(senderMember) || (activeRoom.type === "group" ? GROUP_FALLBACK_AVATAR : headerAvatar));
           const prevMessage = messages[index - 1];
+          const prevDisplaySenderId = prevMessage?.messageType === "call_log" && prevMessage?.callLog?.callerId
+            ? String(prevMessage.callLog.callerId)
+            : prevMessage?.senderId;
           const startsSenderRun =
             !prevMessage ||
-            prevMessage.senderId !== m.senderId ||
+            prevDisplaySenderId !== displaySenderId ||
             Boolean(prevMessage.unsentForAll);
           const showGroupSenderName =
             activeRoom.type === "group" &&

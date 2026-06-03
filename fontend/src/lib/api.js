@@ -27,6 +27,10 @@ export async function resetPassword(payload) { return api.post("/auth/reset-pass
 export async function getServices(params = {}) { return api.get("/services", { params }); }
 export async function getServiceById(id) { return api.get(`/services/${id}`); }
 export async function submitServiceApplication(payload) { return api.post("/services/submit", payload); }
+export async function checkDuplicateDossier(payload) { return api.post("/dossiers/check-duplicate", payload); }
+export async function getServiceDraft(serviceId) { return api.get(`/services/drafts/${serviceId}`); }
+export async function saveServiceDraft(serviceId, payload) { return api.post(`/services/drafts/${serviceId}`, payload); }
+export async function deleteServiceDraft(serviceId) { return api.delete(`/services/drafts/${serviceId}`); }
 export async function trackApplication(code) { return api.get(`/services/track/${code}`); }
 export async function getApplicationByCode(code) { return api.get(`/services/application/code/${code}`); }
 export async function getApplicationDetail(code) { return getApplicationByCode(code); }
@@ -85,11 +89,14 @@ export async function postAdminSupportResolve(id) { return api.post(`/admin/supp
 export async function getAdminAiHistory() { return api.get("/admin/ai/history"); }
 export async function getAdminAiRules() { return api.get("/admin/ai/rules"); }
 export async function putAdminAiRules(rulesText) { return api.put("/admin/ai/rules", { rulesText }); }
+export async function getAdminUsers(params = {}) { return api.get("/admin/users", { params }); }
+export async function updateAdminUserRole(userId, role) { return api.put(`/admin/users/${userId}/role`, { role }); }
 export async function createService(payload) { return api.post("/services/admin", payload); }
 export async function seedServices() { return api.post("/services/admin/seed"); }
 export async function updateService(serviceId, payload) { return api.put(`/services/admin/${serviceId}`, payload); }
 export async function deleteService(serviceId) { return api.delete(`/services/admin/${serviceId}`); }
 export async function updateAdminDossierStatus(id, payload) { return api.patch(`/admin/dossiers/${id}/status`, payload); }
+export async function deliverAdminDossierResult(id, formData) { return api.post(`/admin/dossiers/${id}/deliver-result`, formData, { headers: { "Content-Type": "multipart/form-data" } }); }
 export async function getAdminServiceCategories() { return api.get("/admin/service-categories"); }
 export async function seedAdminServiceCategories() { return api.post("/admin/service-categories/seed"); }
 export async function createBankTransferPayment(payload) { return api.post("/payments/bank-transfer/create", payload); }

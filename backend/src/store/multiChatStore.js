@@ -181,7 +181,14 @@ function sanitizeMessage(message) {
           roomId: String(message.callLog.roomId || "").slice(0, 120),
           callerId: String(message.callLog.callerId || "").slice(0, 120),
           callerName: String(message.callLog.callerName || "").slice(0, 120),
-          endedBy: String(message.callLog.endedBy || "").slice(0, 120)
+          endedBy: String(message.callLog.endedBy || "").slice(0, 120),
+          participantCount: Number(message.callLog.participantCount || 0) || 0,
+          joinedParticipants: Array.isArray(message.callLog.joinedParticipants)
+            ? Array.from(new Set(message.callLog.joinedParticipants.map(String).filter(Boolean))).slice(0, 100)
+            : [],
+          startedAt: String(message.callLog.startedAt || "").slice(0, 40),
+          endedAt: String(message.callLog.endedAt || "").slice(0, 40),
+          hasJoinedMember: Boolean(message.callLog.hasJoinedMember)
         }
       : null,
     replyToMessageId: String(message?.replyToMessageId || "").trim(),
@@ -381,7 +388,12 @@ async function appendCallLogMessage({
   callRoomId = "",
   callerId = "",
   callerName = "",
-  endedBy = ""
+  endedBy = "",
+  participantCount = 0,
+  joinedParticipants = [],
+  startedAt = "",
+  endedAt = "",
+  hasJoinedMember = false
 }) {
   const room = await getRoomById(roomId);
   if (!room) throw new Error("Không tìm thấy phòng chat");
@@ -401,7 +413,12 @@ async function appendCallLogMessage({
       roomId: callRoomId,
       callerId,
       callerName,
-      endedBy
+      endedBy,
+      participantCount,
+      joinedParticipants,
+      startedAt,
+      endedAt,
+      hasJoinedMember
     },
     createdAt: nowIso(),
     unsentForAll: false,

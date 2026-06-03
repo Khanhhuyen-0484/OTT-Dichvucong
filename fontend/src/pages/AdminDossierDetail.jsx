@@ -1,22 +1,25 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { BadgeAlert, Ban, Clock3, FileCheck2, FileText, Play, RefreshCw, X } from "lucide-react";
+import { BadgeAlert, Ban, Clock3, Download, FileCheck2, FileText, Play, RefreshCw, Upload, X } from "lucide-react";
 import BackToDashboardButton from "../components/BackToDashboardButton.jsx";
-import { getAdminDossier, getApiErrorMessage, resolvedApiBaseUrl, updateAdminDossierStatus } from "../lib/api";
+import { deliverAdminDossierResult, downloadApplicationResult, getAdminDossier, getApiErrorMessage, resolvedApiBaseUrl, updateAdminDossierStatus } from "../lib/api";
 
 const STATUS_META = {
   PENDING: { text: "Chờ tiếp nhận", color: "bg-slate-100 text-slate-700", icon: Clock3 },
   PROCESSING: { text: "Đang xử lý", color: "bg-sky-100 text-sky-700", icon: Play },
   NEED_MORE: { text: "Yêu cầu bổ sung", color: "bg-amber-100 text-amber-700", icon: BadgeAlert },
   SUPPLEMENTED: { text: "Đã bổ sung", color: "bg-indigo-100 text-indigo-700", icon: FileText },
+  APPROVED: { text: "Đã duyệt", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
   REJECTED: { text: "Từ chối", color: "bg-red-100 text-red-700", icon: Ban },
   COMPLETED: { text: "Hoàn thành", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
+  RESULT_DELIVERED: { text: "Đã trả kết quả", color: "bg-emerald-100 text-emerald-700", icon: FileCheck2 },
 };
 
 const WORKFLOW_BUTTONS = [
   { key: "PENDING", label: "Tiếp nhận", icon: Clock3, className: "bg-slate-700 hover:bg-slate-800 text-white" },
   { key: "PROCESSING", label: "Đang xử lý", icon: Play, className: "bg-sky-600 hover:bg-sky-700 text-white" },
   { key: "NEED_MORE", label: "Yêu cầu bổ sung", icon: BadgeAlert, className: "bg-amber-500 hover:bg-amber-600 text-white" },
+  { key: "APPROVED", label: "Đã duyệt", icon: FileCheck2, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
   { key: "REJECTED", label: "Từ chối", icon: Ban, className: "bg-red-600 hover:bg-red-700 text-white" },
   { key: "COMPLETED", label: "Hoàn thành", icon: FileCheck2, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
 ];
@@ -36,6 +39,10 @@ function getAttachmentUrl(fileUrl) {
   return encodeURI(`${base}${fileUrl.startsWith("/") ? "" : "/"}${fileUrl}`);
 }
 
+function hasDeliveredResult(dossier) {
+  return Boolean(dossier?.resultFileKey || dossier?.resultFileUrl || String(dossier?.status || "").toUpperCase() === "RESULT_DELIVERED");
+}
+
 function Field({ label, value }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -53,12 +60,15 @@ export default function AdminDossierDetail() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [workflowModal, setWorkflowModal] = useState(null);
+  const [resultModal, setResultModal] = useState({ open: false, file: null, note: "" });
 
   const status = String(dossier?.status || "PENDING").toUpperCase();
   const statusMeta = statusLabel(status);
   const timeline = Array.isArray(dossier?.timeline) ? dossier.timeline : Array.isArray(dossier?.history) ? dossier.history : [];
   const attachments = Array.isArray(dossier?.attachments) ? dossier.attachments : [];
   const formData = dossier?.formData || {};
+  const canComplete = hasDeliveredResult(dossier);
+  const canDeliver = status === "APPROVED";
 
   const headerStats = useMemo(() => [
     { label: "Mã hồ sơ", value: dossier?.applicationCode || dossier?.dossierCode || dossier?.dossierId || dossier?.id },
@@ -85,6 +95,14 @@ export default function AdminDossierDetail() {
   }, [dossierId]);
 
   async function submitWorkflow(nextStatus, note = "") {
+    if (nextStatus === "COMPLETED" && !canComplete) {
+      setMessage("Phải trả kết quả hồ sơ trước khi đánh dấu hoàn thành.");
+      return;
+    }
+    if (nextStatus === "RESULT_DELIVERED") {
+      setMessage("Dùng nút Trả kết quả để upload file PDF.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -96,6 +114,53 @@ export default function AdminDossierDetail() {
       setMessage(getApiErrorMessage(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function submitResultDelivery() {
+    if (!canDeliver) {
+      setMessage("Phải duyệt hồ sơ trước khi trả kết quả.");
+      return;
+    }
+    if (!resultModal.file) {
+      setMessage("Vui lòng chọn file PDF kết quả");
+      return;
+    }
+    if (resultModal.file.type !== "application/pdf") {
+      setMessage("Chỉ chấp nhận file PDF");
+      return;
+    }
+    if (resultModal.file.size > 10 * 1024 * 1024) {
+      setMessage("File PDF tối đa 10MB");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+    try {
+      const formData = new FormData();
+      formData.append("file", resultModal.file);
+      formData.append("note", resultModal.note || "");
+      const { data } = await deliverAdminDossierResult(dossierId, formData);
+      setDossier(data.dossier || null);
+      setResultModal({ open: false, file: null, note: "" });
+      setMessage(data.emailFailed ? "Đã trả kết quả, nhưng gửi email thất bại" : "Đã trả kết quả hồ sơ");
+      await load();
+    } catch (err) {
+      setMessage(getApiErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openResultFile() {
+    try {
+      const code = dossier?.dossierId || dossier?.applicationCode || dossierId;
+      const { data } = await downloadApplicationResult(code);
+      const url = data?.result?.resultFileUrl || dossier?.resultFileUrl;
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setMessage(getApiErrorMessage(err));
     }
   }
 
@@ -178,16 +243,42 @@ export default function AdminDossierDetail() {
                     {WORKFLOW_BUTTONS.map((btn) => {
                       const Icon = btn.icon;
                       const isCurrent = status === btn.key;
-                      const disabled = busy || isCurrent || (btn.key === "COMPLETED" && status === "REJECTED");
+                      const disabled = busy || isCurrent || (btn.key === "COMPLETED" && (status === "REJECTED" || !canComplete));
                       return (
-                        <button key={btn.key} type="button" disabled={disabled} onClick={() => (btn.key === "NEED_MORE" || btn.key === "REJECTED") ? setWorkflowModal({ status: btn.key, note: "" }) : submitWorkflow(btn.key, btn.key === "COMPLETED" ? "Hồ sơ đã hoàn thành" : btn.label)} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${btn.className}`}>
+                        <button key={btn.key} type="button" disabled={disabled} title={btn.key === "COMPLETED" && !canComplete ? "Phải trả kết quả trước khi hoàn thành" : ""} onClick={() => (btn.key === "NEED_MORE" || btn.key === "REJECTED") ? setWorkflowModal({ status: btn.key, note: "" }) : submitWorkflow(btn.key, btn.key === "COMPLETED" ? "Hồ sơ đã hoàn thành" : btn.label)} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${btn.className}`}>
                           <Icon className="h-4 w-4" />
                           {btn.label}
                         </button>
                       );
                     })}
+                    <button
+                      type="button"
+                      disabled={busy || !canDeliver}
+                      title={!canDeliver ? "Phải duyệt hồ sơ trước khi trả kết quả" : ""}
+                      onClick={() => setResultModal({ open: true, file: null, note: "" })}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Trả kết quả
+                    </button>
                   </div>
                 </div>
+
+                {(dossier.resultFileUrl || status === "RESULT_DELIVERED") ? (
+                  <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                    <h2 className="text-lg font-black text-emerald-950">Kết quả hồ sơ</h2>
+                    <p className="mt-1 text-sm font-semibold text-emerald-800">Hồ sơ đã có file kết quả PDF.</p>
+                    {dossier.resultNote ? <p className="mt-3 rounded-2xl bg-white/70 p-3 text-sm font-semibold text-emerald-900">{dossier.resultNote}</p> : null}
+                    <button
+                      type="button"
+                      onClick={openResultFile}
+                      className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800"
+                    >
+                      <Download className="h-4 w-4" />
+                      Tải file kết quả
+                    </button>
+                  </div>
+                ) : null}
 
                 <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="flex items-center justify-between">
@@ -215,6 +306,42 @@ export default function AdminDossierDetail() {
           </>
         ) : null}
       </main>
+
+      {resultModal.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-black text-slate-900">Trả kết quả hồ sơ</h3>
+              <button onClick={() => setResultModal({ open: false, file: null, note: "" })} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            <label className="mt-4 block text-sm font-bold text-slate-700">
+              File PDF kết quả
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(event) => setResultModal((current) => ({ ...current, file: event.target.files?.[0] || null }))}
+                className="mt-2 block w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold"
+              />
+            </label>
+            <label className="mt-4 block text-sm font-bold text-slate-700">
+              Ghi chú
+              <textarea
+                value={resultModal.note}
+                onChange={(event) => setResultModal((current) => ({ ...current, note: event.target.value }))}
+                rows={4}
+                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal outline-none focus:border-[#003366]"
+                placeholder="Nhập ghi chú trả kết quả..."
+              />
+            </label>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setResultModal({ open: false, file: null, note: "" })} className="flex-1 rounded-xl bg-slate-100 px-4 py-3 font-bold text-slate-700 hover:bg-slate-200">Hủy</button>
+              <button onClick={submitResultDelivery} disabled={busy || !resultModal.file} className="flex-1 rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white disabled:opacity-50">
+                {busy ? "Đang gửi..." : "Gửi kết quả"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {workflowModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

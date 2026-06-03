@@ -17,11 +17,11 @@ export default function IncomingCallModal({ call, onAccept, onReject }) {
   const initial = displayName[0]?.toUpperCase() || "?";
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-300">
       <div className="w-full max-w-sm rounded-[2.5rem] border border-white/10 bg-slate-900 p-8 text-center shadow-2xl animate-in zoom-in duration-300">
         <div className="relative mx-auto mb-6 h-24 w-24">
           <div className="absolute inset-0 animate-ping rounded-full bg-blue-500 opacity-20" />
-          <div className="relative flex h-full w-full items-center justify-center rounded-full border-4 border-slate-800 bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg">
+          <div className="relative flex h-full w-full items-center justify-center rounded-full border-4 border-slate-800 bg-linear-to-br from-blue-500 to-blue-700 shadow-lg">
             {isGroup ? (
               <Users size={40} className="text-white" />
             ) : (

@@ -6,7 +6,7 @@ const TABLE_NAME = process.env.DYNAMODB_SERVICE_APPLICATIONS_TABLE || process.en
 
 function getClient() { return getDynamoClient(); }
 
-const ALLOWED_STATUSES = new Set(["DRAFT", "PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "COMPLETED", "REJECTED"]);
+const ALLOWED_STATUSES = new Set(["DRAFT", "PENDING_PAYMENT", "PAID", "PENDING", "PROCESSING", "NEED_MORE", "SUPPLEMENTED", "APPROVED", "COMPLETED", "RESULT_DELIVERED", "REJECTED", "CANCELLED", "CANCELED"]);
 
 function normalizeTimeline(items) {
   if (!Array.isArray(items)) return [];
@@ -91,6 +91,48 @@ async function findByUserId(userId) {
   return items.filter((item) => item.userId === uid);
 }
 
+function getCitizenId(application) {
+  return String(application?.citizenId || application?.formData?.citizenId || application?.formData?.cccd || "").trim();
+}
+
+function normalizeDuplicateStatus(application) {
+  const status = String(application?.status || "").trim().toUpperCase();
+  const paymentStatus = String(application?.paymentStatus || "").trim().toUpperCase();
+  if (status === "DRAFT" && paymentStatus === "PENDING") return "PENDING_PAYMENT";
+  if (status === "DRAFT" && ["PAID", "COMPLETED"].includes(paymentStatus)) return "PAID";
+  return status;
+}
+
+const DUPLICATE_BLOCKING_STATUSES = new Set([
+  "PENDING_PAYMENT",
+  "PAID",
+  "PENDING",
+  "PROCESSING",
+  "NEED_MORE",
+  "APPROVED",
+  "COMPLETED",
+  "RESULT_DELIVERED",
+]);
+
+const DUPLICATE_ALLOWED_STATUSES = new Set(["REJECTED", "CANCELLED", "CANCELED"]);
+
+async function findDuplicateByCitizenAndService(citizenId, serviceId) {
+  const cid = String(citizenId || "").trim();
+  const sid = String(serviceId || "").trim();
+  if (!cid || !sid) return { duplicate: false };
+
+  const matches = (await readAll())
+    .filter((item) => getCitizenId(item) === cid && String(item.serviceId || "").trim() === sid)
+    .map((item) => ({ ...item, duplicateStatus: normalizeDuplicateStatus(item) }))
+    .sort((a, b) => new Date(b.submittedAt || b.createdAt || b.updatedAt || 0) - new Date(a.submittedAt || a.createdAt || a.updatedAt || 0));
+
+  const duplicate = matches.find((item) => DUPLICATE_BLOCKING_STATUSES.has(item.duplicateStatus));
+  if (duplicate) return { duplicate: true, application: duplicate };
+
+  const lastAllowed = matches.find((item) => DUPLICATE_ALLOWED_STATUSES.has(item.duplicateStatus));
+  return { duplicate: false, application: lastAllowed || null };
+}
+
 async function updateByCode(dossierIdOrCode, updates) {
   const dossierId = String(dossierIdOrCode || "").trim();
   if (!dossierId) return null;
@@ -126,6 +168,7 @@ module.exports = {
   create,
   findByCode,
   findByUserId,
+  findDuplicateByCitizenAndService,
   updateByCode,
   deleteByCode,
   normalizeApplication,

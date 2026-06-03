@@ -7,6 +7,7 @@ const { validateRegisterPassword } = require("../utils/passwordStrength");
 const { generateOtp, setOtp, verifyOtp, consumeOtp } = require("../store/otpStore");
 const {
   findByEmail,
+  findByPhone,
   findById,
   createUser,
   updateUserById,
@@ -33,10 +34,19 @@ function normalizePublicUser(u) {
     fullName: u.fullName != null ? String(u.fullName) : "",
     phone: u.phone != null ? String(u.phone) : "",
     address: u.address != null ? String(u.address) : "",
-    role: u.role === "admin" ? "admin" : "citizen",
+    role: ["admin", "staff"].includes(u.role) ? u.role : "citizen",
     avatarUrl: av ? String(av).trim() : null,
     createdAt: u.createdAt
   };
+}
+
+async function findLoginUser(identifier) {
+  const value = String(identifier || "").trim();
+  if (!value) return null;
+  if (value.includes("@")) return findByEmail(value);
+  const phoneDigits = value.replace(/\D/g, "");
+  if (phoneDigits.length >= 8) return findByPhone(phoneDigits);
+  return findByEmail(value);
 }
 
 function isDeleteBlockingApplication(application) {
@@ -327,10 +337,10 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Email hoặc mật khẩu không đúng" });
     }
 
-    const user = await findByEmail(email);
+    const user = await findLoginUser(email);
     console.log('[DEBUG] User từ DB:', user);
     if (!user) {
-      return res.status(400).json({ message: "Email hoặc mật khẩu không đúng" });
+      return res.status(401).json({ message: "Email hoặc mật khẩu không đúng" });
     }
 
     const currentPassword = String(user.passwordHash || "");
@@ -397,7 +407,7 @@ exports.login = async (req, res) => {
       {
         id: user.id,
         email: user.email,
-        role: user.role === "admin" ? "admin" : "citizen"
+        role: ["admin", "staff"].includes(user.role) ? user.role : "citizen"
       },
       jwtSecret,
       { expiresIn: "1d" }
@@ -670,7 +680,7 @@ function normalizePublicUser(u) {
     fullName: u.fullName != null ? String(u.fullName) : "",
     phone: u.phone != null ? String(u.phone) : "",
     address: u.address != null ? String(u.address) : "",
-    role: u.role === "admin" ? "admin" : "citizen",
+    role: ["admin", "staff"].includes(u.role) ? u.role : "citizen",
     avatarUrl: av ? String(av).trim() : null,
     createdAt: u.createdAt
   };
@@ -955,10 +965,10 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Email hoặc mật khẩu không đúng" });
     }
 
-    const user = await findByEmail(email);
+    const user = await findLoginUser(email);
     console.log('[DEBUG] User từ DB:', user);
     if (!user) {
-      return res.status(400).json({ message: "Email hoặc mật khẩu không đúng" });
+      return res.status(401).json({ message: "Email hoặc mật khẩu không đúng" });
     }
 
     const currentPassword = String(user.passwordHash || "");
@@ -1025,7 +1035,7 @@ exports.login = async (req, res) => {
       {
         id: user.id,
         email: user.email,
-        role: user.role === "admin" ? "admin" : "citizen"
+        role: ["admin", "staff"].includes(user.role) ? user.role : "citizen"
       },
       jwtSecret,
       { expiresIn: "1d" }
